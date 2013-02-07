@@ -1,0 +1,16 @@
+{
+    "author": "Jan de Visser",
+    "version": "1.0",
+    "app_id": "grumble",
+    "about": {
+        "version": "1.0",
+        "copyright": "(c) 2012-2013 finiandarcy.com",
+        "contact": "info@finiandarcy.com",
+        "contacturl": "http://www,finiandarcy.com",
+        "application_name": "Grumble test app",
+        "application_url": "http://localhost:8080/"
+    },
+    "mounts": [
+        { "path": "/", "app": "index.app", "role": "admin" }
+    ]
+}
