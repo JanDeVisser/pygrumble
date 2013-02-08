@@ -33,7 +33,7 @@ class User(grumble.Model):
 class HttpAccess(grumble.Model):
     timestamp = grumble.DateTimeProperty(auto_now_add = True)
     remote_addr = grumble.TextProperty()
-    user = grumble.ReferenceProperty(reference_class = User)
+    user = grumble.TextProperty()
     path = grumble.TextProperty()
     method = grumble.TextProperty()
     status = grumble.TextProperty()

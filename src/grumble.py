@@ -275,25 +275,30 @@ class ModelManager(object):
             cur.execute(sql, v)
         return ret
 
-    def delete(self, id):
+    def delete_one(self, id):
         with Tx.begin() as tx:
             cur = tx.get_cursor()
             sql = "DELETE FROM %s WHERE id = %%s" % self.tablename
             cur.execute(sql, (id, ))
 
     def query(self, ancestor, filters, what = "key_name"):
-        if what == "columns":
-            cols = ['id', 'key_name', 'ancestors', 'parent'] + self.columns.keys()
-            collist = ""
-            for colname in cols:
-                if len(collist):
-                    collist += ', '
-                collist += '"' + colname + '"'
+        if what == "delete":
+            sql = "DELETE FROM %s" % self.tablename
+            cols = ()
         else:
-            collist = what
-            cols = (what,)
+            if what == "columns":
+                cols = ['id', 'key_name', 'ancestors', 'parent'] + self.columns.keys()
+                collist = ""
+                for colname in cols:
+                    if len(collist):
+                        collist += ', '
+                    collist += '"' + colname + '"'
+                sql = 'SELECT %s FROM %s' % (collist, self.tablename)
+            else:
+                collist = what
+                cols = (what,)
+            sql = 'SELECT %s FROM %s' % (collist, self.tablename)
         v = []
-        sql = 'SELECT %s FROM %s' % (collist, self.tablename)
         glue = ' WHERE '
         if ancestor:
             glue = ' AND '
@@ -324,6 +329,13 @@ class ModelManager(object):
     def count(self, ancestor, filters):
         (cur, ignored) = self.query(ancestor, filters, 'COUNT(*)')
         ret = cur.fetchone()[0]
+        tx = Tx.get()
+        tx.close_cursor(cur)
+        return ret
+
+    def delete_query(self, ancestor, filters):
+        (cur, ignored) = self.query(ancestor, filters, 'delete')
+        ret = cur.rowcount
         tx = Tx.get()
         tx.close_cursor(cur)
         return ret
@@ -816,7 +828,7 @@ def delete(model):
     if not hasattr(model, "_brandnew") and model.exists():
         model.on_delete()
         mm = model.modelmanager
-        mm.delete(model.id())
+        mm.delete_one(model.id())
     return None
 
 class Key(object):
@@ -940,6 +952,11 @@ class Query(object):
 
     def count(self):
         return self._mm.count(self._get_ancestor(), self.filters)
+
+    def delete(self):
+        for m in self:
+            m.on_delete()
+        return self._mm.delete_query(self._get_ancestor(), self.filters)
 
     def run(self):
         return self.__iter__()

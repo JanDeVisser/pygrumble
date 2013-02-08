@@ -3,6 +3,7 @@
 # To change this template, choose Tools | Templates
 # and open the template in the editor.
 
+import threading
 import webapp2
 from jinja2 import Environment, FileSystemLoader
 import grumble
@@ -24,6 +25,9 @@ class UserManager(object):
     def login(self, userid, password):
         return Grumble.User.login(userid, password)
 
+    def displayname(self, user):
+        return user.email if user else None
+
 usermanagerfactory = resolve(grumble.Config.app.get("usermanager", None)) or UserManager
 usermanager = usermanagerfactory()
 
@@ -39,10 +43,11 @@ class SessionManager(object):
             session = self._create_session()
         else:
             key = grumble.Key(cookie)
-            session = HttpSession.get(key)
+            session = Grumble.HttpSession.get(key)
             if not session.exists():
-                session = cls._create_session(key.name)
+                session = self._create_session(key.name)
         data = session.session_data
+        user = None
         if "userid" in data:
             user = usermanager.get(data["userid"])
             if not user.exists():
@@ -50,7 +55,7 @@ class SessionManager(object):
         return (session.id(), data, user)
 
     def persist(self, session_id, data):
-        session = HttpSession(session_id)
+        session = Grumble.HttpSession.get(session_id)
         session.session_data = data
         session.put()
 
@@ -70,12 +75,13 @@ class Session(object):
         (self._session_id, self._data, self._user) = sessionmanager.init_session(request.cookies.get("grumble"))
         if self._session_id:
             request.cookies["grumble"] = self._session_id
-            request.response.set_cookie("grumble", self._session_id, httponly = True)
+            request.response.set_cookie("grumble", self._session_id, httponly=True)
         else:
             del request.cookies["grumble"]
             request.response.delete_cookie("grumble")
         request.session = self._data
         request.user = self._user
+        self._tl.session = self
 
     def __enter__(self):
         self.count += 1
@@ -114,10 +120,10 @@ class Session(object):
 
     def _end(self):
         sessionmanager.persist(self._session_id, self._data)
-        if hasattr(request, "session"):
-            del request.session
-        if hasattr(request, "user"):
-            del request.user
+        if hasattr(self._request, "session"):
+            del self._request.session
+        if hasattr(self._request, "user"):
+            del self._request.user
         if hasattr(self._tl, "session"):
             del self._tl.session
 
@@ -161,13 +167,15 @@ def dispatch_to_mount(request, *args, **kwargs):
     where = None          # FIXME UGLY MESS
     if role:
         where = confirm_role(request, role)
-        if isinstance(where, basestring):
-            return webapp2.redirect(where)
-        else:
-            request.response.status_int = 401
-    if not where:
-        print "dispatching"
-        wsgi_app.router.dispatch(request, request.response)
+        if where:
+            if isinstance(where, basestring):
+                request.response.status = "302 Moved Temporarily"
+                request.response.headers["Location"] = where
+            else:
+                request.response.status_int = 401
+            return request.response
+    print "dispatching"
+    wsgi_app.router.dispatch(request, request.response)
 
 class SessionManagementHandler(webapp2.RequestHandler):
     @classmethod
@@ -178,9 +186,9 @@ class SessionManagementHandler(webapp2.RequestHandler):
         return cls.env
 
     def _page(self, config_key, default):
-        ctx = dict(Config.app.get("about", {}))
+        ctx = dict(grumble.Config.app.get("about", {}))
         self.response.headers['Content-Type'] = "text/html"
-        self.response.out.write(self.get_env().get_template(Config.app.get(config_key, default + ".html")).render(ctx))
+        self.response.out.write(self.get_env().get_template(grumble.Config.app.get(config_key, default + ".html")).render(ctx))
 
 class Login(SessionManagementHandler):
     def get(self):
@@ -188,14 +196,15 @@ class Login(SessionManagementHandler):
         self._page("loginpage", "login")
 
     def post(self):
-        print "main::login.post"
+        print "main::login.post %s/%s" % (self.request.get("userid"), self.request.get("password"))
         url = self.request.session.pop("redirecturl") if "redirecturl" in self.request.session else "/"
         userid = self.request.get("userid")
         password = self.request.get("password")
         if Session.login(userid, password):
-            return webapp2.redirect(url if url else "/")
+            self.request.response.status = "302 Moved Temporarily"
+            self.request.response.headers["Location"] = url if url else "/"
         else:
-            request.response.status_int = 401
+            self.request.response.status_int = 401
 
 class Logout(SessionManagementHandler):
     def get(self):
@@ -236,9 +245,11 @@ class WSGIApplication(webapp2.WSGIApplication):
         rv = None
         user = None
         with grumble.Tx.begin():
-            with Session.begin():
-                user = request.user.key() if hasattr(request, "user") and request.user else None
+            with Session.begin(request):
+                user = usermanager.displayname(request.user) if hasattr(request, "user") else None
                 rv = router.default_dispatcher(request, response)
+                if not rv and request.response:
+                    rv = request.response
                 if isinstance(rv, basestring):
                     rv = webapp2.Response(rv)
                 elif isinstance(rv, tuple):
@@ -253,9 +264,47 @@ class WSGIApplication(webapp2.WSGIApplication):
             access.status = rv.status
             access.put()
 
+        return rv
+
 app = WSGIApplication(debug=True)
 
 if __name__ == '__main__':
-    from paste import httpserver
+#    from paste import httpserver
 #    autoreload.main(httpserver.serve, (app,), {"host": '127.0.0.1', "port": '8080'})
-    httpserver.serve(app, host = '127.0.0.1', port = '8080')
+#    httpserver.serve(app, host = '127.0.0.1', port = '8080')
+    request = webapp2.Request.blank('/')
+    response = request.get_response(app)
+    print response
+    assert response.status_int == 302, "Expected to be redirected"
+
+    cookie = response.headers["Set-Cookie"]
+    (junk,sep,cookie) = cookie.partition('"')
+    (cookie,sep,junk) = cookie.partition('"')
+    cookie = cookie.replace('\\075', '=')
+    location  = response.headers["Location"]
+    assert location == "http://localhost/login"
+
+    request = webapp2.Request.blank(location)
+    request.headers['Cookie'] = "grumble=%s" % cookie
+    response = request.get_response(app)
+    print response
+    assert response.status_int == 200, "Expected OK"
+
+    request = webapp2.Request.blank(location)
+    request.headers['Cookie'] = "grumble=%s" % cookie
+    request.method = "POST"
+    request.POST["userid"] = "jan@de-visser.net"
+    request.POST["password"] = "wbw417"
+    response = request.get_response(app)
+    print response
+    assert response.status_int == 302, "Expected to be redirected"
+    location  = response.headers["Location"]
+    assert location == "http://localhost/"
+
+    request = webapp2.Request.blank(location)
+    request.headers['Cookie'] = "grumble=%s" % cookie
+    response = request.get_response(app)
+    print response
+    assert response.status_int == 200, "Expected OK"
+
+
