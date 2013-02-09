@@ -5,7 +5,7 @@
 
 import threading
 import webapp2
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, PackageLoader
 import grumble
 from Model import Grumble
 
@@ -75,7 +75,7 @@ class Session(object):
         (self._session_id, self._data, self._user) = sessionmanager.init_session(request.cookies.get("grumble"))
         if self._session_id:
             request.cookies["grumble"] = self._session_id
-            request.response.set_cookie("grumble", self._session_id, httponly=True)
+            request.response.set_cookie("grumble", str(self._session_id), httponly=True)
         else:
             del request.cookies["grumble"]
             request.response.delete_cookie("grumble")
@@ -170,7 +170,7 @@ def dispatch_to_mount(request, *args, **kwargs):
         if where:
             if isinstance(where, basestring):
                 request.response.status = "302 Moved Temporarily"
-                request.response.headers["Location"] = where
+                request.response.headers["Location"] = str(where)
             else:
                 request.response.status_int = 401
             return request.response
@@ -181,7 +181,7 @@ class SessionManagementHandler(webapp2.RequestHandler):
     @classmethod
     def get_env(cls):
         if not hasattr(cls, "env"):
-            env = Environment(loader=FileSystemLoader("template"))
+            env = Environment(loader=PackageLoader("grit", "template"))
             cls.env = env
         return cls.env
 
@@ -202,7 +202,7 @@ class Login(SessionManagementHandler):
         password = self.request.get("password")
         if Session.login(userid, password):
             self.request.response.status = "302 Moved Temporarily"
-            self.request.response.headers["Location"] = url if url else "/"
+            self.request.response.headers["Location"] = str(url)
         else:
             self.request.response.status_int = 401
 

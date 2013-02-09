@@ -9,8 +9,8 @@
         "admin": {
             "user_id": "jan",
             "password": "wbw417"
-            
         },
+	"host": "wolverine",
         "database": "jan",
         "password": "wbw417",
         "schema": "grumble",
