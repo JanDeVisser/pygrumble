@@ -11,74 +11,9 @@ import webapp2
 
 from jinja2 import Environment, FileSystemLoader
 
+import grit
 from Model import Grumble
 import Util
-
-class ReqHandler(webapp2.RequestHandler):
-    content_type = "application/xhtml+xml"
-    template_dir = "/template"
-    file_suffix = "html"
-    env = None
-
-    def get_session(self, key):
-        return Grumble.Session.get_session()
-
-    @classmethod
-    def get_env(cls):
-        if not cls.env:
-            env = Environment(loader=FileSystemLoader(Util.get_path(cls.template_dir)))
-            env.filters['formatdistance'] = Util.format_distance
-            env.filters['datetime'] = Util.format_datetime
-            env.filters['prettytime'] = Util.prettytime
-            env.filters['avgspeed'] = Util.avgspeed
-            env.filters['speed'] = Util.speed
-            env.filters['pace'] = Util.pace
-            env.filters['avgpace'] = Util.avgpace
-            env.filters['weight'] = Util.weight
-            env.filters['height'] = Util.height
-            env.filters['length'] = Util.length
-            cls.env = env
-        return cls.env
-
-    def get_context(self, ctx):
-        return ctx
-
-    def _get_context(self, ctx = {}, param = None):
-        if not ctx:
-            ctx = {}
-        if param:
-            ctx[param] = self.request.get(param)
-        ctx['user'] = users.get_current_user()
-        ctx['units'] = Util.units
-        ctx['units_table'] = Util.units_table
-        ctx['url'] = users.create_logout_url(self.request.uri) \
-            if users.get_current_user() \
-            else None
-        ctx['tab'] = self.request.get('tab', None)
-        logging.info("--> _get_context: %s", str(ctx))
-        ctx = self.get_context(ctx)
-        logging.info("--> after get_context: %s", str(ctx))
-        return ctx
-
-    def _get_template(self):
-        ret = self.template \
-            if hasattr(self, "template") \
-            else None
-        if not ret:
-            ret = self.get_template() \
-                if hasattr(self, "get_template") and callable(self.get_template) \
-                else None
-        if not ret:
-            ret = self.get_modelclass().__name__.lower() \
-                if hasattr(self, "get_modelclass") and callable(self.get_modelclass) \
-                else None
-        return ret
-
-    def render(self, template, values = None, param = None):
-        ctx = self._get_context(values, param)
-        self.response.headers['Content-Type'] = self.content_type
-        logging.info("Rendering '%s.%s'", template, self.file_suffix)
-        self.response.out.write(self.get_env().get_template(template + "." + self.file_suffix).render(ctx))
 
 class BridgedHandler(ReqHandler):
     def allow_access(self):

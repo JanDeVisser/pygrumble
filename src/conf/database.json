@@ -10,9 +10,8 @@
             "user_id": "jan",
             "password": "wbw417"
         },
-	"host": "wolverine",
+	"host": "localhost",
         "database": "jan",
-        "password": "wbw417",
         "schema": "grumble",
         "wipe_schema": true,
         "wipe_database": false
