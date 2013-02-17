@@ -1,5 +1,3 @@
-import psycopg2
-import sys
 # To change this template, choose Tools | Templates
 # and open the template in the editor.
 
@@ -181,6 +179,18 @@ class Tx(object):
             del tx.cache
             tx.cache = {}
 
+_sessionbridge = None
+def set_sessionbridge(bridge):
+    global _sessionbridge
+    _sessionbridge = bridge
+
+def get_sessionbridge():
+    global _sessionbridge
+    if not _sessionbridge:
+        from grumble import sessionbridge
+        _sessionbridge = sessionbridge.sessionbridge
+    return _sessionbridge
+
 def _init_schema():
     config = Config.database
     assert "postgresql" in config, "Config: conf/database.json is missing postgresql section"
@@ -216,6 +226,7 @@ class ColumnDefinition(object):
         self.required = required
         self.defval = defval
         self.indexed = indexed
+        self.is_key = False
 
 class ModelManager(object):
     modelconfig = Config.model
@@ -237,6 +248,7 @@ class ModelManager(object):
         self.kind = None
         self.key_col = None
         self.flat = False
+        self.audit = True
 
     def set_tablename(self, tablename):
         self.table = tablename
@@ -244,48 +256,70 @@ class ModelManager(object):
 
     def set_columns(self, columns):
         self.key_col = None
-        for c in columns.values():
+        for c in columns:
             if c.is_key and not c.scoped:
                 self.key_col = c
-        self.columns = {}
+        self.columns = []
         if not self.key_col:
             kc = ColumnDefinition("_key_name", "TEXT", True, None, False)
             kc.is_key = True
             self.key_col = kc
-            self.columns.update({ '_key_name': kc })
+            self.columns.append(kc)
         if not self.flat:
-            ac = ColumnDefinition("_ancestors", "TEXT", True, None, True)
-            ac.is_key = False
-            pc = ColumnDefinition("_parent", "TEXT", False, None, True)
-            pc.is_key = False
-            self.columns.update({ '_ancestors': ac, '_parent': pc })
-        self.columns.update(columns)
+            self.columns += (ColumnDefinition("_ancestors", "TEXT", True, None, True), \
+                ColumnDefinition("_parent", "TEXT", False, None, True))
+        self.columns += columns
+        if self.audit:
+            self.columns += ( ColumnDefinition("_ownerid", "TEXT", False, None, True), \
+                ColumnDefinition("_acl", "TEXT", False, None, False), \
+                ColumnDefinition("_createdby", "TEXT", False, None, False), \
+                ColumnDefinition("_created", "TIMESTAMP", False, None, False), \
+                ColumnDefinition("_updatedby", "TEXT", False, None, False), \
+                ColumnDefinition("_updated", "TIMESTAMP", False, None, False))
+        self.column_names = [c.name for c in self.columns]
 
     def get_properties(self, key):
         ret = None
         with Tx.begin() as tx:
             cur = tx.get_cursor()
             sql = 'SELECT "%s" FROM %s WHERE "%s" = %%s' % \
-                ('", "'.join(self.columns), self.tablename, self.key_col.name)
+                ('", "'.join(self.column_names), self.tablename, self.key_col.name)
             cur.execute(sql, (key.name, ))
             values = cur.fetchone()
             if values:
-                ret = zip(self.columns, values)
+                ret = zip(self.column_names, values)
         return ret
 
     def set_properties(self, insert, key, values):
         print "set_properties(%s)" % values
+        if self.audit:
+            values["_updated"] = datetime.datetime.now()
+            values["_updatedby"] = get_sessionbridge().userid()
+            if insert:
+                values["_created"] = values["_updated"]
+                values["_createdby"] = values["_updatedby"]
+                if not values.get("_ownerid"):
+                    values["_ownerid"] = values["_createdby"]
+            else:
+                if "_created" in values:
+                    values.pop("_created")
+                if "_createdby" in values:
+                    values.pop("_createdby")
         ret = key.id
         with Tx.begin() as tx:
             assert key.name
             cur = tx.get_cursor()
-            v = [values[colname] for colname in self.columns]
+            cols = list(self.column_names)
+            for c in cols:
+                if c not in values:
+                    cols.remove(c)
+            v = [values[c] for c in cols]
             if insert:
                 sql = 'INSERT INTO %s ( "%s" ) VALUES ( %s )' % \
-                    (self.tablename, '", "'.join(self.columns), ', '.join(['%s']*len(self.columns)))
+                    (self.tablename, '", "'.join(cols), ', '.join(['%s']*len(cols)))
             else:
                 sql = 'UPDATE %s SET %s WHERE "%s" = %%s' % \
-                    (self.tablename, ", ".join(['"%s" = %%s' % colname for colname in self.columns]), self.key_col.name)
+                    (self.tablename, ", ".join(['"%s" = %%s' % c for c in cols]), self.key_col.name)
                 v.append(key.name)
             cur.execute(sql, v)
         return ret
@@ -304,8 +338,8 @@ class ModelManager(object):
             key_ix = -1
         else:
             if what == "columns":
-                cols = self.columns.keys()
-                collist = '"' + '", "'.join(self.columns) + '"'
+                cols = [c.name for c in self.columns]
+                collist = '"' + '", "'.join(cols) + '"'
                 key_ix = cols.index(self.key_col.name)
             elif what == "key_name":
                 cols = (self.key_col.name,)
@@ -397,7 +431,11 @@ class ModelManager(object):
             v.append(self.schema)
         cur.execute(sql, v)
         for (colname, defval, is_nullable, data_type) in cur:
-            column = self.columns[colname]
+            column = None
+            for c in self.columns:
+                if c.name == colname:
+                    column = c
+                    break
             if column:
                 if data_type.lower() != column.data_type.lower():
                     cur.execute('ALTER TABLE ' + self.tablename + ' DROP COLUMN "' + colname + '"')
@@ -415,19 +453,19 @@ class ModelManager(object):
                         if alter != "":
                             cur.execute('ALTER TABLE %s ALTER COLUMN "%s" %s' % ( self.tablename, colname, alter ), vars)
                     del self.columns[colname]
-        for (colname, column) in self.columns.items():
+        for c in self.columns:
             vars = []
-            sql = 'ALTER TABLE ' + self.tablename + ' ADD COLUMN "' + colname + '" ' + column.data_type
-            if column.required:
+            sql = 'ALTER TABLE ' + self.tablename + ' ADD COLUMN "' + c.name + '" ' + c.data_type
+            if c.required:
                 sql += " NOT NULL"
-            if column.defval:
+            if c.defval:
                 sql += " DEFAULT %s"
-                vars.append(column.defval)
-            if column.is_key:
+                vars.append(c.defval)
+            if c.is_key:
                 sql += " PRIMARY KEY"
             cur.execute(sql, vars)
-            if column.indexed and not column.is_key:
-                cur.execute('CREATE INDEX "%s_%s" ON %s ( "%s" )' % (self.table, colname, self.tablename, colname))
+            if c.indexed and not c.is_key:
+                cur.execute('CREATE INDEX "%s_%s" ON %s ( "%s" )' % (self.table, c.name, self.tablename, c.name))
 
     modelmanagers_byname = {}
     @classmethod
@@ -486,7 +524,7 @@ class DictConverter(PropertyConverter):
 class ListConverter(PropertyConverter):
     def convert(self, value):
         try:
-            return dict(value)
+            return list(value)
         except:
             return json.loads(str(value)) if value is not None else {}
 
@@ -579,7 +617,8 @@ class ModelProperty(object):
     def get_coldef(self):
         ret = ColumnDefinition(self.column_name, self.sqltype, self.required, self.default, self.indexed)
         ret.is_key = self.is_key
-        return {self.name: ret}
+        ret.scoped = self.scoped
+        return [ret]
 
     def _on_insert(self, instance):
         value = self.__get__(instance)
@@ -680,9 +719,9 @@ class CompoundProperty(object):
             prop.set_kind(kind)
 
     def get_coldef(self):
-        ret = {}
+        ret = []
         for prop in self.compound:
-            ret.update(prop.get_coldef())
+            ret += prop.get_coldef()
         return ret
 
     def _on_insert(self, instance):
@@ -736,26 +775,44 @@ class CompoundProperty(object):
             values = p.to_json_value(instance, values)
         return values
 
+def _set_acl(obj, acl):
+    if isinstance(acl, dict):
+        obj._acl = dict(acl)
+    elif isinstance(acl, basestring):
+        obj._acl = json.loads(acl)
+    else:
+        obj._acl = {}
+    for (role, perms) in obj._acl.items():
+        assert role and role.lower() == role, "Model._set_acl: Role may not be None and and must belower case"
+        assert perms and perms.upper() == perms, "Model._set_acl: Permissions may not be None and must be upper case"
+
 class ModelMetaClass(type):
     def __new__(cls, name, bases, dct):
         kind = type.__new__(cls, name, bases, dct)
         if name != 'Model':
-            Model._register_class(name, kind)
+            Model._register_class(cls.__module__, name, kind)
             if hasattr(kind, "table_name"):
                 tablename = kind.table_name
             else:
                 tablename = name
                 kind.table_name = name
             kind._flat = kind._flat if hasattr(kind, "_flat") else False
+            kind._audit = kind._audit if hasattr(kind, "_audit") else True
+            acl = Config.model["model"][name]["acl"] \
+                if "model" in Config.model and \
+                    name in Config.model["model"] and \
+                    "acl" in Config.model["model"][name] \
+                else kind.acl if hasattr(kind, "acl") else None
+            _set_acl(kind, acl)
             properties = {}
-            columns = {}
+            columns = []
             kind._allproperties = {}
             for (propname, value) in dct.items():
                 if isinstance(value, (ModelProperty, CompoundProperty)):
                     value.set_name(propname)
                     value.set_kind(name)
                     if not value.transient:
-                        columns.update(value.get_coldef())
+                        columns += value.get_coldef()
                     if hasattr(value, "is_label") and value.is_label:
                         assert not hasattr(kind, "label_prop"), "Can only assign one label property"
                         kind.label_prop = value
@@ -770,26 +827,31 @@ class ModelMetaClass(type):
                         setattr(kind, p.name, p)
                         kind._allproperties[p.name] = value
             kind._properties = properties
-            kind._kind = name
+            kind._kind =("%s.%s" % (kind.__module__, name)).lower()
             mm = ModelManager.for_name(name)
-            mm.flat = kind._flat if hasattr(kind, "_flat") else False
+            mm.flat = kind._flat
+            mm.audit = kind._audit
             mm.set_tablename(tablename)
             mm.set_columns(columns)
             mm.kind = kind
             mm.reconcile()
             kind.modelmanager = mm
             kind.load_template_data()
+        else:
+            _set_acl(kind, Config.model.get("global_acl", kind.acl))
         return kind
 
 class Model(object):
     __metaclass__ = ModelMetaClass
     classes = {}
+    acl = { "admin": "CRWDQ", "owner": "R" }
 
     def __new__(cls, *args, **kwargs):
         ret = super(Model, cls).__new__(cls)
         ret._brandnew = True
         ret._set_ancestors_from_parent(kwargs["parent"] if "parent" in kwargs else None)
         ret._key_name = kwargs["key_name"] if "key_name" in kwargs else None
+        ret._acl = kwargs["acl"] if "acl" in kwargs else {}
         ret._id = None
         ret._values = {}
         for (propname, prop) in ret._allproperties.items():
@@ -801,10 +863,11 @@ class Model(object):
         return ret
 
     def __repr__(self):
+        self._load()
         label = None
         id = self.get_name()
-        if hasattr(self, "label_prop"):
-            label = getattr(self, self.label_prop)
+        if hasattr(self.__class__, "label_prop"):
+            label = self.label_prop
         if id:
             s = id
             if label:
@@ -814,7 +877,7 @@ class Model(object):
             super(self.__class__, self).__repr__()
 
     def get_label(self):
-        return getattr(self, self.label_prop) if hasattr(self, "label_prop") else str(self)
+        return self.label_prop if hasattr(self, "label_prop") else str(self)
 
     def get_name(self):
         return self.key_prop if hasattr(self, "key_prop") else self._key_name
@@ -861,10 +924,12 @@ class Model(object):
             parent = v["_parent"] if "_parent" in v else None
             ancestors = v["_ancestors"] if "_ancestors" in v else None
             self._key_name =  v["_key_name"] if "_key_name" in v else None
+            self._ownerid = v["_ownerid"] if "_ownerid" in v else None
+            _set_acl(self, v["_acl"] if "_acl" in v else None)
             for prop in self._properties.values():
                 prop._update_fromsql(self, v)
             if (self._key_name is None) and hasattr(self, "key_prop"):
-                self._key_name = getattr(self, self.key_prop)
+                self._key_name = self.key_prop
             self._set_ancestors(ancestors, parent)
             self._exists = True
             self._id = self.key().id
@@ -880,7 +945,7 @@ class Model(object):
         include_key_name = True
         if hasattr(self, "key_prop"):
             scoped = getattr(self.__class__, "key_prop").scoped
-            key = getattr(self, "key_prop")
+            key = self.key_prop
             self._key_name = "%s/%s" % (parent(), key) if scoped else key
             include_key_name = scoped
         elif not self._key_name:
@@ -904,6 +969,8 @@ class Model(object):
             p = self.parent()
             values['_parent'] = str(p) if p else None
             values['_ancestors'] = self._ancestors
+        values["_acl"] = json.dumps(self._acl)
+        values["_ownerid"] = self._ownerid if hasattr(self, "_ownerid") else None
         self._id = self.modelmanager.set_properties(hasattr(self, "_brandnew"), self.key(), values)
         if hasattr(self, "_brandnew"):
             del self._brandnew
@@ -950,6 +1017,14 @@ class Model(object):
         pl = self.pathlist()
         return pl[0] if pl else self
 
+    def ownerid(self):
+        self._load()
+        return self._ownerid
+
+    def set_ownerid(self, ownerid):
+        self._load()
+        self._ownerid = owner
+
     def put(self):
         self._store()
 
@@ -975,7 +1050,10 @@ class Model(object):
             if hasattr(self, "to_dict_" + name) and callable(getattr(self, "to_dict_" + name)):
                 getattr(self, "to_dict_" + name)(ret)
             else:
-                ret = prop.to_json_value(self, ret)
+                try:
+                    ret = prop.to_json_value(self, ret)
+                except NotSerializableError:
+                    pass
         hasattr(self, "sub_to_dict") and callable(self.sub_to_dict) and self.sub_to_dict(ret)
         return ret
 
@@ -994,11 +1072,68 @@ class Model(object):
             if hasattr(self, "update_" + name) and callable(getattr(self, "update_" + name)):
                 getattr(self, "update_" + name)(descriptor)
             else:
-                prop.from_json_value(self, descriptor)
+                try:
+                    prop.from_json_value(self, descriptor)
+                except NotSerializableError:
+                    pass
         self.put()
         hasattr(self, "sub_update") and callable(self.sub_update) and self.sub_update(descriptor)
         self.put()
 	return self.to_dict()
+    
+    def get_user_permissions(self):
+        roles = set(get_sessionbridge.roles())
+        if get_sessionbridge().userid() == self.owner():
+            roles.add("owner")
+        roles.add("world")
+        perms = set()
+        for role in roles:
+            perms |= self.get_all_permissions(role)
+        return perms
+
+    @classmethod
+    def get_user_classpermissions(cls):
+        roles = set(get_sessionbridge.roles())
+        roles.add("world")
+        perms = set()
+        for role in roles:
+            perms |= cls.get_class_permissions(role) | Model.get_global_permissions(role)
+        return perms
+
+    def get_object_permissions(self, role):
+        return set(self._acl.get(role, ""))
+
+    @classmethod
+    def get_class_permissions(cls, role):
+        return set(cls.acl.get(role, ""))
+
+    @staticmethod
+    def get_global_permissions(role):
+        return set(Model.acl.get(role, ""))
+
+    def get_all_permissions(self, role):
+       return self.get_object_permissions(role) | self.get_class_permissions(role) | self.get_global_permissions(role)
+
+    def set_permissions(self, role, perms):
+        assert role, "Model.set_permissions: Role must not be None"
+        self._acl[role.lower()] = perms.upper() if perms else ""
+
+    def can_read(self):
+        return "R" in self.get_user_permissions()
+
+    def can_update(self):
+        return "U" in self.get_user_permissions()
+
+    def can_delete(self):
+        return "D" in self.get_user_permissions()
+
+    @classmethod
+    def can_query(cls):
+        return "Q" in self.get_user_classpermissions()
+
+    @classmethod
+    def can_create(cls, roles):
+        return "C" in self.get_user_classpermissions()
 
     @classmethod
     def kind(cls):
@@ -1006,11 +1141,34 @@ class Model(object):
 
     @classmethod
     def for_name(cls, name):
-        return Model.classes[name] if name in Model.classes else None
+        print "for_name(%s): registry = %s" % (name, Model.classes)
+        name = name.lower()
+        ret = Model.classes[name] if name in Model.classes else None
+        if not ret and "." not in name:
+            for n in Model.classes:
+                e = ".%s" % name
+                if n.endswith(e):
+                    c = Model.classes[n]
+                    assert not ret, "for_name(%s): Already found match %s but there's a second one %s" % \
+                        (name, ret.kind(), c.kind())
+                    ret = c
+        return ret
 
     @classmethod
-    def _register_class(cls, name, modelclass):
-        Model.classes[name] = modelclass
+    def _register_class(cls, module, name, modelclass):
+        assert modelclass, "Model._register_class: empty class name"
+        if not module:
+            fullname = name
+        else:
+            module = module.lower()
+            hierarchy = module.split(".")
+            if hierarchy[0] == 'model':
+                hierarchy.pop(0)
+            hierarchy.append(name)
+            fullname = ".".join(hierarchy)
+        fullname = fullname.lower()
+        assert fullname not in cls.classes, "Model._register_class: Class '%s' is already registered" % fullname
+        Model.classes[fullname] = modelclass
 
     @classmethod
     def get(cls, key, values = None):
@@ -1148,6 +1306,7 @@ class Key(object):
         return hash(str(self))
 
     def get(self):
+        print "Key.get: self.kind = %s" % self.kind
         cls = Model.for_name(self.kind)
         return cls.get(self)
 
@@ -1155,7 +1314,7 @@ class Query(object):
     def __init__(self, kind, keys_only = True, **kwargs):
         assert isinstance(kind, basestring) or isinstance(kind, ModelMetaClass)
         self.kind = kind if isinstance(kind, basestring) else kind.kind()
-        self._mm = ModelManager.for_name(self.kind)
+        self._mm = Model.for_name(self.kind).modelmanager
         self.keys_only = keys_only
         self.filters = []
 
@@ -1406,8 +1565,7 @@ if __name__ == "__main__":
 
     with Tx.begin():
         class Test(Model):
-            label_prop = "testname"
-            testname = TextProperty(required = True)
+            testname = TextProperty(required = True, is_label = True)
             value = IntegerProperty(default = 12)
 
         jan = Test(testname = "Jan", value = "42")
@@ -1442,7 +1600,7 @@ if __name__ == "__main__":
         assert count == 2, "Expected Test.count() to return 2, but it returned %s instead" % count
 
         class RefTest(Model):
-            refname = TextProperty(required = True)
+            refname = TextProperty(required = True, is_key = True)
             ref = ReferenceProperty(Test)
 
         print ">>", jan, jan.id()
@@ -1487,6 +1645,7 @@ if __name__ == "__main__":
 
         schapie = SelfRefTest(selfrefname = "Schapie", ref = luc)
         schapie.put()
+        print schapie.to_dict()
 
         for s in luc.loves:
             print s

@@ -10,16 +10,7 @@ import grumble
 
 class BinaryConverter(grumble.PropertyConverter):
     def __init__(self):
-        self.datatype = str
-
-    def to_sqlvalue(self, value):
-        if value is None:
-            return None
-        else:
-            return psycopg2.Binary(value)
-
-    def from_sqlvalue(self, sqlvalue):
-        return str(sqlvalue)
+        self.datatype = psycopg2.Binary
 
     def to_jsonvalue(self, value):
         raise NotSerializableError(self.name)
@@ -27,16 +18,17 @@ class BinaryConverter(grumble.PropertyConverter):
     def from_jsonvalue(self, value):
         raise NotSerializableError(self.name)
 
+grumble.register_propertyconverter(psycopg2.Binary, BinaryConverter())
+
 class BinaryProperty(grumble.ModelProperty):
-    datatype = str
+    datatype = psycopg2.Binary
     sqltype = "BYTEA"
-    converter = BinaryConverter()
 
 class ImageProperty(grumble.CompoundProperty):
     def __init__(self, **kwargs):
         bin_kwargs = { "suffix": "_blob"}
         ct_kwargs = { "suffix": "_ct"}
-        if "verbpse_name" in kwargs:
+        if "verbose_name" in kwargs:
             bin_kwargs["verbose_name"] = kwargs["verbpse_name"]
         super(ImageProperty, self).__init__(
             BinaryProperty(**bin_kwargs),
@@ -45,7 +37,6 @@ class ImageProperty(grumble.CompoundProperty):
 
 if __name__ == "__main__":
     class Test(grumble.Model):
-        label_prop = "label"
         label = grumble.TextProperty(required = True)
         image = ImageProperty()
 
@@ -64,6 +55,6 @@ if __name__ == "__main__":
     with grumble.Tx.begin():
         desert = Test.get(k)
         with open("C:/Users/Public/Pictures/Sample Pictures/Desert_1.jpg", "wb") as fh:
-            img = fh.write(desert.image_blob)
+            fh.write(desert.image_blob)
 
 

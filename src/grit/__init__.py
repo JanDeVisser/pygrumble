@@ -25,13 +25,21 @@ class UserManager(object):
     def login(self, userid, password):
         return Grumble.User.login(userid, password)
 
+    def id(self, user):
+        return user.id() if user else None
+
     def displayname(self, user):
-        return user.email if user else None
+        return user.display_name if user else None
+
+    def roles(self, user):
+        return tuple(user.roles if user.roles else ()) if user else ()
 
 usermanagerfactory = resolve(grumble.Config.app.get("usermanager", None)) or UserManager
 usermanager = usermanagerfactory()
 
 class SessionManager(object):
+    def __init__(self):
+        pass
 
     def _create_session(self, name = None):
         session = Grumble.HttpSession(key_name = name)
@@ -143,8 +151,15 @@ class Session(object):
 
     @classmethod
     def user(cls):
-        if hasattr(cls._tl, "session"):
-            return cls._tl.session._user
+        return cls._tl.session._user if hasattr(cls._tl, "session") else None
+
+    @classmethod
+    def userid(cls):
+        return usermanager.id(cls._tl.session._user) if hasattr(cls._tl, "session") else ()
+
+    @classmethod
+    def roles(cls):
+        return usermanager.roles(cls._tl.session._user) if hasattr(cls._tl, "session") else ()
 
 class ReqHandler(webapp2.RequestHandler):
     content_type = "application/xhtml+xml"

@@ -12,24 +12,78 @@ import webapp2
 from jinja2 import Environment, FileSystemLoader
 
 import grit
+import grumble
 from Model import Grumble
 import Util
 
-class BridgedHandler(ReqHandler):
+
+class ModelBridge(object):
+    def _initialize(self, kind = None):
+        if hasattr(self, "_kind"):
+            return
+        if not kind:
+            assert hasattr(self, "get_kind"), "ModelBridge: No get_kind in bridge class '%s'" % self.__class__.__name__
+            kind = self.__class__.get_kind()
+            assert kind, "ModelBridge: get_kind returned 'None' "
+        if isinstance(kind, basestring):
+            self._kind = grumble.Model.for_name(kind)
+            assert self._kind, "ModelBridge: unknown kind '%s'" % kind
+        elif isinstance(kind, grumble.ModelMetaClass):
+            self._kind = kind
+        else:
+            assert 0, "ModelBridge.initialize called with invalid kind '%s' of type '%s'" % (kind, type(kind))
+
+    def kind(self):
+        _initialize()
+        return self._kind
+
+    def get_context(self, ctx):
+        return ctx
+
+    def get_object(self, key):
+        return self.kind().get(key)
+
+    def save_object(self, obj):
+        if obj:
+            obj.put()
+
+    def get_parent(self):
+        return None
+
+    def create_object(self, descriptor):
+        return self.kind().create(descriptor, self.get_parent())
+
+    def prepare_query(self, q):
+        return q
+
+    def query(self, q):
+        print "query(%s)" % q
+        q = self.prepare_query(q)
+        objs = self.kind().query(q)
+        return [ obj.to_dict() for obj in objs ]
+
+    def can_read(self, obj):
+        return obj.can_read()
+
+    def can_update(self, obj):
+        return obj.can_update()
+
+    def can_delete(self, obj):
+        return obj.can_delete()
+
+    def can_create(self):
+        return self.kind().can_create()
+
+    def can_query(self):
+        return self.kind().can_query()
+
+
+class BridgedHandler(grit.ReqHandler):
     def allow_access(self):
-        return users.get_current_user()
+        return True
 
     def must_redirect_to(self):
-        return users.create_login_url(self.request.uri) if not self.allow_access() else None
-
-    def user_can_update(self, obj):
-        return True
-
-    def user_can_query(self, obj):
-        return True
-
-    def user_can_create(self):
-        return True
+        return None
 
     def call_initialize_bridge(self):
         hasattr(self, "initialize_bridge") and callable(self.initialize_bridge) and self.initialize_bridge()
@@ -46,7 +100,7 @@ class JSHandler(BridgedHandler):
             obj = None
             if key:
                 obj = self.get_object(key)
-                if obj and not(self.user_can_query(obj)):
+                if obj and not(self.can_read(obj)):
                     obj = None
             else:
                 objs = None
@@ -57,25 +111,39 @@ class JSHandler(BridgedHandler):
                     objs = self.query(q)
                 if objs:
                     obj = objs[0]
-            self.render(self._get_template(), { "object": obj } if obj else {})
+            self.render({ "object": obj } if obj else {})
         else:
             self.error(401)
 
 class ImageHandler(BridgedHandler):
-    def post(self):
+    def __init__(self, kind = None, prop = None):
+        self.kind = kind
+        self.prop = prop
+
+    def post(self, kind = None, prop = None):
+        kind = kind or self.kind
+        assert kind, "ImageHandler: Model kind must be specified either in __init__ or application route"
+        kind_cls = grumble.Model.for_name(kind)
+        assert kind_cls, "ImageHandler: Unknown model kind %s" % kind
+        prop = prop or self.prop
+        assert prop, "ImageHandler: Model property must be specified either in __init__ or application route"
+        prop_obj = kind_cls.properties()[prop]
+        assert prop_obj,  "ImageHandler: Kind %s does not have property %s" % (kind, prop)
+        assert isinstance(prop_obj, ImageProperty), "ImageHandler: %s.%s is not an image property" % (kind, prop)
         key = self.request.get("id", None)
 	if self.allow_access() and key:
-            self.initialize_bridge(self.request)
+            self.call_initialize_bridge()
             obj = self.get_object(key)
-            if obj and self.user_can_update(obj):
-                obj.set_image(self.request.get("contentType"), self.request.get("image"))
-                return self.get(key)
+            if obj and self.can_update(obj):
+                setattr(obj, prop, (self.request.get("contentType"), self.request.get("image")))
+                self.save_obj(obj)
+                return self.get(key, kind, prop)
             else:
                 self.error(401)
         else:
             self.error(401)
 
-    def get(self, key):
+    def get(self, key, kind = None, prop = None):
         logging.info("ImageHandler(%s): path: %s key: %s", self.__class__.__name__, self.request.path, str(key))
         key = key or self.request.get("id", None)
 	if self.allow_access() and key:
