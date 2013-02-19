@@ -4,6 +4,7 @@
 __author__="jan"
 __date__ ="$11-Feb-2013 8:28:51 AM$"
 
+import re
 import psycopg2
 from psycopg2 import extensions
 import grumble
@@ -117,8 +118,14 @@ if __name__ == "__main__":
             loc_label = grumble.TextProperty(required = True)
             loc = GeoPtProperty()
 
+    with grumble.Tx.begin():
         jan = Test(loc_label = "Jan", loc = GeoPt(23,-5))
         print "++", jan.loc_label, jan.loc
         jan.put()
         print "+++", jan.id(), jan.get_name(), jan.get_label()
+        k = jan.key()
+
+    with grumble.Tx.begin():
+        jan = Test.get(k)
+        print "++", jan.loc_label, jan.loc
 

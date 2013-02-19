@@ -135,7 +135,7 @@ class ImageHandler(BridgedHandler):
             self.call_initialize_bridge()
             obj = self.get_object(key)
             if obj and self.can_update(obj):
-                setattr(obj, prop, (self.request.get("contentType"), self.request.get("image")))
+                setattr(obj, prop, (self.request.get("image"), self.request.get("contentType")))
                 self.save_obj(obj)
                 return self.get(key, kind, prop)
             else:
@@ -144,7 +144,15 @@ class ImageHandler(BridgedHandler):
             self.error(401)
 
     def get(self, key, kind = None, prop = None):
-        logging.info("ImageHandler(%s): path: %s key: %s", self.__class__.__name__, self.request.path, str(key))
+        kind = kind or self.kind
+        assert kind, "ImageHandler: Model kind must be specified either in __init__ or application route"
+        kind_cls = grumble.Model.for_name(kind)
+        assert kind_cls, "ImageHandler: Unknown model kind %s" % kind
+        prop = prop or self.prop
+        assert prop, "ImageHandler: Model property must be specified either in __init__ or application route"
+        prop_obj = kind_cls.properties()[prop]
+        assert prop_obj,  "ImageHandler: Kind %s does not have property %s" % (kind, prop)
+        assert isinstance(prop_obj, ImageProperty), "ImageHandler: %s.%s is not an image property" % (kind, prop)
         key = key or self.request.get("id", None)
 	if self.allow_access() and key:
             logging.info("ImageHandler(%s): going with key: %s", self.__class__.__name__, key)

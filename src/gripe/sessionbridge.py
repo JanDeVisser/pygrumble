@@ -15,7 +15,8 @@ class SessionBridge(object):
     def roles(self):
         return self._roles
 
-sessionbridge = SessionBridge("test@grumble.net", ["admin", "user"])
+def login(userid, roles):
+    global sessionbridge
+    sessionbridge = SessionBridge(userid, roles)
 
-if __name__ == "__main__":
-    print "Hello World";
+login("test@grumble.net", ["admin", "user"])

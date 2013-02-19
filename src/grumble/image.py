@@ -6,6 +6,7 @@ __date__ ="$11-Feb-2013 2:47:51 PM$"
 
 import os
 import psycopg2
+import gripe
 import grumble
 
 class BinaryConverter(grumble.PropertyConverter):
@@ -13,10 +14,10 @@ class BinaryConverter(grumble.PropertyConverter):
         self.datatype = psycopg2.Binary
 
     def to_jsonvalue(self, value):
-        raise NotSerializableError(self.name)
+        raise gripe.NotSerializableError(self.name)
 
     def from_jsonvalue(self, value):
-        raise NotSerializableError(self.name)
+        raise gripe.NotSerializableError(self.name)
 
 grumble.register_propertyconverter(psycopg2.Binary, BinaryConverter())
 
@@ -43,7 +44,8 @@ if __name__ == "__main__":
     with grumble.Tx.begin():
         with open("C:/Users/Public/Pictures/Sample Pictures/Desert.jpg", "rb") as fh:
             img = fh.read()
-            desert = Test(label = "Desert", image_blob = img, image_ct = "image/jpeg")
+            desert = Test(label = "Desert")
+            desert.image = (img, "image/jpeg")
             desert.put()
             k = desert.key()
 

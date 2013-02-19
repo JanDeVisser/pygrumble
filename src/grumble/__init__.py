@@ -7,30 +7,20 @@ __date__ ="$19-Jan-2013 11:19:59 AM$"
 import base64
 import datetime
 import json
+import logging
 import os
 import os.path
 import sys
 import threading
+import traceback
 import uuid
 
-from grumble import json_util
-from grumble import pgsql
+import gripe
+from gripe import json_util
+from gripe import pgsql
 
 
-class Error(Exception):
-    """Base class for exceptions in this module."""
-    pass
-
-class NotSerializableError(Error):
-    """Marker exception raised when when a non-JSON serializable property is
-    serialized"""
-    def __init__(self, propname):
-        self.propname = propname
-
-    def __str__(self):
-        return "Property %s is not serializable" % (self.propname, )
-
-class PropertyRequired(Error):
+class PropertyRequired(gripe.Error):
     """Raised when no value is specified for a required property"""
     def __init__(self, propname):
         self.propname = propname
@@ -38,7 +28,7 @@ class PropertyRequired(Error):
     def __str__(self):
         return "Property %s requires a value" % (self.propname, )
 
-class InvalidChoice(Error):
+class InvalidChoice(gripe.Error):
     """Raised when a value is specified for a property that is not in the
     property's <tt>choices</tt> list"""
     def __init__(self, propname, value):
@@ -48,7 +38,7 @@ class InvalidChoice(Error):
     def __str__(self):
         return "Value %s is invalid for property %s" % (self.value, self.propname)
 
-class ObjectDoesNotExist(Error):
+class ObjectDoesNotExist(gripe.Error):
     """Raised when an object is requested that does not exist"""
     def __init__(self, cls, id):
         self.cls = cls
@@ -57,44 +47,17 @@ class ObjectDoesNotExist(Error):
     def __str__(self):
         return "Model %s:%s does not exist" % (self.cls.__name__, self.id)
 
-_root_dir = None
-def root_dir():
-    global _root_dir
-    if not _root_dir:
-        modfile = sys.modules["grumble"].__file__
-        _root_dir = os.path.dirname(modfile)
-        _root_dir = os.path.dirname(_root_dir) if _root_dir != modfile else '..'
-    return _root_dir
-
-def read_file(fname):
-    try:
-        filename = "%s/%s" % (root_dir(), fname)
-        fp = open(filename, "rb")
-    except IOError as e:
-        #print "IOError reading config file %s: %s" % (filename, e.strerror)
-        return None
-    else:
-        with fp:
-            return fp.read()
-
-class Config(object):
-    @classmethod
-    def read_all_configs(cls):
-        for f in os.listdir("%s/conf" % root_dir()):
-            if f.endswith(".json"):
-                (section, dot, ext) = f.partition(".")
-                datastr = read_file("conf/" + section + ".json")
-                if datastr:
-                    config = json.loads(datastr) if datastr else {}
-                    setattr(cls, section, config)
-
-Config.read_all_configs()
-
 class Tx(object):
+    _init = False
     _tl = threading.local()
 
-    def __init__(self, role):
+    def __init__(self, role, database, autocommit):
+        if not Tx._init:
+            Tx._init = True
+            Tx._init_schema()
         self.role = role
+        self.database = database
+        self.autocommit = autocommit
         self.cursors = []
         self.cache = {}
         self.active = True
@@ -102,21 +65,63 @@ class Tx(object):
         self._connect()
         Tx._tl.tx = self
 
+    @classmethod
+    def _init_schema(cls):
+        config = gripe.Config.database
+        assert "postgresql" in config, "Config: conf/database.json is missing postgresql section"
+        pgsql_conf = config["postgresql"]
+        assert "user" in pgsql_conf, "Config: No user role in postgresql section of conf/database.json"
+        assert "admin" in pgsql_conf, "Config: No admin role in postgresql section of conf/database.json"
+        assert "user_id" in pgsql_conf["user"] and "password" in pgsql_conf["user"], \
+            "Config: user role is missing user_id or password in postgresql section of conf/database.json"
+        assert "user_id" in pgsql_conf["admin"] and "password" in pgsql_conf["admin"], \
+            "Config: admin role is missing user_id or password in postgresql section of conf/database.json"
+        if "database" in pgsql_conf:
+            with Tx.begin("admin", "postgres", True) as tx:
+                cur = tx.get_cursor()
+                create_db = False
+                database = pgsql_conf["database"]
+                if pgsql_conf.get("wipe_database", False) and database != "postgres":
+                    cur.execute('DROP DATABASE IF EXISTS "%s"' % (database, ))
+                    create_db = True
+                else:
+                    cur.execute("SELECT COUNT(*) FROM pg_catalog.pg_database WHERE datname = %s", (database, ))
+                    create_db = (cur.fetchone()[0] == 0)
+                if create_db:
+                    cur.execute('CREATE DATABASE "%s"' % (database, ))
+        if "schema" in pgsql_conf:
+            with Tx.begin("admin") as tx:
+                cur = tx.get_cursor()
+                create_schema = False
+                schema = pgsql_conf["schema"]
+                if pgsql_conf.get("wipe_schema", False):
+                    cur.execute('DROP SCHEMA IF EXISTS "%s" CASCADE' % (schema, ))
+                    create_schema = True
+                else:
+                    cur.execute("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = %s", (schema, ))
+                    create_schema = (cur.fetchone()[0] == 0)
+                if create_schema:
+                    cur.execute('CREATE SCHEMA "%s" AUTHORIZATION %s' % (schema, pgsql_conf["user"]["user_id"]))
+
     def _connect(self):
-        config = Config.database
+        config = gripe.Config.database
         pgsql_conf = config["postgresql"]
         dsn = "user=" + pgsql_conf[self.role]["user_id"] + \
             " password=" + pgsql_conf[self.role]["password"]
-        if "database" in pgsql_conf:
-            dsn += " dbname=" + pgsql_conf["database"]
+        if not self.database:
+            self.database = pgsql_conf.get("database")
+        if not self.database:
+            self.database = "postgres" if self.role == "admin" else pgsql_conf[self.role]["user_id"]
+        dsn += " dbname=" + self.database
         if "host" in pgsql_conf:
             dsn += " host=" + pgsql_conf["host"]
-        print "Connecting with role", self.role, "DSN", dsn
+        logging.debug("Connecting with role '%s' autocommit = %s", self.role, self.autocommit)
         self.conn = pgsql.Connection.get(dsn)
+        self.conn.autocommit = self.autocommit
 
     @classmethod
-    def begin(cls, role = "user"):
-        return cls._tl.tx if hasattr(cls._tl, "tx") else Tx(role)
+    def begin(cls, role = "user", database = None, autocommit = False):
+        return cls._tl.tx if hasattr(cls._tl, "tx") else Tx(role, database, autocommit)
 
     @classmethod
     def get(cls):
@@ -124,19 +129,17 @@ class Tx(object):
 
     def __enter__(self):
         self.count += 1
-        #print "__enter__", self.role, self.count
         return self
 
     def __exit__(self, exception_type, exception_value, trace):
-        #print "__exit__", self.role, self.count
         self.count -= 1
         if exception_type:
-            print "Exception: ", exception_type, exception_value, trace
+            logging.error("Exception in Tx block, Exception: %s %s %s", exception_type, exception_value, trace)
         if not self.count:
             try:
                 self._end_tx()
             except Exception, exc:
-                print exc.__class__.__name__, exc
+                logging.error("Exception committing Tx, Exception: %s %s", exc.__class__.__name__, exc)
         return False
 
     def get_cursor(self):
@@ -187,37 +190,9 @@ def set_sessionbridge(bridge):
 def get_sessionbridge():
     global _sessionbridge
     if not _sessionbridge:
-        from grumble import sessionbridge
+        from gripe import sessionbridge
         _sessionbridge = sessionbridge.sessionbridge
     return _sessionbridge
-
-def _init_schema():
-    config = Config.database
-    assert "postgresql" in config, "Config: conf/database.json is missing postgresql section"
-    pgsql_conf = config["postgresql"]
-    assert "user" in pgsql_conf, "Config: No user role in postgresql section of conf/database.json"
-    assert "admin" in pgsql_conf, "Config: No admin role in postgresql section of conf/database.json"
-    assert "user_id" in pgsql_conf["user"] and "password" in pgsql_conf["user"], \
-        "Config: user role is missing user_id or password in postgresql section of conf/database.json"
-    assert "user_id" in pgsql_conf["admin"] and "password" in pgsql_conf["admin"], \
-        "Config: admin role is missing user_id or password in postgresql section of conf/database.json"
-    if pgsql_conf["wipe_database"]:
-        raise NotImplemented
-    if "schema" in pgsql_conf:
-        with Tx.begin("admin") as tx:
-            cur = tx.get_cursor()
-            create_it = False
-            schema = pgsql_conf["schema"]
-            if pgsql_conf.get("wipe_schema", False):
-                cur.execute('DROP SCHEMA IF EXISTS "%s" CASCADE' % (schema, ))
-                create_it = True
-            else:
-                cur.execute("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = %s", (schema, ))
-                create_it = (cur.fetchone()[0] == 0)
-            if create_it:
-                cur.execute('CREATE SCHEMA "%s" AUTHORIZATION %s' % (schema, pgsql_conf["user"]["user_id"]))
-
-_init_schema()
 
 class ColumnDefinition(object):
     def __init__(self, name, data_type, required, defval, indexed):
@@ -229,18 +204,18 @@ class ColumnDefinition(object):
         self.is_key = False
 
 class ModelManager(object):
-    modelconfig = Config.model
+    modelconfig = gripe.Config.model
     models = modelconfig.get("model", {})
     def_recon_policy = modelconfig.get("reconcile", "all")
 
     def __init__(self, name):
         self.my_config = self.models.get(name, {})
         self.name = name
-        self.schema = Config.database["postgresql"]["schema"]  \
-            if "schema" in Config.database["postgresql"] \
+        self.schema = gripe.Config.database["postgresql"]["schema"]  \
+            if "schema" in gripe.Config.database["postgresql"] \
             else None
-        self.tableprefix = '"' + Config.database["postgresql"]["schema"] + '".' \
-            if "schema" in Config.database["postgresql"] \
+        self.tableprefix = '"' + gripe.Config.database["postgresql"]["schema"] + '".' \
+            if "schema" in gripe.Config.database["postgresql"] \
             else ""
         self.table = name
         self.tablename = self.tableprefix + '"' + name + '"'
@@ -291,7 +266,7 @@ class ModelManager(object):
         return ret
 
     def set_properties(self, insert, key, values):
-        print "set_properties(%s)" % values
+        logging.debug("ModelManager.set_properties(%s)", values)
         if self.audit:
             values["_updated"] = datetime.datetime.now()
             values["_updatedby"] = get_sessionbridge().userid()
@@ -309,10 +284,7 @@ class ModelManager(object):
         with Tx.begin() as tx:
             assert key.name
             cur = tx.get_cursor()
-            cols = list(self.column_names)
-            for c in cols:
-                if c not in values:
-                    cols.remove(c)
+            cols = set(self.column_names) & set(values.keys())
             v = [values[c] for c in cols]
             if insert:
                 sql = 'INSERT INTO %s ( "%s" ) VALUES ( %s )' % \
@@ -372,7 +344,7 @@ class ModelManager(object):
         if not cur.closed:
             ret = cur.fetchmany()
             if len(ret) < cur.arraysize:
-                print "ModelManager.query: no more results, closing cursor"
+                logging.debug("ModelManager.query: no more results, closing cursor")
                 tx = Tx.get()
                 assert tx, "ModelManager.query: no transaction active"
                 tx.close_cursor(cur)
@@ -422,9 +394,7 @@ class ModelManager(object):
         self.update_table(cur)
 
     def update_table(self, cur):
-        sql = """SELECT column_name, column_default, is_nullable, data_type
-            FROM information_schema.columns
-            WHERE table_name = %s"""
+        sql = "SELECT column_name, column_default, is_nullable, data_type FROM information_schema.columns WHERE table_name = %s"
         v = [ self.table ]
         if self.schema:
             sql += ' AND table_schema = %s'
@@ -799,9 +769,9 @@ class ModelMetaClass(type):
             kind._flat = kind._flat if hasattr(kind, "_flat") else False
             kind._audit = kind._audit if hasattr(kind, "_audit") else True
             acl = Config.model["model"][name]["acl"] \
-                if "model" in Config.model and \
-                    name in Config.model["model"] and \
-                    "acl" in Config.model["model"][name] \
+                if "model" in gripe.Config.model and \
+                    name in gripe.Config.model["model"] and \
+                    "acl" in gripe.Config.model["model"][name] \
                 else kind.acl if hasattr(kind, "acl") else None
             _set_acl(kind, acl)
             properties = {}
@@ -838,7 +808,7 @@ class ModelMetaClass(type):
             kind.modelmanager = mm
             kind.load_template_data()
         else:
-            _set_acl(kind, Config.model.get("global_acl", kind.acl))
+            _set_acl(kind, gripe.Config.model.get("global_acl", kind.acl))
         return kind
 
 class Model(object):
@@ -859,7 +829,7 @@ class Model(object):
         for (propname, propvalue) in kwargs.items():
             if propname in ret._allproperties:
                 setattr(ret, propname, propvalue)
-        print "__new__: ", ret._values
+        logging.debug("%s.__new__: %s", ret.kind(), ret._values)
         return ret
 
     def __repr__(self):
@@ -915,7 +885,7 @@ class Model(object):
             self._ancestors = "/"
 
     def _populate(self, values):
-        print "_populate(%s)" % values
+        logging.debug("%s._populate(%s)", self.kind(), values)
         if values:
             self._values = {}
             v = {}
@@ -1068,7 +1038,7 @@ class Model(object):
             if prop.private:
                 continue
             newval = descriptor[name]
-            print "Updating %s.%s to %s" % (self.__class__.__name__, name, newval)
+            logging.debug("Updating %s.%s to %s", self.kind(), name, newval)
             if hasattr(self, "update_" + name) and callable(getattr(self, "update_" + name)):
                 getattr(self, "update_" + name)(descriptor)
             else:
@@ -1141,8 +1111,9 @@ class Model(object):
 
     @classmethod
     def for_name(cls, name):
-        print "for_name(%s): registry = %s" % (name, Model.classes)
-        name = name.lower()
+        name = name.replace('/', '.').lower()
+        if name.startswith("."):
+            (empty, dot, name) = name.partition(".")
         ret = Model.classes[name] if name in Model.classes else None
         if not ret and "." not in name:
             for n in Model.classes:
@@ -1152,6 +1123,7 @@ class Model(object):
                     assert not ret, "for_name(%s): Already found match %s but there's a second one %s" % \
                         (name, ret.kind(), c.kind())
                     ret = c
+        logging.debug("for_name(%s): %s", name, ret.__name__ if ret else None)
         return ret
 
     @classmethod
@@ -1234,7 +1206,7 @@ class Model(object):
     def load_template_data(cls):
         cname = cls.__name__.lower()
         fname = "data/template/" + cname + ".json"
-        datastr = read_file(fname)
+        datastr = gripe.read_file(fname)
         if datastr:
             with Tx.begin():
                 if cls.all(keys_only = True).count() == 0:
@@ -1306,7 +1278,6 @@ class Key(object):
         return hash(str(self))
 
     def get(self):
-        print "Key.get: self.kind = %s" % self.kind
         cls = Model.for_name(self.kind)
         return cls.get(self)
 
@@ -1499,8 +1470,9 @@ class TimeProperty(DateTimeProperty):
         return datetime.time(dt.hour, dt.minute, dt.second, dt.microsecond)
 
 class ReferenceConverter(PropertyConverter):
-    def __init__(self, reference_class = None):
+    def __init__(self, reference_class = None, serialize = True):
         self.reference_class = reference_class
+        self.serialize = True
 
     def convert(self, value):
         return Model.get(value)
@@ -1517,7 +1489,7 @@ class ReferenceConverter(PropertyConverter):
         return Model.get(Key(self.reference_class, sqlvalue) if self.reference_class else Key(sqlvalue))
 
     def to_jsonvalue(self, value):
-        return value.to_dict()
+        return value.to_dict() if self.serialize else value.id()
 
     def from_jsonvalue(self, value):
         clazz = prop.reference_class
@@ -1537,13 +1509,14 @@ class ReferenceProperty(ModelProperty):
         super(ReferenceProperty, self).__init__(*args, **kwargs)
         self.reference_class = args[0] \
             if args \
-            else (kwargs["reference_class"] if "reference_class" in kwargs else None)
+            else kwargs.get("reference_class")
         if self.reference_class and isinstance(self.reference_class, basestring):
             self.reference_class = Model.for_name(self.reference_class)
-        self.collection_name = kwargs["collection_name"] if "collection_name" in kwargs else None
-        self.collection_verbose_name = kwargs["collection_verbose_name"] if "collection_verbose_name" in kwargs else None
         assert not self.reference_class or isinstance(self.reference_class, ModelMetaClass)
-        self.converter = ReferenceConverter(self.reference_class)
+        self.collection_name = kwargs.get("collection_name")
+        self.collection_verbose_name = kwargs.get("collection_verbose_name")
+        self.serialize = kwargs.get("serialize", True)
+        self.converter = ReferenceConverter(self.reference_class, self.serialize)
 
     def set_kind(self, kind):
         super(ReferenceProperty, self).set_kind(kind)
@@ -1569,18 +1542,26 @@ if __name__ == "__main__":
             value = IntegerProperty(default = 12)
 
         jan = Test(testname = "Jan", value = "42")
-        print "++", jan.id(), jan.testname, jan.value
+        assert jan.id() is None
+        assert jan.testname == "Jan"
+        assert jan.value == 42
         jan.put()
-        print "+++", jan.id()
-
+        assert jan.id()
         x = jan.key()
 
+    with Tx.begin():
         y = Test.get(x)
-        print y.testname, y.value
+        assert y.id() == x.id
+        assert y.testname == "Jan"
+        assert y.value == 42
+        y.value = 43
+        y.put()
+        assert y.value == 43
 
+    with Tx.begin():
         tim = Test(testname = "Tim", value = 9, parent = y)
         tim.put()
-        print tim.parent()
+        assert tim.parent().id == y.id()
 
         Tx.flush_cache()
         q = Query(Test)
