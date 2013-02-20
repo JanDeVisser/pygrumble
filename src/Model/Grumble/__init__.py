@@ -19,8 +19,8 @@ class User(grumble.Model):
     display_name = grumble.TextProperty()
     roles = grumble.ListProperty()
     
-    def has_role(self, role):
-        return role in self.roles if self.roles else False
+    def has_role(self, roles):
+        return set(roles) &  set(self.roles)
 
     @classmethod
     def login(cls, email, password):
@@ -40,8 +40,10 @@ class HttpAccess(grumble.Model):
 
 if __name__ == "__main__":
     with grumble.Tx.begin():
-        u = User.login("jan@de-visser.net", "wbw417")
-        assert u, "login returned no User object"
+        uid = User.login("jan@de-visser.net", "wbw417")
+        assert uid, "login returned no User id"
+        u = User.get(uid)
+        assert u, "uid %s does not map to a User model" % uid
         assert u.email == "jan@de-visser.net", "User has unexpected email address %s" % u.email
         assert u.has_role("admin"), "%s does not have admin role while he should" % u.email
         assert not u.has_role("coach"), "%s does have coach role while he shouldn't" % u.email

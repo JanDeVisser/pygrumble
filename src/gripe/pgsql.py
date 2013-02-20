@@ -18,7 +18,7 @@ class Connection(psycopg2.extensions.connection):
         return super(Connection, self).cursor(cursor_factory=Cursor)
 
     def commit(self):
-        logging.info("Commit")
+        logging.debug("Commit")
         try:
             super(Connection, self).commit()
         except Exception, exc:

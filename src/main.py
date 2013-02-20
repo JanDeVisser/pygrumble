@@ -12,7 +12,7 @@ if __name__ == '__main__':
 
     request = webapp2.Request.blank('/')
     response = request.get_response(app)
-    print response
+    #print response
     assert response.status_int == 302, "Expected to be redirected"
 
     cookie = response.headers["Set-Cookie"]
@@ -25,7 +25,7 @@ if __name__ == '__main__':
     request = webapp2.Request.blank(location)
     request.headers['Cookie'] = "grumble=%s" % cookie
     response = request.get_response(app)
-    print response
+    #print response
     assert response.status_int == 200, "Expected OK"
 
     request = webapp2.Request.blank(location)
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     request.POST["userid"] = "jan@de-visser.net"
     request.POST["password"] = "wbw417"
     response = request.get_response(app)
-    print response
+    #print response
     assert response.status_int == 302, "Expected to be redirected"
     location  = response.headers["Location"]
     assert location == "http://localhost/"
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     request = webapp2.Request.blank(location)
     request.headers['Cookie'] = "grumble=%s" % cookie
     response = request.get_response(app)
-    print response
+    #print response
     assert response.status_int == 200, "Expected OK"
 
 

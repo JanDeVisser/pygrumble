@@ -797,7 +797,6 @@ class ModelMetaClass(type):
                         setattr(kind, p.name, p)
                         kind._allproperties[p.name] = value
             kind._properties = properties
-            kind._kind =("%s.%s" % (kind.__module__, name)).lower()
             mm = ModelManager.for_name(name)
             mm.flat = kind._flat
             mm.audit = kind._audit
@@ -1111,6 +1110,7 @@ class Model(object):
 
     @classmethod
     def for_name(cls, name):
+        logging.debug("for_name(%s): registry = %s", name, Model.classes)
         name = name.replace('/', '.').lower()
         if name.startswith("."):
             (empty, dot, name) = name.partition(".")
@@ -1140,7 +1140,9 @@ class Model(object):
             fullname = ".".join(hierarchy)
         fullname = fullname.lower()
         assert fullname not in cls.classes, "Model._register_class: Class '%s' is already registered" % fullname
+        logging.debug("Model._register_class %s => %s", fullname, modelclass)
         Model.classes[fullname] = modelclass
+        modelclass._kind = fullname
 
     @classmethod
     def get(cls, key, values = None):
@@ -1167,8 +1169,7 @@ class Model(object):
         assert not len(args) % 2, "Must specify a value for every filter"
         assert cls != Model, "Cannot query on unconstrained Model class"
         q = Query(cls, kwargs.get("keys_only", True))
-        if "ancestor" in kwargs:
-            assert not self._flat, "Cannot do ancestor queries on flat models"
+        if "ancestor" in kwargs and not cls._flat:
             q.ancestor(kwargs["ancestor"])
         ix = 0
         while ix < len(args):
@@ -1290,7 +1291,9 @@ class Query(object):
         self.filters = []
 
     def ancestor(self, ancestor):
-        assert not Model.for_name(self.kind)._flat, "Cannot do ancestor queries on flat model %s" % self.kind
+        if Model.for_name(self.kind)._flat:
+            logging.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
+            return
         assert (ancestor is None) or isinstance(ancestor, basestring) or \
             isinstance(ancestor, Model) or isinstance(ancestor, Key), \
             "Must specify an ancestor object in Query.ancestor"

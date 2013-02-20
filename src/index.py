@@ -10,7 +10,6 @@ import webapp2
 
 class MainPage(webapp2.RequestHandler):
     def get(self):
-        print "here"
         self.response.headers['Content-Type'] = 'text/html'
         self.response.out.write("""
         <html>

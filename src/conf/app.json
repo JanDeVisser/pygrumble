@@ -10,6 +10,9 @@
         "application_name": "Grumble test app",
         "application_url": "http://localhost:8080/"
     },
+    "container": {
+        "pipeline": [ "grit.RequestLogger", "grit.TxWrapper", "grit.Session" ]
+    },
     "mounts": [
         { "path": "/", "app": "index.app", "role": "admin" }
     ]
