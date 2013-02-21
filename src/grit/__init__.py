@@ -78,10 +78,11 @@ sessionmanagerfactory = resolve(gripe.Config.app.get("sessionmanager", None)) or
 sessionmanager = sessionmanagerfactory()
 
 class RequestCtx(object):
-    def __init__(self, router, request, response):
-        self.router = router
+    def __init__(self, request, response, defaults):
         self.request = request
         self.response = response
+        for k in defaults:
+            setattr(self, k, defaults[k])
 
 class Session(object):
     _tl = threading.local()
@@ -101,6 +102,7 @@ class Session(object):
         request.session = self
         request.user = self._user
         reqctx.user = self._user
+        reqctx.session = self
         self._tl.session = self
         logging.debug("Session.__init__: %s, %s", self.__class__._tl, threading.current_thread().ident)
 
@@ -206,6 +208,53 @@ class TxWrapper(object):
         logging.debug("TxWrapper.__exit__(%s, %s)", exception_type, exception_value)
         return self._tx.__exit__(exception_type, exception_value, trace)
 
+class Auth(object):
+    def __init__(self, reqctx):
+        self.reqctx = reqctx
+        self.request = reqctx.request
+        self.response = reqctx.response
+
+    def auth_needed(self):
+        if not hasattr(self.reqctx, "session"):
+            logging.debug("Auth.needs_auth: no session")
+            return False
+        if not (hasattr(self.reqctx, "roles") and self.reqctx.roles):
+            logging.debug("Auth.needs_auth: no specific role needed")
+            return False
+        self.session = self.reqctx.session
+        self.roles = self.reqctx.roles
+        return True
+
+    def logged_in(self):
+        if not (hasattr(self.reqctx, "user") and self.reqctx.user):
+            logging.debug("Auth.needs_login: no user. Redirecting to /login")
+            self.session["redirecturl"] = self.request.path_qs
+            self.response.status = "302 Moved Temporarily"
+            self.response.headers["Location"] = "/login"
+            return False
+        else:
+            self.user = self.reqctx.user
+            return True
+
+    def confirm_role(self):
+        logging.debug("Auth.confirm_role(%s)", self.reqctx.roles)
+        if not self.user.has_role(self.reqctx.roles):
+            logging.debug("Auth.confirm_role: user %s doesn't have any role in %s", self.user.email, self.reqctx.roles)
+            self.response.status = "401 Unauthorized"
+
+    @classmethod
+    def begin(cls, reqctx):
+        logging.debug("Auth.begin")
+        return Auth(reqctx)
+
+    def __enter__(self):
+        logging.debug("Auth.__enter__")
+        self.auth_needed() and self.logged_in() and self.confirm_role()
+
+    def __exit__(self, exception_type, exception_value, trace):
+        logging.debug("Auth.__exit__(%s, %s)", exception_type, exception_value)
+        return False
+
 class Dispatcher(object):
     def __init__(self, reqctx):
         self.reqctx = reqctx
@@ -219,14 +268,11 @@ class Dispatcher(object):
 
     def __enter__(self):
         logging.debug("Dispatcher.__enter__")
-        rv = self.reqctx.router.default_dispatcher(self.request, self.response)
-        if not rv and self.request.response:
-            rv = self.request.response
-        if isinstance(rv, basestring):
-            rv = webapp2.Response(rv)
-        elif isinstance(rv, tuple):
-            rv = webapp2.Response(*rv)
-        self.reqctx.response = rv
+        if hasattr(self.reqctx, "app"):
+            self.reqctx.app.router.dispatch(self.request, self.response)
+        elif hasattr(self.reqctx, "handler"):
+            self.request.route_kwargs = {}
+            self.reqctx.handler(self.request, self.response).dispatch()
 
     def __exit__(self, exception_type, exception_value, trace):
         # FIXME: Do fancy HTTP error code stuffs maybe
@@ -380,47 +426,36 @@ class Logout(ReqHandler):
     def post(self):
         self.get()
 
-def confirm_role(request, role):
-    logging.debug("main::confirm_role(%s)", role)
-    if not request.user:
-        logging.debug("confirm_role: no user. Redirecting to /login")
-        request.session["redirecturl"] = request.path_qs
-        return "/login"
-    elif not request.user.has_role(roles):
-        logging.debug("confirm_role: user %s doesn't have any role in %s", user.email, roles)
-        return 401
-    else:
-        logging.debug("confirm_role: OK")
-        return False
-    return ret
+def handle_request(request, *args, **kwargs):
+    root = kwargs["root"]
+    if request.path == '/favicon.ico':
+        return None
+    logging.debug("main::WSGIApplication::handle_request path: %s method: %s", request.path_qs, request.method)
 
-def dispatch_to_mount(request, *args, **kwargs):
-    logging.debug("main::dispatch_to_mount")
-    wsgi_app = kwargs["app"]
-    roles = kwargs["roles"]
-    where = None          # FIXME UGLY MESS
-    if roles:
-        where = confirm_role(request, roles)
-        if where:
-            if isinstance(where, basestring):
-                request.response.status = "302 Moved Temporarily"
-                request.response.headers["Location"] = str(where)
-            else:
-                request.response.status_int = 401
-            return request.response
-    logging.debug("dispatching")
-    wsgi_app.router.dispatch(request, request.response)
+    reqctx = RequestCtx(request, request.response, kwargs)
+    def run_pipeline(l):
+        logging.debug("run_pipeline(%s)", l)
+        if l:
+            handler_cls = l.pop(0)
+            with handler_cls.begin(reqctx):
+                logging.info("----> %s %s", reqctx.response.status, reqctx.response.status_int)
+                if reqctx.response.status_int in [0, 200]:
+                    run_pipeline(l)
+
+    run_pipeline(list(root.pipeline))
+
+    rv = request.response
+    if isinstance(rv, basestring):
+        rv = webapp2.Response(rv)
+    elif isinstance(rv, tuple):
+        rv = webapp2.Response(*rv)
+    request.response = rv
 
 class WSGIApplication(webapp2.WSGIApplication):
-    _app = None
-
     def __init__(self, *args, **kwargs):
-        assert self.__class__._app is None, "grit.WSGIApplication is a singleton"
-        self.__class__._app = self
         super(WSGIApplication, self).__init__(*args, **kwargs)
-        self.router.set_dispatcher(self.__class__.custom_dispatcher)
-        self.router.add(webapp2.Route("/login", handler=Login))
-        self.router.add(webapp2.Route("/logout", handler=Logout))
+        self.router.add(webapp2.Route("/login", handler=handle_request, defaults = { "root": self, "handler": Login, "roles": [] }))
+        self.router.add(webapp2.Route("/logout", handler=handle_request, defaults = { "root": self, "handler": Logout, "roles": [] }))
         self.mounts = []
         self.pipeline = []
 
@@ -448,24 +483,7 @@ class WSGIApplication(webapp2.WSGIApplication):
                 wsgi_sub_app = getattr(mod, app_obj)
                 assert isinstance(wsgi_sub_app, webapp2.WSGIApplication)
                 self.mounts.append((path, wsgi_sub_app))
-                self.router.add(webapp2.Route(path, handler=dispatch_to_mount, defaults = { "root": self, "app": wsgi_sub_app, "roles": roles }))
-
-    @staticmethod
-    def custom_dispatcher(router, request, response):
-        if request.path == '/favicon.ico':
-            return None
-        logging.debug("main::WSGIApplication.custom_dispatcher path: %s method: %s", request.path_qs, request.method)
-
-        reqctx = RequestCtx(router, request, response)
-        def run_pipeline(l):
-            logging.debug("run_pipeline(%s)", l)
-            if l:
-                handler_cls = l.pop(0)
-                with handler_cls.begin(reqctx):
-                    run_pipeline(l)
-
-        run_pipeline(list(WSGIApplication._app.pipeline))
-        return reqctx.response
+                self.router.add(webapp2.Route(path, handler=handle_request, defaults = { "root": self, "app": wsgi_sub_app, "roles": roles }))
 
 if __name__ == '__main__':
     app = WSGIApplication(debug=True)

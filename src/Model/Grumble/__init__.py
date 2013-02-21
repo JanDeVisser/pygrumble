@@ -1,6 +1,7 @@
 __author__="jan"
 __date__ ="$30-Jan-2013 12:08:58 PM$"
 
+import logging
 import sha
 import threading
 
@@ -20,7 +21,8 @@ class User(grumble.Model):
     roles = grumble.ListProperty()
     
     def has_role(self, roles):
-        return set(roles) &  set(self.roles)
+        logging.debug("has_role: %s %s %s", set(roles), set(self.roles), set(roles) &  set(self.roles))
+        return len(set(roles) & set(self.roles)) > 0
 
     @classmethod
     def login(cls, email, password):

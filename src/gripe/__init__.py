@@ -8,7 +8,7 @@ import os.path
 import sys
 
 
-logging.basicConfig(level = logging.INFO, datefmt = '%Y-%m-%d %H:%M:%S', \
+logging.basicConfig(level = logging.DEBUG, datefmt = '%Y-%m-%d %H:%M:%S', \
     format = '%(asctime)s %(levelname)-8s %(message)s')
 
 class Error(Exception):

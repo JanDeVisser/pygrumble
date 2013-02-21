@@ -4,6 +4,7 @@
 # and open the template in the editor.
 
 import grit
+import re
 
 app = grit.WSGIApplication(debug=True)
 
@@ -42,7 +43,7 @@ if __name__ == '__main__':
     request = webapp2.Request.blank(location)
     request.headers['Cookie'] = "grumble=%s" % cookie
     response = request.get_response(app)
-    #print response
     assert response.status_int == 200, "Expected OK"
-
+    print response.body
+    #assert re.match("Really", response.body)
 

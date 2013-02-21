@@ -11,9 +11,9 @@
         "application_url": "http://localhost:8080/"
     },
     "container": {
-        "pipeline": [ "grit.RequestLogger", "grit.TxWrapper", "grit.Session" ]
+        "pipeline": [ "grit.RequestLogger", "grit.TxWrapper", "grit.Session", "grit.Auth" ]
     },
     "mounts": [
-        { "path": "/", "app": "index.app", "role": "admin" }
+        { "path": "/", "app": "index.app", "roles": [ "admin" ] }
     ]
 }
