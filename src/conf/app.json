@@ -14,6 +14,10 @@
         "pipeline": [ "grit.RequestLogger", "grit.TxWrapper", "grit.Session", "grit.Auth" ]
     },
     "mounts": [
-        { "path": "/", "app": "index.app", "roles": [ "admin" ] }
+        { "path": "/", "app": "index.app", "roles": [ "admin" ] },
+        { "path": "/conf/.+", "roles": [ "admin" ] },
+        { "path": "/grit/.+", "roles": [ "admin" ] },
+        { "path": "/image/.+", "roles": [] },
+        { "path": "/json/.+|/img/.+", "app": "grit.handlers.app", "roles": [ "admin" ]}
     ]
 }

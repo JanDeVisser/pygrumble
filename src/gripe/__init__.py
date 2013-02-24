@@ -33,10 +33,12 @@ def root_dir():
         _root_dir = os.path.dirname(_root_dir) if _root_dir != modfile else '..'
         logging.info("root dir: %s", _root_dir)
     return _root_dir
+#       logging.info("os.getcwd(): %s", os.getcwd())
+#   return os.getcwd()
 
 def read_file(fname):
     try:
-        filename = "%s/%s" % (root_dir(), fname)
+        filename = os.path.join(root_dir(), fname)
         fp = open(filename, "rb")
     except IOError as e:
         #print "IOError reading config file %s: %s" % (filename, e.strerror)
@@ -44,6 +46,22 @@ def read_file(fname):
     else:
         with fp:
             return fp.read()
+
+
+_content_types = {
+    "json": "application/json",
+    "jpg": "image/jpeg",
+    "gif": "image/gif",
+    "png": "image/png",
+    "js": "text/javascript",
+    "css": "text/css",
+    "xml": "text/xml",
+    "txt": "text/plain",
+    "html": "text/html"
+}
+def get_content_type(disposition):
+    (fname, dot, ext) = disposition.rpartition(".")
+    return _content_types.get(ext, "text/plain")
 
 class ConfigMeta(type):
     def __getattribute__(cls, name):

@@ -813,7 +813,7 @@ class ModelMetaClass(type):
 class Model(object):
     __metaclass__ = ModelMetaClass
     classes = {}
-    acl = { "admin": "CRWDQ", "owner": "R" }
+    acl = { "admin": "RUDQC", "owner": "R" }
 
     def __new__(cls, *args, **kwargs):
         ret = super(Model, cls).__new__(cls)
@@ -850,9 +850,9 @@ class Model(object):
 
     def get_name(self):
         return self.key_prop if hasattr(self, "key_prop") else self._key_name
-
-    def properties(self):
-        return self._properties
+    @classmethod
+    def properties(cls):
+        return cls._properties
 
     def _set_ancestors_from_parent(self, parent):
         if not self._flat:
@@ -1036,23 +1036,24 @@ class Model(object):
         for name, prop in self.properties().items():
             if prop.private:
                 continue
-            newval = descriptor[name]
-            logging.debug("Updating %s.%s to %s", self.kind(), name, newval)
-            if hasattr(self, "update_" + name) and callable(getattr(self, "update_" + name)):
-                getattr(self, "update_" + name)(descriptor)
-            else:
-                try:
-                    prop.from_json_value(self, descriptor)
-                except NotSerializableError:
-                    pass
+            if name in descriptor:
+                newval = descriptor[name]
+                logging.debug("Updating %s.%s to %s", self.kind(), name, newval)
+                if hasattr(self, "update_" + name) and callable(getattr(self, "update_" + name)):
+                    getattr(self, "update_" + name)(descriptor)
+                else:
+                    try:
+                        prop.from_json_value(self, descriptor)
+                    except NotSerializableError:
+                        pass
         self.put()
         hasattr(self, "sub_update") and callable(self.sub_update) and self.sub_update(descriptor)
         self.put()
 	return self.to_dict()
     
     def get_user_permissions(self):
-        roles = set(get_sessionbridge.roles())
-        if get_sessionbridge().userid() == self.owner():
+        roles = set(get_sessionbridge().roles())
+        if get_sessionbridge().userid() == self.ownerid():
             roles.add("owner")
         roles.add("world")
         perms = set()
@@ -1062,7 +1063,7 @@ class Model(object):
 
     @classmethod
     def get_user_classpermissions(cls):
-        roles = set(get_sessionbridge.roles())
+        roles = set(get_sessionbridge().roles())
         roles.add("world")
         perms = set()
         for role in roles:
@@ -1098,11 +1099,11 @@ class Model(object):
 
     @classmethod
     def can_query(cls):
-        return "Q" in self.get_user_classpermissions()
+        return "Q" in cls.get_user_classpermissions()
 
     @classmethod
-    def can_create(cls, roles):
-        return "C" in self.get_user_classpermissions()
+    def can_create(cls):
+        return "C" in cls.get_user_classpermissions()
 
     @classmethod
     def kind(cls):
@@ -1114,6 +1115,8 @@ class Model(object):
         name = name.replace('/', '.').lower()
         if name.startswith("."):
             (empty, dot, name) = name.partition(".")
+        if name.startswith("__main__."):
+            (main, dot, name) = name.partition(".")
         ret = Model.classes[name] if name in Model.classes else None
         if not ret and "." not in name:
             for n in Model.classes:
