@@ -14,6 +14,11 @@ class BinaryConverter(grumble.PropertyConverter):
     def __init__(self):
         self.datatype = psycopg2.Binary
 
+    def convert(self, value):
+        # psycopg2.Binary is a function, not a class. Therefore our isinstance
+        # test in the base convert method doesn't work.
+        return self.datatype(value)
+
     def to_jsonvalue(self, value):
         raise gripe.NotSerializableError(self.name)
 

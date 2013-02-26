@@ -1,0 +1,74 @@
+<!DOCTYPE xhtml>
+{% macro import_script(s) %}
+    <script src="{{s}}" type="text/javascript"></script>
+{% endmacro %}
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:st="http://www.sweattrails.com/html">
+  <head>
+    {% block head %}
+    {% endblock %}
+    <link rel="stylesheet" type="text/css" href="/css/gristle.css"/>
+    <style type="text/css">
+        {% block css %}
+	{% endblock css %}
+    </style>
+    <script src="/javascript/grit.js" type="text/javascript"></script>
+    <script src="/javascript/action.js" type="text/javascript"></script>
+    <script src="/javascript/datasource.js" type="text/javascript"></script>
+    <script src="/javascript/form.js" type="text/javascript"></script>
+    <script src="/javascript/table.js" type="text/javascript"></script>
+    <script src="/javascript/treeview.js" type="text/javascript"></script>
+    <script src="/javascript/lookup.js" type="text/javascript"></script>
+    <script>
+	{% block javascript %}
+	{% endblock javascript %}
+    </script>
+    {% block imports %}
+    {% endblock %}
+    <title>
+	{% block title %}
+	SweatTrails
+	{% endblock %}
+    </title>
+  </head>
+  <body onload="$$.run();">
+    <div id="topbar" class="topbar">
+	{% block topbar %}
+	<div class="tools">
+            {% if user %}
+		{{ user.display_name|d(user.email) }} |
+		<a class="whitelink" href="/">Home</a> |
+		<a class="whitelink" href="{{ url['logout']|e }}">Logout</a>
+            {% endif %}
+        </div>
+	{% endblock topbar %}
+    </div>
+    <span id="document" class="document">
+	<div id="sidebar" class="sidebar">
+	    <div id="sidebarwrapper" class="sidebarwrapper">
+		{% block sidebar %}
+		{% endblock sidebar %}
+	    </div>
+	</div>
+	<div id="documentwrapper" class="documentwrapper">
+	    <div class="mainpage" id="mainpage">
+                {% block pagecontent %}
+                    <div class="tabbox" id="tabbox">
+                    </div>
+                    <div class="pagebox" id="pagebox" width="100%">
+                        <div id="page_pleasewait" class="tabpage">
+                            <span style="text-align: center;"><img src="/image/throbber.gif" height="32" width="32"/>&#160;Please wait</span>
+                        </div>
+                        <st:tabs>
+                            {% block tabs %}
+                            {% endblock tabs %}
+                        </st:tabs>
+                        {% block mainpage %}
+                        {% endblock mainpage %}
+                    </div>
+                {% endblock pagecontent %}
+	    </div>
+        </div>
+    </span>
+  </body>
+</html>
+

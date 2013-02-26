@@ -2,21 +2,18 @@ __author__="jan"
 __date__ ="$30-Jan-2013 12:08:58 PM$"
 
 import logging
-import sha
 import threading
 
 import grumble
 
-_tl = threading.local()
-
 class HttpSession(grumble.Model):
+    _flat = True
     session_data = grumble.JSONProperty()
-    created = grumble.DateTimeProperty(auto_now_add = True)
-    last_access = grumble.DateTimeProperty(auto_now = True)
 
 class User(grumble.Model):
-    email = grumble.TextProperty(Key = True)
-    password = grumble.TextProperty()
+    _flat = True
+    email = grumble.TextProperty(is_key = True)
+    password = grumble.PasswordProperty()
     display_name = grumble.TextProperty()
     roles = grumble.ListProperty()
     
@@ -26,13 +23,15 @@ class User(grumble.Model):
 
     @classmethod
     def login(cls, email, password):
-        user = User.query("email = ", email, "password = ", sha.sha(password).hexdigest(), ancestor = None)
+        hash = grumble.PasswordProperty.hash(password)
+        user = User.query("email = ", email, "password = ", hash, ancestor = None)
         if user:
             assert isinstance(user, User), "Huh? More than one user with the same email and password??"
-            _tl.user = user
         return user.id() if user else None
 
 class HttpAccess(grumble.Model):
+    _flat = True
+    _audit = False
     timestamp = grumble.DateTimeProperty(auto_now_add = True)
     remote_addr = grumble.TextProperty()
     user = grumble.TextProperty()

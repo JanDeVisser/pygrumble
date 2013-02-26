@@ -1,0 +1,190 @@
+/* 
+    Document   : sweattrails
+    Created on : 4-Mar-2012, 11:31:11 AM
+    Author     : jan
+    Description:
+        Basic sweattrails stylesheet
+*/
+
+root { 
+    display: block;
+}
+
+body {
+    font-family: Verdana,Arial,sans serif;
+    margin: 0 0 0 0;
+}
+
+tr.tableheader {
+    background-color: #47BCFD;
+}
+
+th {
+    text-align: left;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    padding-right: 5px;
+    padding-left: 5px;
+}
+
+span.tab {
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-right: 10px;
+    padding-left: 10px;
+    border-style: solid;
+    border-width: thin;
+    border-radius: 5px 5px 0px 0px;
+}
+
+span.tab_selected {
+    background-color:  #47BCFD;
+    margin: 0px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-right: 10px;
+    padding-left: 10px;
+    border-style: solid;
+    border-width: medium;
+    border-radius: 5px 5px 0px 0px;
+}
+
+div.tabpage {
+    height: 100%
+}
+
+div.tabbox {
+    padding-top: 12px;
+}
+
+div.pagebox {
+    margin-top: 10px;
+    margin-left: 0px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    padding-right: 10px;
+    padding-left: 10px;
+    border-style: solid;
+    border-width: thin;
+    border-radius: 5px;
+    height: 100%;
+}
+
+div.boxtitle {
+    font-weight: bold;
+}
+
+div.buttonbar-header {
+    border-bottom: thin solid black;
+    padding-top: 5px;
+    padding-left: 2px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+div.buttonbar-footer {
+    border-top: thin solid black;
+    padding-top: 5px;
+    padding-left: 2px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+div.menubar {
+    border-bottom: thin solid black;
+    padding-bottom: 5px;
+    padding-left: 2px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+.topbar {
+    margin: 0 0 0 0;
+    width: 100%;
+    height: 50px;
+    background-color: #BFE4FB;
+}
+
+.sidebar {
+    float: left;
+    width: 230px;
+    background-color: #BFE4FB;
+    height: 100%;
+}
+
+.sidebarwrapper {
+    padding: 10px 5px 0 10px;
+    background-color: #BFE4FB;
+    height: 100%;
+    position: fixed;
+    top: 50px;
+    bottom: -0px;
+    left: 0px;
+    width: 210px;
+}
+
+.mainpage {
+    margin: 0 0 0 230px;
+    height: 100%
+}
+
+.documentwrapper {
+    height: 100%;
+    padding: 5px;
+    clip: rect(1px, 0px, 0px, 0px);
+}
+
+.document {
+    height: 100%;
+    width: 95%;
+}
+
+.tools {
+    position: absolute;
+    top: 10px;
+    right: 1em;
+    color: white;
+}
+
+a.whitelink:link {
+    text-decoration: none;
+    color: white;
+}
+
+a.whitelink:visited {
+    text-decoration: none;
+    color: #D3D3D3;
+}
+
+a.menulink {
+    text-decoration: none;
+    color: blue;
+}
+
+a.disabledmenulink {
+    text-decoration: none;
+    color: #BEBEBE;
+}
+
+.propsbox {
+    border: thin solid black;
+    padding: 5px;
+    margin-left: 20px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+.menu {
+    position: absolute;
+    background-color: white;
+    border: thin solid black;
+    padding: 10px;
+    margin-left: 0px;
+    margin-top: 0px;
+    margin-bottom: 5px;
+    border-radius: 5px;
+}
+
+div.treeview-daycare {
+    margin-left: 20px;
+}

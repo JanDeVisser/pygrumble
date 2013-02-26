@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import os.path
+import sha
 import sys
 import threading
 import traceback
@@ -452,7 +453,11 @@ class PropertyConverter(object):
         self.datatype = datatype
 
     def convert(self, value):
-        return self.datatype(value)
+        try:
+            return self.datatype(value) if not isinstance(value, self.datatype) else value
+        except:
+            logging.debug("converter: %s - value %s - datatype %s", self.__class__.__name__, value, self.datatype)
+            raise
 
     def to_sqlvalue(self, value):
         return value
@@ -1137,7 +1142,7 @@ class Model(object):
         else:
             module = module.lower()
             hierarchy = module.split(".")
-            if hierarchy[0] == 'model':
+            while hierarchy[0] in [ 'model', '__main__' ]:
                 hierarchy.pop(0)
             hierarchy.append(name)
             fullname = ".".join(hierarchy)
@@ -1410,6 +1415,15 @@ class StringProperty(ModelProperty):
 class TextProperty(StringProperty):
     pass
 
+class PasswordProperty(StringProperty):
+    def _on_store(self, instance):
+        value = self.__get__(instance, instance.__class__)
+        self.__set__(instance, self.hash(value))
+    
+    @classmethod
+    def hash(cls, password):
+        return password if password and password.startswith("sha://") else "sha://%s" % sha.sha(password if password else "").hexdigest()
+
 class JSONProperty(ModelProperty):
     datatype = dict
     sqltype = "TEXT"
@@ -1442,20 +1456,16 @@ class DateTimeProperty(ModelProperty):
 
     def __init__(self, *args, **kwargs):
         super(DateTimeProperty, self).__init__(*args, **kwargs)
-        self.auto_now = kwargs["auto_now"] if "auto_now" in kwargs else False
-        self.auto_now_add = kwargs["auto_now_add"] if "auto_now_add" in kwargs else False
+        self.auto_now = kwargs.get("auto_now", False)
+        self.auto_now_add = kwargs.get("auto_now_add", False)
 
-    def _on_insert(self, value):
-        if self.auto_now_add and (value is None):
-            return self.now()
-        else:
-            return value
+    def _on_insert(self, instance):
+        if self.auto_now_add and (self.__get__(instance, instance.__class__) is None):
+            self.__set__(instance, self.now())
 
-    def _on_store(self, value):
+    def _on_store(self, instance):
         if self.auto_now:
-            return self.now()
-        else:
-            return value
+            self.__set__(instance, self.now())
 
     def now(self):
         return datetime.datetime.now()

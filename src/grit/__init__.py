@@ -32,7 +32,7 @@ class UserManager(object):
         return Grumble.User.login(userid, password)
 
     def id(self, user):
-        return user.id() if user else None
+        return user.name() if user else None
 
     def displayname(self, user):
         return user.display_name if user else None
@@ -88,7 +88,7 @@ class GrumbleRequestLogger(object):
         with grumble.Tx.begin():
             access = Grumble.HttpAccess()
             access.remote_addr = request.remote_addr
-            access.user = reqctx.user if hasattr(reqctx, "user") else None
+            access.user = reqctx.user.name() if (hasattr(reqctx, "user") and reqctx.user) else None
             access.path = request.path_qs
             access.method = request.method
             access.status = response.status
@@ -123,7 +123,7 @@ class Session(object):
         request.user = self._user
         reqctx.user = self._user
         reqctx.session = self
-        self._tl.session = self
+        Session._tl.session = self
         logging.debug("Session.__init__: _data: %s", self._data)
 
     #
@@ -133,7 +133,7 @@ class Session(object):
     @classmethod
     def begin(cls, reqctx):
         logging.debug("Session.begin")
-        return cls._tl.session if hasattr(cls._tl, "session") else Session(reqctx)
+        return Session._tl.session if hasattr(Session._tl, "session") else Session(reqctx)
 
     def __enter__(self):
         logging.debug("Session.__enter__")
@@ -197,7 +197,7 @@ class Session(object):
 
     @classmethod
     def get(cls):
-        return cls._tl.session if hasattr(cls._tl, "session") else None
+        return Session._tl.session if hasattr(Session._tl, "session") else None
 
     def user(self):
         return self._user
@@ -208,6 +208,14 @@ class Session(object):
     def roles(self):
         return usermanager.roles(self._user)
 
+class SessionBridge(object):
+    def userid(self):
+        session = Session.get()
+        return session.userid() if session else None
+
+    def roles(self):
+        session = Session.get()
+        return session.roles() if session else None
 
 class TxWrapper(object):
     def __init__(self, tx, request):
@@ -397,8 +405,8 @@ class ReqHandler(webapp2.RequestHandler):
                 if hasattr(self, "get_template") and callable(self.get_template) \
                 else None
         if not ret:
-            ret = self.get_modelclass().__name__.lower() \
-                if hasattr(self, "get_modelclass") and callable(self.get_modelclass) \
+            ret = self.get_kind().__name__.lower() \
+                if hasattr(self, "get_kind") and callable(self.get_kind) \
                 else None
         cname = self.__class__.__name__.lower()
         if not ret:
@@ -501,6 +509,7 @@ def handle_request(request, *args, **kwargs):
 class WSGIApplication(webapp2.WSGIApplication):
     def __init__(self, *args, **kwargs):
         super(WSGIApplication, self).__init__(*args, **kwargs)
+        grumble.set_sessionbridge(SessionBridge())
         self.router.add(webapp2.Route("/login", handler=handle_request, defaults = { "root": self, "handler": Login, "roles": [] }))
         self.router.add(webapp2.Route("/logout", handler=handle_request, defaults = { "root": self, "handler": Logout, "roles": [] }))
         self.pipeline = []
@@ -547,7 +556,8 @@ class WSGIApplication(webapp2.WSGIApplication):
                     defaults["relpath"] = mp["relpath"]
             self.router.add(webapp2.Route(path, handler = handler, defaults = defaults))
 
+app = WSGIApplication(debug=True)
+
 if __name__ == '__main__':
-    app = WSGIApplication(debug=True)
     from paste import httpserver
     httpserver.serve(app, host='127.0.0.1', port='8080')

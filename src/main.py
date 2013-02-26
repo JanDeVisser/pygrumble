@@ -137,10 +137,10 @@ if __name__ == '__main__':
     print response.status
     assert response.status_int == 200, "Expected 200 OK"
 
-    request = webapp2.Request.blank("/json/test/%s" % k)
-    request.headers['Cookie'] = "grit=%s" % cookie
-    request.method = "DELETE"
-    response = request.get_response(app)
-    assert response.status_int == 200, "Expected OK"
+#    request = webapp2.Request.blank("/json/test/%s" % k)
+#    request.headers['Cookie'] = "grit=%s" % cookie
+#    request.method = "DELETE"
+#    response = request.get_response(app)
+#    assert response.status_int == 200, "Expected OK"
 
     print "all done"
