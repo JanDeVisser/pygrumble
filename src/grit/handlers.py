@@ -82,7 +82,7 @@ class ModelBridge(object):
         # FIXME adapt to Model.query
         print "query(%s)" % q
         q = self.prepare_query(q)
-        return self.kind().query(q)
+        return [o for o in self.kind().query(**q)]
 
     def load(self):
         data = self.request.body

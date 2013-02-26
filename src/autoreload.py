@@ -1,100 +1,118 @@
 # autoreloading launcher
 # stolen a lot from Ian Bicking's WSGIKit (www.wsgikit.org)
 
-import errno
-import sys
-import thread
-import time
-
 import os
-import re
+import sys
+import time
+import signal
+import threading
+import atexit
+import Queue
 
-RUN_RELOADER = True
-reloadFiles = []
-ignoreFiles = ['<string>']
-#path = "[Cc]:\\Users\\jan\\Documents\\Projects\\Grumble"
-path = ".*"
-match = ".*"
+_interval = 1.0
+_times = {}
+_files = []
+
+_running = False
+_queue = Queue.Queue()
+_lock = threading.Lock()
+
+def _restart(path):
+    _queue.put(True)
+    prefix = 'monitor (pid=%d):' % os.getpid()
+    print >> sys.stderr, '%s Change detected to \'%s\'.' % (prefix, path)
+    print >> sys.stderr, '%s Triggering Apache restart.' % prefix
+    import ctypes
+    ctypes.windll.libhttpd.ap_signal_parent(1)
 
 
-def reloader_thread(freq):
-    mtimes = {}
+def _modified(path):
+    try:
+        # If path doesn't denote a file and were previously
+        # tracking it, then it has been removed or the file type
+        # has changed so force a restart. If not previously
+        # tracking the file then we can ignore it as probably
+        # pseudo reference such as when file extracted from a
+        # collection of modules contained in a zip file.
 
-    main = sys.modules["__main__"]
-    (prj_path, slash, main_py) = main.__file__.replace('\\', '/').rpartition("/")
-    print prj_path, main_py
+        if not os.path.isfile(path):
+            return path in _times
 
-    i = 1
-    while RUN_RELOADER:
-        sysfiles = []
+        # Check for when file last modified.
 
+        mtime = os.stat(path).st_mtime
+        if path not in _times:
+            _times[path] = mtime
 
-        print "autoreload - checking", i
-        i += 1
-        for k, m in sys.modules.items():
-            f = None
-            if m:
-                if hasattr(m, "__loader__") and hasattr(m.__loader__, "archive"):
-                    f = m.__loader__.archive
-                if hasattr(m, "__file__") and m.__file__.replace('\\', '/').startswith(prj_path) and re.match(match, k):
-                    f = m.__file__
-                    print k, f
-            sysfiles.append(f)
+        # Force restart when modification time has changed, even
+        # if time now older, as that could indicate older file
+        # has been restored.
 
-        print mtimes
-        for filename in sysfiles + reloadFiles:
-            if filename and filename not in ignoreFiles:
+        if mtime != _times[path]:
+            return True
+    except:
+        # If any exception occured, likely that file has been
+        # been removed just before stat(), so force a restart.
 
-                orig = filename
-                if filename.endswith(".pyc"):
-                    filename = filename[:-1]
+        return True
 
-                # Get the last-modified time of the source file.
-                try:
-                    mtime = os.stat(filename).st_mtime
-                except OSError, e:
-                    if orig.endswith('.pyc') and e[0] == errno.ENOENT:
-                        # This prevents us from endlessly restarting if
-                        # there is an old .pyc lying around after a .py
-                        # file has been deleted. Note that TG's solution
-                        # actually deletes the .pyc, but we just ignore it.
-                        # See http://www.cherrypy.org/ticket/438.
-                        continue
-                    sys.exit(3) # force reload
+    return False
 
-                if filename not in mtimes:
-                    mtimes[filename] = mtime
-                    continue
+def _monitor():
+    while 1:
+        # Check modification times on all files in sys.modules.
 
-                if mtime > mtimes[filename]:
-                    print filename, "Triggered it"
-                    sys.exit(3) # force reload
-        time.sleep(freq)
+        for module in sys.modules.values():
+            if not hasattr(module, '__file__'):
+                continue
+            path = getattr(module, '__file__')
+            if not path:
+                continue
+            if os.path.splitext(path)[1] in ['.pyc', '.pyo', '.pyd']:
+                path = path[:-1]
+            if _modified(path):
+                return _restart(path)
 
-def restart_with_reloader():
-    while True:
-        args = [sys.executable] + sys.argv
-        if sys.platform == "win32":
-            args = ['"%s"' % arg for arg in args]
-        new_environ = os.environ.copy()
-        new_environ["RUN_MAIN"] = 'true'
-        exit_code = os.spawnve(os.P_WAIT, sys.executable, args, new_environ)
-        if exit_code != 3:
-            return exit_code
+        # Check modification times on files which have
+        # specifically been registered for monitoring.
 
-def main(main_func, args=None, kwargs=None, freq=1):
-    if os.environ.get("RUN_MAIN") == "true":
+        for path in _files:
+            if _modified(path):
+                return _restart(path)
 
-        if args is None:
-            args = ()
-        if kwargs is None:
-            kwargs = {}
-        thread.start_new_thread(main_func, args, kwargs)
+        # Go to sleep for specified interval.
 
-        # If KeyboardInterrupt is raised within reloader_thread,
-        # let it propagate out to the caller.
-        reloader_thread(freq)
-    else:
-        # If KeyboardInterrupt is raised within restart_with_reloader,
-        # let it propagate out to the caller.
-        sys.exit(restart_with_reloader())
+        try:
+            return _queue.get(timeout=_interval)
+        except:
+            pass
+
+_thread = threading.Thread(target=_monitor)
+_thread.setDaemon(True)
+
+def _exiting():
+    try:
+        _queue.put(True)
+    except:
+        pass
+    _thread.join()
+
+atexit.register(_exiting)
+
+def track(path):
+    if not path in _files:
+        _files.append(path)
+
+def start(interval=1.0):
+    global _interval
+    if interval < _interval:
+        _interval = interval
+
+    global _running
+    _lock.acquire()
+    if not _running:
+        prefix = 'monitor (pid=%d):' % os.getpid()
+        print >> sys.stderr, '%s Starting change monitor.' % prefix
+        _running = True
+        _thread.start()
+    _lock.release()

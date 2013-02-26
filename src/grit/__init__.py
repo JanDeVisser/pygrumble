@@ -362,7 +362,7 @@ class ReqHandler(webapp2.RequestHandler):
             cls.env = env
         return cls.env
 
-# Move to sweattrails specific mixin
+# Move to --sweattrails specific mixin
 #    @classmethod
 #    def get_env(cls, env):
 #        env.filters['formatdistance'] = Util.format_distance

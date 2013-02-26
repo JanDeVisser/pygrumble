@@ -1148,7 +1148,7 @@ class Model(object):
         else:
             module = module.lower()
             hierarchy = module.split(".")
-            while hierarchy[0] in [ 'model', '__main__' ]:
+            while hierarchy and hierarchy[0] in [ 'model', '__main__' ]:
                 hierarchy.pop(0)
             hierarchy.append(name)
             fullname = ".".join(hierarchy)
@@ -1180,7 +1180,8 @@ class Model(object):
 
     @classmethod
     def query(cls, *args, **kwargs):
-        assert not len(args) % 2, "Must specify a value for every filter"
+        logging.debug("%s.query: args %s kwargs %s", cls.__name__, args, kwargs)
+        assert (args is None) or (len(args) % 2 == 0), "Must specify a value for every filter"
         assert cls != Model, "Cannot query on unconstrained Model class"
         q = Query(cls, kwargs.get("keys_only", True))
         if "ancestor" in kwargs and not cls._flat:
@@ -1189,7 +1190,7 @@ class Model(object):
         while ix < len(args):
             q.filter(args[ix], args[ix+1])
             ix += 2
-        return q.fetch()
+        return q
 
     @classmethod
     def create(cls, descriptor = None, parent = None):
