@@ -235,6 +235,7 @@ class ModelManager(object):
         for c in columns:
             if c.is_key and not c.scoped:
                 self.key_col = c
+                c.required = True
         self.columns = []
         if not self.key_col:
             kc = ColumnDefinition("_key_name", "TEXT", True, None, False)
@@ -401,7 +402,10 @@ class ModelManager(object):
             sql += ' AND table_schema = %s'
             v.append(self.schema)
         cur.execute(sql, v)
-        for (colname, defval, is_nullable, data_type) in cur:
+        coldescs = []
+        for coldesc in cur:
+            coldescs.append(coldesc)
+        for (colname, defval, is_nullable, data_type) in coldescs:
             column = None
             for c in self.columns:
                 if c.name == colname:
@@ -409,6 +413,7 @@ class ModelManager(object):
                     break
             if column:
                 if data_type.lower() != column.data_type.lower():
+                    logging.info("Data type change: %s.%s %s -> %s", self.tablename, colname, data_type.lower(), column.data_type.lower())
                     cur.execute('ALTER TABLE ' + self.tablename + ' DROP COLUMN "' + colname + '"')
                     # We're not removing the column from the dict -
                     # we'll re-add the column when we add 'new' columns
@@ -417,13 +422,14 @@ class ModelManager(object):
                         alter = ""
                         vars = []
                         if column.required != (is_nullable == 'NO'):
-                            alter = " NOT NULL" if column.required else " NULL"
+                            logging.info("NULL change: %s.%s required %s -> is_nullable %s", self.tablename, colname, column.required, is_nullable)
+                            alter = " SET NOT NULL" if column.required else " DROP NOT NULL"
                         if column.defval != defval:
                             alter += " DEFAULT %s"
                             vars.append(column.defval)
                         if alter != "":
                             cur.execute('ALTER TABLE %s ALTER COLUMN "%s" %s' % ( self.tablename, colname, alter ), vars)
-                    del self.columns[colname]
+                    self.columns.remove(column)
         for c in self.columns:
             vars = []
             sql = 'ALTER TABLE ' + self.tablename + ' ADD COLUMN "' + c.name + '" ' + c.data_type
@@ -1452,7 +1458,7 @@ class BooleanProperty(ModelProperty):
 
 class DateTimeProperty(ModelProperty):
     datatype = datetime.datetime
-    sqltype = "TIMESTAMP"
+    sqltype = "TIMESTAMP WITHOUT TIME ZONE"
 
     def __init__(self, *args, **kwargs):
         super(DateTimeProperty, self).__init__(*args, **kwargs)

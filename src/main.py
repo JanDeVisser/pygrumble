@@ -94,7 +94,7 @@ if __name__ == '__main__':
     print d
     k = d["key"]
 
-    with open("C:/Users/Public/Pictures/Sample Pictures/Desert.jpg", "rb") as fh:
+    with open("image/Desert.jpg", "rb") as fh:
         img = fh.read()
     request = webapp2.Request.blank("/img/test/icon/%s" % k, POST = { "contentType": "image/jpeg", "image": ("Desert.jpg", img) })
     request.headers['Cookie'] = "grit=%s" % cookie
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     assert response.status_int == 200, "Expected OK"
 
     try:
-        os.remove("C:/Users/Public/Pictures/Sample Pictures/Desert_1.jpg")
+        os.remove("image/Desert_1.jpg")
     except:
         pass
 
@@ -112,7 +112,7 @@ if __name__ == '__main__':
     response = request.get_response(app)
     assert response.status_int == 200, "Expected OK"
     etag = response.etag
-    with open("C:/Users/Public/Pictures/Sample Pictures/Desert_1.jpg", "wb") as fh:
+    with open("image/Desert_1.jpg", "wb") as fh:
         fh.write(response.body)
 
     request = webapp2.Request.blank("/img/test/icon/%s" % k)
@@ -122,7 +122,7 @@ if __name__ == '__main__':
     print response.status
     assert response.status_int == 304, "Expected 304 Not Modified"
 
-    with open("C:/Users/Public/Pictures/Sample Pictures/Koala.jpg", "rb") as fh:
+    with open("image/Koala.jpg", "rb") as fh:
         img = fh.read()
     request = webapp2.Request.blank("/img/test/icon/%s" % k, POST = { "contentType": "image/jpeg", "image": ("Koala.jpg", img) })
     request.headers['Cookie'] = "grit=%s" % cookie

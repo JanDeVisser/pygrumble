@@ -437,8 +437,12 @@ class Login(ReqHandler):
 
     def post(self):
         logging.debug("main::login.post(%s/%s)", self.request.get("userid"), self.request.get("password"))
-        url = self.session["redirecturl"] if "redirecturl" in self.session else "/"
-        del self.session["redirecturl"]
+        url = "/"
+        if "redirecturl" in self.session:
+            url = self.session["redirecturl"]
+            del self.session["redirecturl"]
+        else:
+            url = self.request.get("redirecturl", "/")
         userid = self.request.get("userid")
         password = self.request.get("password")
         assert self.session is not None, "Session missing from request handler"
@@ -462,7 +466,6 @@ class Logout(ReqHandler):
         self.get()
 
 class StaticHandler(ReqHandler):
-
     def get(self, **kwargs):
         logging.debug("StaticHandler.get(%s)", self.request.path)
         path = ''
@@ -474,6 +477,7 @@ class StaticHandler(ReqHandler):
                 path = os.path.join(path, kwargs["relpath"])
         path += self.request.path if not kwargs.get('alias') else kwargs.get("alias")
         if not os.path.exists(path):
+            logging.debug("Static file %s does not exist", path)
             self.request.response.status = "404 Not Found"
         else:
             self.response.content_length = str(os.path.getsize(path))
@@ -483,6 +487,20 @@ class StaticHandler(ReqHandler):
                 self.response.text = unicode(fh.read())
                 #self.response.out.write(fh.read())
 
+class ErrorPage(ReqHandler):
+    content_type = "text/html"
+
+    def __init__(self, status, request, response, exception):
+        self.status = status
+        self.exception = exception
+        super(ErrorPage, self).initialize(request, response)
+
+    def get_template(self):
+        return "error_%s" % self.response.status_int
+
+    def get(self):
+        logging.debug("main::ErrorPage_%s.get", self.status)
+        self.render({ "request": self.request, "response": self.response})
 
 def handle_request(request, *args, **kwargs):
     root = kwargs["root"]
@@ -505,6 +523,13 @@ def handle_request(request, *args, **kwargs):
     elif isinstance(rv, tuple):
         rv = webapp2.Response(*rv)
     request.response = rv
+
+def handle_404(request, response, exception):
+    #logging.exception(exception)
+    logging.info("404 for %s", request.path_qs)
+    #handler = ErrorPage(404, request, response, exception)
+    #handler.get()
+    response.set_status(404)
 
 class WSGIApplication(webapp2.WSGIApplication):
     def __init__(self, *args, **kwargs):
@@ -540,9 +565,7 @@ class WSGIApplication(webapp2.WSGIApplication):
             app_path  = mp.get("app")
             if app_path:
                 (module, dot, app_obj) = app_path.rpartition(".")
-                #mod = __import__(module)
                 mod = importlib.import_module(module)
-                logging.info(" dir(%s): %s" % (module, dir(mod)))
                 assert hasattr(mod, app_obj), "Imported %s, but no object %s found" % (module, app_obj)
                 wsgi_sub_app = getattr(mod, app_obj)
                 assert isinstance(wsgi_sub_app, webapp2.WSGIApplication)
@@ -555,6 +578,7 @@ class WSGIApplication(webapp2.WSGIApplication):
                 if "relpath" in mp:
                     defaults["relpath"] = mp["relpath"]
             self.router.add(webapp2.Route(path, handler = handler, defaults = defaults))
+        self.error_handlers[404] = handle_404
 
 app = WSGIApplication(debug=True)
 

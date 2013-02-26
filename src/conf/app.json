@@ -17,6 +17,6 @@
         { "path": "/", "app": "index.app", "roles": [ "admin" ] },
         { "path": "/image/.+|/conf/.+|/grit/template/.+", "roles": [] },
         { "path": "/json/.+|/img/.+", "app": "grit.handlers.app", "roles": [ "admin" ]},
-        { "path": "/users/.+", "app": "gristle.app", "roles": [ "admin" ]}
+        { "path": "/users/?|/users/.+", "app": "gristle.app", "roles": [ "admin" ]}
     ]
 }
