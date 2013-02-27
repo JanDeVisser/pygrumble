@@ -82,3 +82,24 @@ class Config(object):
                 if datastr:
                     config = json.loads(datastr) if datastr else {}
                     setattr(cls, section, config)
+
+
+class Enum(tuple):
+    """
+    Enum class, from here: http://stackoverflow.com/questions/36932/whats-the-best-way-to-implement-an-enum-in-python
+
+    >>> State = Enum(['Unclaimed', 'Claimed'])
+    >>> State.Claimed
+    1
+    >>> State[1]
+    'Claimed'
+    >>> State
+    ('Unclaimed', 'Claimed')
+    >>> range(len(State))
+    [0, 1]
+    >>> [(k, State[k]) for k in range(len(State))]
+    [(0, 'Unclaimed'), (1, 'Claimed')]
+    >>> [(k, getattr(State, k)) for k in State]
+    [('Unclaimed', 0), ('Claimed', 1)]
+    """
+    __getattr__ = tuple.index

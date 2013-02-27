@@ -748,11 +748,11 @@ class CompoundProperty(object):
         return tuple(p.convert(v) for (p,v) in zip(self.compound, value))
 
     def from_json_value(self, instance, values):
-        for p in self.compound:
+        for p in filter(lambda p: not p.private, self.compound):
             p.from_json_value(instance, values)
 
     def to_json_value(self, instance, values):
-        for p in self.compound:
+        for p in filter(lambda p: not p.private, self.compound):
             values = p.to_json_value(instance, values)
         return values
 
@@ -788,6 +788,7 @@ class ModelMetaClass(type):
             properties = {}
             columns = []
             kind._allproperties = {}
+            kind._query_properties = {}
             for (propname, value) in dct.items():
                 if isinstance(value, (ModelProperty, CompoundProperty)):
                     value.set_name(propname)
@@ -861,6 +862,7 @@ class Model(object):
 
     def get_name(self):
         return self.key_prop if hasattr(self, "key_prop") else self._key_name
+
     @classmethod
     def properties(cls):
         return cls._properties
@@ -1044,19 +1046,16 @@ class Model(object):
         for b in self.__class__.__bases__:
             if hasattr(b, "_update") and callable(b._update):
                 b._update(self, descriptor)
-        for name, prop in self.properties().items():
-            if prop.private:
-                continue
-            if name in descriptor:
-                newval = descriptor[name]
-                logging.debug("Updating %s.%s to %s", self.kind(), name, newval)
-                if hasattr(self, "update_" + name) and callable(getattr(self, "update_" + name)):
-                    getattr(self, "update_" + name)(descriptor)
-                else:
-                    try:
-                        prop.from_json_value(self, descriptor)
-                    except NotSerializableError:
-                        pass
+        for name, prop in filter(lambda (name, prop): (not prop.private) and (name in descriptor), self.properties().items()):
+            newval = descriptor[name]
+            logging.debug("Updating %s.%s to %s", self.kind(), name, newval)
+            if hasattr(self, "update_" + name) and callable(getattr(self, "update_" + name)):
+                getattr(self, "update_" + name)(descriptor)
+            else:
+                try:
+                    prop.from_json_value(self, descriptor)
+                except NotSerializableError:
+                    pass
         self.put()
         hasattr(self, "sub_update") and callable(self.sub_update) and self.sub_update(descriptor)
         self.put()
@@ -1395,25 +1394,40 @@ class Query(object):
             print "Query(%s, %s, %s).fetch(): %s" % (self.kind, self.filters, self._ancestor if hasattr(self, "_ancestor") else None, ret)
             return ret
 
+RefSerializationMethod = Enum(['Deep', 'Key', 'None'])
+
 class QueryProperty(object):
-    def __init__(self, name, foreign_kind, foreign_key, verbose_name = None):
+    def __init__(self, name, foreign_kind, foreign_key, serialize, verbose_name = None):
         self.name = name
         self.fk_kind = foreign_kind if isinstance(foreign_kind, ModelMetaClass) else Model.for_name(foreign_kind)
         self.fk = foreign_key
-        self.verbose_name = verbose_name if verbose_name else None
+        self.verbose_name = verbose_name if verbose_name else name
+        self.serialize = serialize
+
+    def _get_query(self, instance):
+        q = Query(self.fk_kind)
+        q.filter('"%s" = ' % self.fk, instance)
+        return q
 
     def __get__(self, instance, owner):
         if not instance:
             return self
-        q = Query(self.fk_kind)
-        q.filter(self.fk + " = ", instance)
-        return q
+        return self._get_query(instance)
 
     def __set__(self, instance, value):
         raise AttributeError("Cannot set Query Property")
 
     def __delete__(self, instance):
         return NotImplemented
+
+    def from_json_value(self, instance, values):
+        pass
+
+    def to_json_value(self, instance, values):
+        if self.serialize != RefSerializationMethod.None:
+            values[self.name] = [obj.to_dict() for obj in self._get_query(instance)] \
+                if self.serialize == RefSerializationMethod.Deep
+                else values[self.name] = [obj.id() for obj in self._get_query(instance)]
 
 class StringProperty(ModelProperty):
     datatype = str
@@ -1423,6 +1437,10 @@ class TextProperty(StringProperty):
     pass
 
 class PasswordProperty(StringProperty):
+    def __init__(self, *args, **kwargs):
+        super(PasswordProperty, self).__init__(*args, **kwargs)
+        self.private = True
+
     def _on_store(self, instance):
         value = self.__get__(instance, instance.__class__)
         self.__set__(instance, self.hash(value))
@@ -1493,9 +1511,9 @@ class TimeProperty(DateTimeProperty):
         return datetime.time(dt.hour, dt.minute, dt.second, dt.microsecond)
 
 class ReferenceConverter(PropertyConverter):
-    def __init__(self, reference_class = None, serialize = True):
+    def __init__(self, reference_class, serialize):
         self.reference_class = reference_class
-        self.serialize = True
+        self.serialize = serialize
 
     def convert(self, value):
         return Model.get(value)
@@ -1538,7 +1556,8 @@ class ReferenceProperty(ModelProperty):
         assert not self.reference_class or isinstance(self.reference_class, ModelMetaClass)
         self.collection_name = kwargs.get("collection_name")
         self.collection_verbose_name = kwargs.get("collection_verbose_name")
-        self.serialize = kwargs.get("serialize", True)
+        self.serialize = kwargs.get("serialize", RefSerializationMethod.Deep)
+        self.collection_serialize = kwargs.get("collection_serialize", RefSerializationMethod.None)
         self.converter = ReferenceConverter(self.reference_class, self.serialize)
 
     def set_kind(self, kind):
@@ -1547,15 +1566,17 @@ class ReferenceProperty(ModelProperty):
             self.collection_name = kind.lower() + "_set"
         if not self.collection_verbose_name:
             self.collection_verbose_name = kind.title()
-        k = Model.for_name(kind)
-        qp = QueryProperty(self.collection_name, k, self.name, self.collection_verbose_name)
-        setattr(self.reference_class, self.collection_name, qp)
+        if self.reference_class:
+            k = Model.for_name(kind)
+            qp = QueryProperty(self.collection_name, k, self.name, self.collection_serialize, self.collection_verbose_name)
+            setattr(self.reference_class, self.collection_name, qp)
+            self.reference_class._query_properties[self.collection_name] = qp
 
 class SelfReferenceProperty(ReferenceProperty):
     def set_kind(self, kind):
         self.reference_class = Model.for_name(kind)
         super(SelfReferenceProperty, self).set_kind(kind)
-        self.converter = ReferenceConverter(self.reference_class)
+        self.converter = ReferenceConverter(self.reference_class, self.serialize)
 
 if __name__ == "__main__":
 
