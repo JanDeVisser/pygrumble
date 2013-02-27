@@ -391,7 +391,10 @@ class ReqHandler(webapp2.RequestHandler):
             ctx[param] = self.request.get(param)
         ctx['app'] = gripe.Config.app.get("about", {})
         ctx['user'] = self.user
-        ctx['session'] = self.session 
+        ctx['session'] = self.session
+        ctx['url'] = {
+            'logout': '/logout'
+        }
         if hasattr(self, "get_context") and callable(self.get_context):
             ctx = self.get_context(ctx)
         return ctx
@@ -412,6 +415,7 @@ class ReqHandler(webapp2.RequestHandler):
         if not ret:
             ret = cname
         ret = gripe.Config.app.get(cname, ret)
+        logging.info("ReqHandler: using template %s", ret)
         return ret
 
     def _get_content_type(self):

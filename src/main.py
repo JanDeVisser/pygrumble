@@ -6,17 +6,18 @@
 import os
 import re
 
+import gripe
 import grit
 import grumble
 
 from grumble import image
 
-import autoreload
-
-autoreload.start(interval=1.0)
-autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/app.json'))
-autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/database.json'))
-autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/model.json'))
+if __name__ != '__main__':
+    import autoreload
+    autoreload.start(interval=1.0)
+    autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/app.json'))
+    autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/database.json'))
+    autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/model.json'))
 
 app = grit.WSGIApplication(debug=True)
 

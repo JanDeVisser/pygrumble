@@ -20,6 +20,9 @@ com.sweattrails.api.internal.format.icon = function(value, col) {
     var url
     if (col.url) {
         url = col.url.replace('$$', value)
+        url = url.replace(/\$([\w]+)/g, function() {
+            return object[arguments[1]]
+        })
     } else if ((value.indexOf("/") == 0) || (value.indexOf("http://") == 0) || (value.indexOf("https://") == 0)) {
         url = value
     } else {
@@ -31,7 +34,11 @@ com.sweattrails.api.internal.format.icon = function(value, col) {
     return ret
 }
 com.sweattrails.api.internal.format.link = function(value, col, object) {
-    var ret = new com.sweattrails.api.Link(value, col.url)
+    url = col.url.replace('$$', value)
+    url = url.replace(/\$([\w]+)/g, function() {
+        return object[arguments[1]]
+    })
+    var ret = new com.sweattrails.api.Link(value, url)
     for (p in col.parameters) {
         ret.parameter(p, object[col.parameters[p]])
     }

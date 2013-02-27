@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import signal
+import platform
 import threading
 import atexit
 import Queue
@@ -21,10 +22,13 @@ def _restart(path):
     _queue.put(True)
     prefix = 'monitor (pid=%d):' % os.getpid()
     print >> sys.stderr, '%s Change detected to \'%s\'.' % (prefix, path)
-    print >> sys.stderr, '%s Triggering Apache restart.' % prefix
-    import ctypes
-    ctypes.windll.libhttpd.ap_signal_parent(1)
-
+    print >> sys.stderr, '%s Triggering process restart.' % prefix
+    if platform.system() == 'Windows':
+        # Windows embedded mode
+        import ctypes
+    else:
+        # Linux. Assuming daemon mode.
+        os.kill(os.getpid(), signal.SIGINT)
 
 def _modified(path):
     try:

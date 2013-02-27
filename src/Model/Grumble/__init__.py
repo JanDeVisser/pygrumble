@@ -24,9 +24,9 @@ class User(grumble.Model):
     @classmethod
     def login(cls, email, password):
         hash = grumble.PasswordProperty.hash(password)
-        user = User.query("email = ", email, "password = ", hash, ancestor = None)
+        user = User.query("email = ", email, "password = ", hash, ancestor = None).fetch()
         if user:
-            assert isinstance(user, User), "Huh? More than one user with the same email and password??"
+            assert isinstance(user, User), "Huh? More than one user with the same email and password?? %s" % type(user)
         return user.id() if user else None
 
 class HttpAccess(grumble.Model):
