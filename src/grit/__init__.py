@@ -471,7 +471,7 @@ class Logout(ReqHandler):
 
 class StaticHandler(ReqHandler):
     def get(self, **kwargs):
-        logging.debug("StaticHandler.get(%s)", self.request.path)
+        logging.info("StaticHandler.get(%s)", self.request.path)
         path = ''
         if "abspath" in kwargs:
             path = kwargs["abspath"]
@@ -481,15 +481,22 @@ class StaticHandler(ReqHandler):
                 path = os.path.join(path, kwargs["relpath"])
         path += self.request.path if not kwargs.get('alias') else kwargs.get("alias")
         if not os.path.exists(path):
-            logging.debug("Static file %s does not exist", path)
+            logging.info("Static file %s does not exist", path)
             self.request.response.status = "404 Not Found"
         else:
             self.response.content_length = str(os.path.getsize(path))
-            self.response.content_type = gripe.get_content_type(path)
-            self.response.charset = "utf-8"
-            with open(path, "rb") as fh:
-                self.response.text = unicode(fh.read())
-                #self.response.out.write(fh.read())
+            content_type = gripe.ContentType.for_path(path)
+            self.response.content_type = content_type.content_type
+            if content_type.is_text():
+                self.response.charset = "utf-8"
+                mode = "r"
+            else:
+                mode = "rb"
+            with open(path, mode) as fh:
+                if content_type.is_text():
+                    self.response.text = unicode(fh.read())
+                else:
+                    self.response.out.write(fh.read())
 
 class ErrorPage(ReqHandler):
     content_type = "text/html"
@@ -503,7 +510,7 @@ class ErrorPage(ReqHandler):
         return "error_%s" % self.response.status_int
 
     def get(self):
-        logging.debug("main::ErrorPage_%s.get", self.status)
+        logging.info("main::ErrorPage_%s.get", self.status)
         self.render({ "request": self.request, "response": self.response})
 
 def handle_request(request, *args, **kwargs):

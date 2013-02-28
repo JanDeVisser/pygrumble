@@ -7,6 +7,7 @@ import os
 import os.path
 import sys
 
+import gripe.json_utils
 
 logging.basicConfig(level = logging.DEBUG, datefmt = '%Y-%m-%d %H:%M:%S', \
     format = '%(asctime)s %(levelname)-8s %(message)s')
@@ -48,20 +49,44 @@ def read_file(fname):
             return fp.read()
 
 
-_content_types = {
-    "json": "application/json",
-    "jpg": "image/jpeg",
-    "gif": "image/gif",
-    "png": "image/png",
-    "js": "text/javascript",
-    "css": "text/css",
-    "xml": "text/xml",
-    "txt": "text/plain",
-    "html": "text/html"
-}
-def get_content_type(disposition):
-    (fname, dot, ext) = disposition.rpartition(".")
-    return _content_types.get(ext, "text/plain")
+class ContentType(object):
+    Binary, Text = range(2)
+
+    def __init__(self, ext, ct, type):
+        self.content_type = ct
+        self.extension = ext
+        self.type = type
+        _by_ext[ext] = self
+        _by_content_type[ct] = self
+
+    def is_text(self):
+        return self.type == Text
+
+    def is_binary(self):
+        return self.type == Binary
+
+    @classmethod
+    def for_extension(cls, ext, default = None):
+        return _by_ext.get(ext, default)
+
+    @classmethod
+    def for_path(cls, path, default = None):
+        (fname, ext) = os.path.splitext(path)
+        return cls.for_extension(ext, default)
+
+    @classmethod
+    def for_content_type(cls, ct, default = None):
+        return _by_content_type.get(ct, default)
+
+JSON = ContentType(".json", "application/json", ContentType.Text)
+JPG = ContentType(".jpg", "image/jpeg", ContentType.Binary)
+GIF = ContentType(".gif", "image/gif", ContentType.Binary)
+PNG = ContentType(".png", "image/png", ContentType.Binary)
+JS = ContentType(".js", "text/javascript", ContentType.Text)
+CSS = ContentType(".css", "text/css", ContentType.Text)
+XML = ContentType(".xml", "text/xml", ContentType.Text)
+TXT = ContentType(".txt", "text/plain", ContentType.Text)
+HTML = ContentType(".html", "text/html", ContentType.Text)
 
 class ConfigMeta(type):
     def __getattribute__(cls, name):
@@ -76,11 +101,11 @@ class Config(object):
     @classmethod
     def _load(cls):
         for f in os.listdir("%s/conf" % root_dir()):
-            if f.endswith(".json"):
-                (section, dot, ext) = f.partition(".")
-                datastr = read_file("conf/" + section + ".json")
+            (section, ext) = os.path.splitext(f)
+            if ext == ".json":
+                datastr = read_file("conf/%s.json" % section)
                 if datastr:
-                    config = json.loads(datastr) if datastr else {}
+                    config = gripe.json_utils.JSON.load(datastr if datastr else {})
                     setattr(cls, section, config)
 
 

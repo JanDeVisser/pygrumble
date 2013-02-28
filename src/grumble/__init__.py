@@ -20,6 +20,8 @@ import gripe
 from gripe import json_util
 from gripe import pgsql
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class PropertyRequired(gripe.Error):
     """Raised when no value is specified for a required property"""
@@ -69,33 +71,39 @@ class Tx(object):
     @classmethod
     def _init_schema(cls):
         config = gripe.Config.database
-        assert "postgresql" in config, "Config: conf/database.json is missing postgresql section"
-        pgsql_conf = config["postgresql"]
-        assert "user" in pgsql_conf, "Config: No user role in postgresql section of conf/database.json"
-        assert "admin" in pgsql_conf, "Config: No admin role in postgresql section of conf/database.json"
-        assert "user_id" in pgsql_conf["user"] and "password" in pgsql_conf["user"], \
+        assert config.postgresql, "Config: conf/database.json is missing postgresql section"
+        pgsql_conf = config.postgresql
+        assert pgsql_conf.user, "Config: No user role in postgresql section of conf/database.json"
+        pgsql_user = pgsql_conf.user
+        assert pgsql_conf.admin, "Config: No admin role in postgresql section of conf/database.json"
+        pgsql_admin = pgsql_conf.admin
+        assert pgsql_user.user_id andpgsql_user.password, \
             "Config: user role is missing user_id or password in postgresql section of conf/database.json"
-        assert "user_id" in pgsql_conf["admin"] and "password" in pgsql_conf["admin"], \
+        assert pgsql_admin.user_id and pgsql_admin.password, \
             "Config: admin role is missing user_id or password in postgresql section of conf/database.json"
-        if "database" in pgsql_conf:
-            with Tx.begin("admin", "postgres", True) as tx:
-                cur = tx.get_cursor()
-                create_db = False
-                database = pgsql_conf["database"]
-                if pgsql_conf.get("wipe_database", False) and database != "postgres":
-                    cur.execute('DROP DATABASE IF EXISTS "%s"' % (database, ))
-                    create_db = True
-                else:
-                    cur.execute("SELECT COUNT(*) FROM pg_catalog.pg_database WHERE datname = %s", (database, ))
-                    create_db = (cur.fetchone()[0] == 0)
-                if create_db:
-                    cur.execute('CREATE DATABASE "%s"' % (database, ))
-        if "schema" in pgsql_conf:
+
+        if pgsql_conf.database:
+            database = pgsql_conf.database
+            if database != 'postgres':
+                # We're assuming the postgres database exists and should never be wiped:
+                with Tx.begin("admin", "postgres", True) as tx:
+                    cur = tx.get_cursor()
+                    create_db = False
+                    if isinstance(pgsql_conf.wipe_database, bool) and pgsql_conf.wipe_database:
+                        cur.execute('DROP DATABASE IF EXISTS "%s"' % (database, ))
+                        create_db = True
+                    else:
+                        cur.execute("SELECT COUNT(*) FROM pg_catalog.pg_database WHERE datname = %s", (database, ))
+                        create_db = (cur.fetchone()[0] == 0)
+                    if create_db:
+                        cur.execute('CREATE DATABASE "%s"' % (database, ))
+
+        if pgsql_conf.schema:
             with Tx.begin("admin") as tx:
                 cur = tx.get_cursor()
                 create_schema = False
-                schema = pgsql_conf["schema"]
-                if pgsql_conf.get("wipe_schema", False):
+                schema = pgsql_conf.schema
+                if isinstance(pgsql_conf.wipe_schema, bool) and pgsql_conf.wipe_schema:
                     cur.execute('DROP SCHEMA IF EXISTS "%s" CASCADE' % (schema, ))
                     create_schema = True
                 else:
@@ -106,17 +114,16 @@ class Tx(object):
 
     def _connect(self):
         config = gripe.Config.database
-        pgsql_conf = config["postgresql"]
-        dsn = "user=" + pgsql_conf[self.role]["user_id"] + \
-            " password=" + pgsql_conf[self.role]["password"]
+        pgsql_conf = config.postgresql
+        dsn = "user=%s password=%s" % (getattr(pgsql_conf, self.role).user_id, getattr(pgsql_conf, self.role).password)
         if not self.database:
-            self.database = pgsql_conf.get("database")
+            self.database = pgsql_conf.database
         if not self.database:
-            self.database = "postgres" if self.role == "admin" else pgsql_conf[self.role]["user_id"]
-        dsn += " dbname=" + self.database
-        if "host" in pgsql_conf:
-            dsn += " host=" + pgsql_conf["host"]
-        logging.debug("Connecting with role '%s' autocommit = %s", self.role, self.autocommit)
+            self.database = "postgres" if self.role == "admin" else getattr(pgsql_conf, self.role).user_id
+        dsn += " dbname=%s" % self.database
+        if pgsql_conf.host:
+            dsn += " host=%s" + pgsql_conf.host
+        logger.debug("Connecting with role '%s' autocommit = %s", self.role, self.autocommit)
         self.conn = pgsql.Connection.get(dsn)
         self.conn.autocommit = self.autocommit
 
@@ -135,12 +142,12 @@ class Tx(object):
     def __exit__(self, exception_type, exception_value, trace):
         self.count -= 1
         if exception_type:
-            logging.error("Exception in Tx block, Exception: %s %s %s", exception_type, exception_value, trace)
+            logger.error("Exception in Tx block, Exception: %s %s %s", exception_type, exception_value, trace)
         if not self.count:
             try:
                 self._end_tx()
             except Exception, exc:
-                logging.error("Exception committing Tx, Exception: %s %s", exc.__class__.__name__, exc)
+                logger.error("Exception committing Tx, Exception: %s %s", exc.__class__.__name__, exc)
         return False
 
     def get_cursor(self):
@@ -212,11 +219,9 @@ class ModelManager(object):
     def __init__(self, name):
         self.my_config = self.models.get(name, {})
         self.name = name
-        self.schema = gripe.Config.database["postgresql"]["schema"]  \
-            if "schema" in gripe.Config.database["postgresql"] \
-            else None
-        self.tableprefix = '"' + gripe.Config.database["postgresql"]["schema"] + '".' \
-            if "schema" in gripe.Config.database["postgresql"] \
+        self.schema = gripe.Config.database.postgresql.schema
+        self.tableprefix = '"' + gripe.Config.database.postgresql.schema + '".' \
+            if gripe.Config.database.postgresql.schema
             else ""
         self.table = name
         self.tablename = self.tableprefix + '"' + name + '"'
@@ -268,7 +273,7 @@ class ModelManager(object):
         return ret
 
     def set_properties(self, insert, key, values):
-        logging.debug("ModelManager.set_properties(%s)", values)
+        logger.debug("ModelManager.set_properties(%s)", values)
         if self.audit:
             values["_updated"] = datetime.datetime.now()
             values["_updatedby"] = get_sessionbridge().userid()

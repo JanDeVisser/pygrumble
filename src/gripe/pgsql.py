@@ -3,10 +3,14 @@ __date__ ="$29-Jan-2013 11:00:39 AM$"
 
 import logging
 import psycopg2
+import gripe
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class Cursor(psycopg2.extensions.cursor):
     def execute(self, sql, args=None):
-        logging.debug(self.mogrify(sql, args))
+        logger.debug(self.mogrify(sql, args))
         try:
             super(Cursor, self).execute(sql, args)
         except Exception, exc:
@@ -18,7 +22,7 @@ class Connection(psycopg2.extensions.connection):
         return super(Connection, self).cursor(cursor_factory=Cursor)
 
     def commit(self):
-        logging.debug("Commit")
+        logger.debug("Commit")
         try:
             super(Connection, self).commit()
         except Exception, exc:
@@ -26,7 +30,7 @@ class Connection(psycopg2.extensions.connection):
             raise
 
     def rollback(self):
-        logging.warn("ROLLBACK")
+        logger.warn("ROLLBACK")
         try:
             super(Connection, self).rollback()
         except Exception, exc:
@@ -35,5 +39,7 @@ class Connection(psycopg2.extensions.connection):
 
     @classmethod
     def get(cls, dsn):
-        logging.debug("Get pyscopg2 connection with DSN %s", dsn)
+        logger.debug("Get pyscopg2 connection with DSN %s", dsn)
         return psycopg2.connect(dsn, connection_factory=Connection)
+
+logger.info("Initialized module %s", __name__)
