@@ -1,14 +1,30 @@
 {
-    "author": "Jan de Visser",
-    "version": "1.0",
-    "description": "...",
-    "user":
-        [
-            {
-                "email": "jan@de-visser.net",
-                "password": "wbw417",
-                "display_name": "Jan de Visser",
-                "roles": [ "admin", "user", "athlete" ]
-            }
-        ]
+    "_author": "Jan de Visser",
+    "_version": "1.0",
+    "_description": "...",
+    "data": [
+        {
+            "model": "user",
+            "data": [
+                {
+                    "email": "jan@de-visser.net",
+                    "password": "wbw417",
+                    "display_name": "Jan de Visser",
+                    "has_roles": [ "admin" ]
+                },
+                {
+                    "email": "mod@de-visser.net",
+                    "password": "password",
+                    "display_name": "A. Moderator",
+                    "has_roles": [ "moderator" ]
+                },
+                {
+                    "email": "user@de-visser.net",
+                    "password": "password",
+                    "display_name": "Some User",
+                    "has_roles": [ "user" ]
+                }
+            ]
+        }
+    ]
 }

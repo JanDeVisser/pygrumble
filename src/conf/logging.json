@@ -1,0 +1,11 @@
+{
+    "_description": "Logging configuration",
+    "author": "jan",
+    "version": "1.0",
+    "level": "info",
+    "gripe.pgsql": { "level": "debug", "destination": "file" },
+    "gripe": { "level": "debug", "destination": "file" },
+    "grumble": { "level": "debug", "destination": "file"},
+    "grit": { "level": "debug", "destination": "file" },
+    "Model.Grumble": { "level": "debug", "destination": "file" }
+}

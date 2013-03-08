@@ -20,8 +20,7 @@ import gripe
 from gripe import json_util
 from gripe import pgsql
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger = gripe.get_logger(__name__)
 
 class PropertyRequired(gripe.Error):
     """Raised when no value is specified for a required property"""
@@ -77,7 +76,7 @@ class Tx(object):
         pgsql_user = pgsql_conf.user
         assert pgsql_conf.admin, "Config: No admin role in postgresql section of conf/database.json"
         pgsql_admin = pgsql_conf.admin
-        assert pgsql_user.user_id andpgsql_user.password, \
+        assert pgsql_user.user_id and pgsql_user.password, \
             "Config: user role is missing user_id or password in postgresql section of conf/database.json"
         assert pgsql_admin.user_id and pgsql_admin.password, \
             "Config: admin role is missing user_id or password in postgresql section of conf/database.json"
@@ -122,7 +121,7 @@ class Tx(object):
             self.database = "postgres" if self.role == "admin" else getattr(pgsql_conf, self.role).user_id
         dsn += " dbname=%s" % self.database
         if pgsql_conf.host:
-            dsn += " host=%s" + pgsql_conf.host
+            dsn += " host=%s" % pgsql_conf.host
         logger.debug("Connecting with role '%s' autocommit = %s", self.role, self.autocommit)
         self.conn = pgsql.Connection.get(dsn)
         self.conn.autocommit = self.autocommit
@@ -220,9 +219,8 @@ class ModelManager(object):
         self.my_config = self.models.get(name, {})
         self.name = name
         self.schema = gripe.Config.database.postgresql.schema
-        self.tableprefix = '"' + gripe.Config.database.postgresql.schema + '".' \
-            if gripe.Config.database.postgresql.schema
-            else ""
+        self.tableprefix = '"%s".' % gripe.Config.database.postgresql.schema \
+            if gripe.Config.database.postgresql.schema else ""
         self.table = name
         self.tablename = self.tableprefix + '"' + name + '"'
         self.columns = None
@@ -351,7 +349,7 @@ class ModelManager(object):
         if not cur.closed:
             ret = cur.fetchmany()
             if len(ret) < cur.arraysize:
-                logging.debug("ModelManager.query: no more results, closing cursor")
+                logger.debug("ModelManager.query: no more results, closing cursor")
                 tx = Tx.get()
                 assert tx, "ModelManager.query: no transaction active"
                 tx.close_cursor(cur)
@@ -418,7 +416,7 @@ class ModelManager(object):
                     break
             if column:
                 if data_type.lower() != column.data_type.lower():
-                    logging.info("Data type change: %s.%s %s -> %s", self.tablename, colname, data_type.lower(), column.data_type.lower())
+                    logger.info("Data type change: %s.%s %s -> %s", self.tablename, colname, data_type.lower(), column.data_type.lower())
                     cur.execute('ALTER TABLE ' + self.tablename + ' DROP COLUMN "' + colname + '"')
                     # We're not removing the column from the dict -
                     # we'll re-add the column when we add 'new' columns
@@ -427,7 +425,7 @@ class ModelManager(object):
                         alter = ""
                         vars = []
                         if column.required != (is_nullable == 'NO'):
-                            logging.info("NULL change: %s.%s required %s -> is_nullable %s", self.tablename, colname, column.required, is_nullable)
+                            logger.info("NULL change: %s.%s required %s -> is_nullable %s", self.tablename, colname, column.required, is_nullable)
                             alter = " SET NOT NULL" if column.required else " DROP NOT NULL"
                         if column.defval != defval:
                             alter += " DEFAULT %s"
@@ -467,7 +465,7 @@ class PropertyConverter(object):
         try:
             return self.datatype(value) if not isinstance(value, self.datatype) else value
         except:
-            logging.debug("converter: %s - value %s - datatype %s", self.__class__.__name__, value, self.datatype)
+            logger.debug("converter: %s - value %s - datatype %s", self.__class__.__name__, value, self.datatype)
             raise
 
     def to_sqlvalue(self, value):
@@ -638,6 +636,8 @@ class ModelProperty(object):
         return instance._values[self.name] if self.name in instance._values else None
 
     def __set__(self, instance, value):
+        if self.is_key and not hasattr(instance, "_brandnew"):
+            return
         instance._load()
         instance._values[self.name] = self.convert(value) if value is not None else None
 
@@ -761,6 +761,28 @@ class CompoundProperty(object):
             values = p.to_json_value(instance, values)
         return values
 
+
+class LoopDetector(set):
+    _tl = threading.local()
+
+    def __init__(self):
+        self.count = 0
+        LoopDetector._tl.detector = self
+
+    def __enter__(self):
+        self.count += 1
+        return self
+
+    def __exit__(self, *args):
+        self.count -= 1
+        if not self.count:
+            del LoopDetector._tl.detector
+
+    @classmethod
+    def begin(cls):
+        return LoopDetector._tl.detector if hasattr(LoopDetector._tl, "detector") else LoopDetector()
+
+
 def _set_acl(obj, acl):
     if isinstance(acl, dict):
         obj._acl = dict(acl)
@@ -845,32 +867,29 @@ class Model(object):
         for (propname, propvalue) in kwargs.items():
             if propname in ret._allproperties:
                 setattr(ret, propname, propvalue)
-        logging.debug("%s.__new__: %s", ret.kind(), ret._values)
+        logger.debug("%s.__new__: %s", ret.kind(), ret._values)
         return ret
 
     def __repr__(self):
+        return str(self.key())
+
+    def __str__(self):
         self._load()
-        label = None
-        id = self.get_name()
-        if hasattr(self.__class__, "label_prop"):
-            label = self.label_prop
-        if id:
-            s = id
+        label = self.label_prop if hasattr(self.__class__, "label_prop") else None
+        if self.name():
+            s = self.name()
             if label:
                 s += " (%s)"  % label
-            return "<%s: %s>" % (self.__class__.__name__ , s)
+            return "<%s: %s>" % (self.kind(), s)
         else:
             super(self.__class__, self).__repr__()
 
-    def get_label(self):
-        return self.label_prop if hasattr(self, "label_prop") else str(self)
+    def __hash__(self):
+        return hash(self.id())
 
-    def get_name(self):
-        return self.key_prop if hasattr(self, "key_prop") else self._key_name
-
-    @classmethod
-    def properties(cls):
-        return cls._properties
+    def __eq__(self, other):
+        assert isinstance(other, Model)
+        return (self.kind() == other.kind()) and (self.name() == other.name())
 
     def _set_ancestors_from_parent(self, parent):
         if not self._flat:
@@ -902,7 +921,7 @@ class Model(object):
             self._ancestors = "/"
 
     def _populate(self, values):
-        logging.debug("%s._populate(%s)", self.kind(), values)
+        logger.debug("%s._populate(%s)", self.kind(), values)
         if values:
             self._values = {}
             v = {}
@@ -929,6 +948,7 @@ class Model(object):
 
     def _store(self):
         self._load()
+        logger.info("Storing model %s.%s", self.kind(), self.key())
         include_key_name = True
         if hasattr(self, "key_prop"):
             scoped = getattr(self.__class__, "key_prop").scoped
@@ -984,6 +1004,9 @@ class Model(object):
     def name(self):
         return self._key_name
 
+    def label(self):
+        return self.label_prop if hasattr(self, "label_prop") else str(self)
+
     def parent(self):
         self._load()
         return self._parent
@@ -1026,34 +1049,46 @@ class Model(object):
         pass
 
     def to_dict(self):
-        p = self.parent()
-        ret = { "key": self.id(), 'parent': p.id if p else None }
-        for b in self.__class__.__bases__:
-            if hasattr(b, "_to_dict") and callable(b._to_dict):
-                b._to_dict(self, ret)
-        for name, prop in self.properties().items():
-            if prop.private:
-                continue
-            if hasattr(self, "to_dict_" + name) and callable(getattr(self, "to_dict_" + name)):
-                getattr(self, "to_dict_" + name)(ret)
-            else:
-                try:
-                    ret = prop.to_json_value(self, ret)
-                except NotSerializableError:
-                    pass
-        hasattr(self, "sub_to_dict") and callable(self.sub_to_dict) and self.sub_to_dict(ret)
-        return ret
+        with LoopDetector.begin() as detector:
+            p = self.parent()
+            ret = { "key": self.id(), 'parent': p.id if p else None }
+            if self.id() in detector:
+                logger.info("to_dict: Loop detected. %s is already serialized", self)
+                return ret
+            detector.add(self.id())
+            logger.debug("to_dict: Added %s to loop detector", self)
+            for b in self.__class__.__bases__:
+                if hasattr(b, "_to_dict") and callable(b._to_dict):
+                    b._to_dict(self, ret)
+
+            def serialize(ret, (name, prop)):
+                if prop.private:
+                    return ret
+                if hasattr(self, "to_dict_" + name) and callable(getattr(self, "to_dict_" + name)):
+                    return getattr(self, "to_dict_" + name)(ret)
+                else:
+                    try:
+                        return prop.to_json_value(self, ret)
+                    except gripe.NotSerializableError:
+                        pass
+
+            ret = reduce(serialize, self.properties().items(), ret)
+            ret = reduce(serialize, self._query_properties.items(), ret)
+            hasattr(self, "sub_to_dict") and callable(self.sub_to_dict) and self.sub_to_dict(ret)
+            return ret
 
     def _update(self, d):
         pass
 
     def update(self, descriptor):
+        self._load()
+        logger.info("Updating model %s.%s using descriptor %s", self.kind(), self.key(), descriptor)
         for b in self.__class__.__bases__:
             if hasattr(b, "_update") and callable(b._update):
                 b._update(self, descriptor)
         for name, prop in filter(lambda (name, prop): (not prop.private) and (name in descriptor), self.properties().items()):
             newval = descriptor[name]
-            logging.debug("Updating %s.%s to %s", self.kind(), name, newval)
+            logger.debug("Updating %s.%s to %s", self.kind(), name, newval)
             if hasattr(self, "update_" + name) and callable(getattr(self, "update_" + name)):
                 getattr(self, "update_" + name)(descriptor)
             else:
@@ -1064,7 +1099,7 @@ class Model(object):
         self.put()
         hasattr(self, "sub_update") and callable(self.sub_update) and self.sub_update(descriptor)
         self.put()
-	return self.to_dict()
+        return self.to_dict()
     
     def get_user_permissions(self):
         roles = set(get_sessionbridge().roles())
@@ -1125,8 +1160,11 @@ class Model(object):
         return cls._kind
 
     @classmethod
+    def properties(cls):
+        return cls._properties
+
+    @classmethod
     def for_name(cls, name):
-        logging.debug("for_name(%s): registry = %s", name, Model.classes)
         name = name.replace('/', '.').lower()
         if name.startswith("."):
             (empty, dot, name) = name.partition(".")
@@ -1141,7 +1179,6 @@ class Model(object):
                     assert not ret, "for_name(%s): Already found match %s but there's a second one %s" % \
                         (name, ret.kind(), c.kind())
                     ret = c
-        logging.debug("for_name(%s): %s", name, ret.__name__ if ret else None)
         return ret
 
     @classmethod
@@ -1158,7 +1195,7 @@ class Model(object):
             fullname = ".".join(hierarchy)
         fullname = fullname.lower()
         assert fullname not in cls.classes, "Model._register_class: Class '%s' is already registered" % fullname
-        logging.debug("Model._register_class %s => %s", fullname, modelclass)
+        logger.debug("Model._register_class %s => %s", fullname, modelclass)
         Model.classes[fullname] = modelclass
         modelclass._kind = fullname
 
@@ -1169,7 +1206,7 @@ class Model(object):
             ret = Tx.get_from_cache(k)
             if not ret:
                 ret = super(Model, cls).__new__(cls)
-                assert (k.kind == cls.kind()) or not k.kind
+                assert (cls.kind().endswith(k.kind)) or not k.kind, "%s.get(%s.%s) -> wrong key kind" % (cls.kind(), k.kind, k.name)
                 ret._id = k.id
                 ret._key_name = k.name
                 if values:
@@ -1184,7 +1221,7 @@ class Model(object):
 
     @classmethod
     def query(cls, *args, **kwargs):
-        logging.debug("%s.query: args %s kwargs %s", cls.__name__, args, kwargs)
+        logger.debug("%s.query: args %s kwargs %s", cls.__name__, args, kwargs)
         assert (args is None) or (len(args) % 2 == 0), "Must specify a value for every filter"
         assert cls != Model, "Cannot query on unconstrained Model class"
         q = Query(cls, kwargs.get("keys_only", True))
@@ -1200,6 +1237,7 @@ class Model(object):
     def create(cls, descriptor = None, parent = None):
         if descriptor is None:
             descriptor = {}
+        logger.info("Creating new %s model from descriptor %s", cls.__name__, descriptor)
         obj = None
         kwargs = { "parent": parent }
         kwargs.update(descriptor)
@@ -1228,17 +1266,28 @@ class Model(object):
         fname = "data/template/" + cname + ".json"
         datastr = gripe.read_file(fname)
         if datastr:
-            with Tx.begin():
-                if cls.all(keys_only = True).count() == 0:
-                    data = json.loads(datastr)
-                    for d in data[cname]:
-                        cls.create(d)
+            logger.info("Importing data file %s", fname)
+            data = json.loads(datastr)
+            if "data" in data:
+                for cdata in data["data"]:
+                    model = cdata["model"]
+                    clazz = Model.for_name(model)
+                    if clazz:
+                        with Tx.begin():
+                            if clazz.all(keys_only = True).count() == 0:
+                                logger.info("load_template_data(%s): Loading template model data for model %s", cname, model)
+                                for d in cdata["data"]:
+                                    logger.debug("load_template_data(%s): model %s object %s", cname, model, d)
+                                    clazz.create(d)
 
 def delete(model):
     if not hasattr(model, "_brandnew") and model.exists():
-        model.on_delete()
-        mm = model.modelmanager
-        mm.delete_one(model.key())
+        if model.on_delete():
+            mm = model.modelmanager
+            logger.info("Deleting model %s.%s", model.kind(), model.key())
+            mm.delete_one(model.key())
+        else:
+            logger.info("on_delete trigger prevented deletion of model %s.%s", model.kind(), model.key())
     return None
 
 class Key(object):
@@ -1271,7 +1320,7 @@ class Key(object):
         elif len(args) == 2:
             kind = args[0]
             assert isinstance(kind, basestring) or isinstance(kind, ModelMetaClass), "Second argument of Key(kind, name) must be string or model class, not %s" % type(args[0])
-            assert isinstance(args[1], basestring), "Second argument of Key(kind, name) must be string, not %s" % type(args[1])
+            assert isinstance(args[1], basestring), "Second argument of Key(%s, name) must be string, not %s" % (kind, type(args[1]))
             self._assign("%s:%s" % (kind.kind() if not isinstance(kind, basestring) else kind, args[1]))
 
     def _assign(self, value):
@@ -1311,7 +1360,7 @@ class Query(object):
 
     def ancestor(self, ancestor):
         if Model.for_name(self.kind)._flat:
-            logging.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
+            logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
             return
         assert (ancestor is None) or isinstance(ancestor, basestring) or \
             isinstance(ancestor, Model) or isinstance(ancestor, Key), \
@@ -1396,18 +1445,17 @@ class Query(object):
                 else (results \
                         if len(results) \
                         else None)
-            print "Query(%s, %s, %s).fetch(): %s" % (self.kind, self.filters, self._ancestor if hasattr(self, "_ancestor") else None, ret)
+            logging.debug("Query(%s, %s, %s).fetch(): %s", self.kind, self.filters, self._ancestor if hasattr(self, "_ancestor") else None, ret)
             return ret
 
-RefSerializationMethod = Enum(['Deep', 'Key', 'None'])
-
 class QueryProperty(object):
-    def __init__(self, name, foreign_kind, foreign_key, serialize, verbose_name = None):
+    def __init__(self, name, foreign_kind, foreign_key, private = True, serialize = False, verbose_name = None):
         self.name = name
         self.fk_kind = foreign_kind if isinstance(foreign_kind, ModelMetaClass) else Model.for_name(foreign_kind)
         self.fk = foreign_key
         self.verbose_name = verbose_name if verbose_name else name
         self.serialize = serialize
+        self.private = private
 
     def _get_query(self, instance):
         q = Query(self.fk_kind)
@@ -1429,10 +1477,7 @@ class QueryProperty(object):
         pass
 
     def to_json_value(self, instance, values):
-        if self.serialize != RefSerializationMethod.None:
-            values[self.name] = [obj.to_dict() for obj in self._get_query(instance)] \
-                if self.serialize == RefSerializationMethod.Deep
-                else values[self.name] = [obj.id() for obj in self._get_query(instance)]
+        values[self.name] = [obj.to_dict() if self.serialize else obj.id() for obj in self._get_query(instance)]
 
 class StringProperty(ModelProperty):
     datatype = str
@@ -1561,8 +1606,9 @@ class ReferenceProperty(ModelProperty):
         assert not self.reference_class or isinstance(self.reference_class, ModelMetaClass)
         self.collection_name = kwargs.get("collection_name")
         self.collection_verbose_name = kwargs.get("collection_verbose_name")
-        self.serialize = kwargs.get("serialize", RefSerializationMethod.Deep)
-        self.collection_serialize = kwargs.get("collection_serialize", RefSerializationMethod.None)
+        self.serialize = kwargs.get("serialize", True)
+        self.collection_serialize = kwargs.get("collection_serialize", False)
+        self.collection_private = kwargs.get("collection_private", True)
         self.converter = ReferenceConverter(self.reference_class, self.serialize)
 
     def set_kind(self, kind):
@@ -1573,7 +1619,7 @@ class ReferenceProperty(ModelProperty):
             self.collection_verbose_name = kind.title()
         if self.reference_class:
             k = Model.for_name(kind)
-            qp = QueryProperty(self.collection_name, k, self.name, self.collection_serialize, self.collection_verbose_name)
+            qp = QueryProperty(self.collection_name, k, self.name, self.collection_private, self.collection_serialize, self.collection_verbose_name)
             setattr(self.reference_class, self.collection_name, qp)
             self.reference_class._query_properties[self.collection_name] = qp
 
@@ -1680,3 +1726,7 @@ if __name__ == "__main__":
         for s in luc.loves:
             print s
 
+        luc.ref = schapie
+        luc.put()
+        print schapie.to_dict()
+        print luc.to_dict()

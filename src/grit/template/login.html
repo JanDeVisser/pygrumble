@@ -6,12 +6,15 @@
       <form action="/login" method="POST">
           <table>
               <tr>
-                  <td>E-Mail:</td>
+                  <td><label for="userid">E-Mail:</label></td>
                   <td><input type="text" name="userid"/></td>
               </tr>
               <tr>
-                  <td>Password:</td>
+                  <td><label for="password">Password:</label></td>
                   <td><input type="password" name="password"/></td>
+              </tr>
+              <tr>
+                  <td colspan="2"><input type="checkbox" name="remember" value="X"/><label for="remember">&nbsp;Remember me</label></td>
               </tr>
               <tr colspan="2">
                   <td align="center"><input type="submit" value="Submit"></td>

@@ -26,6 +26,7 @@ def _restart(path):
     if platform.system() == 'Windows':
         # Windows embedded mode
         import ctypes
+        ctypes.windll.libhttpd.ap_signal_parent(1)
     else:
         # Linux. Assuming daemon mode.
         os.kill(os.getpid(), signal.SIGINT)

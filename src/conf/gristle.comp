@@ -1,0 +1,8 @@
+{
+    "author": "Jan de Visser",
+    "version": "1.0",
+    "usermanager": "gristle.UserManager",
+    "mounts": [
+        { "path": "/users/?|/users/.+", "app": "gristle.app", "roles": [ "admin" ]}
+    ]
+}

@@ -5,8 +5,7 @@ import logging
 import psycopg2
 import gripe
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger = gripe.get_logger(__name__)
 
 class Cursor(psycopg2.extensions.cursor):
     def execute(self, sql, args=None):

@@ -3,99 +3,167 @@
 # To change this template, choose Tools | Templates
 # and open the template in the editor.
 
+import anydbm
+import atexit
+import datetime
 import importlib
+import jinja2
+import json
 import logging
 import os.path
+import Queue
 import re
 import threading
+import uuid
 import webapp2
-from jinja2 import Environment, PackageLoader, FileSystemLoader, ChoiceLoader
+
+
 import gripe
+import gripe.json_util
+import grit.role
+import grit.auth
+import grit.log
 import grumble
-from Model import Grumble
 
+logger = gripe.get_logger(__name__)
 
-def resolve(path):
-    if path:
-        (module, dot, fnc) = path.rpartition(".")
-        mod = __import__(module)
-        return getattr(mod, fnc) if (hasattr(mod, fnc) and callable(getattr(mod, fnc))) else None
-    else:
-        return None
+class SessionData(dict):
+    def __init__(self, id):
+        self._id = id if id else uuid.uuid1().hex
+        self._user = None
+        self.touch()
+        
+    def id(self):
+        return self._id
 
-class UserManager(object):
-    def get(self, userid):
-        return Grumble.User.get(userid)
+    def __str__(self):
+        return self.id()
+        
+    def __repr__(self):
+        return self.id()
 
-    def login(self, userid, password):
-        logging.debug("UserManager.login(%s, %s)", userid, password)
-        return Grumble.User.login(userid, password)
-
-    def id(self, user):
-        return user.name() if user else None
-
-    def displayname(self, user):
-        return user.display_name if user else None
-
-    def roles(self, user):
-        return tuple(user.roles if user.roles else ()) if user else ()
-
-usermanagerfactory = resolve(gripe.Config.app.get("usermanager", None)) or UserManager
-usermanager = usermanagerfactory()
+    def touch(self):
+        self._last_access = datetime.datetime.now()
+        
+    def valid(self):
+        delta = datetime.datetime.now() - self._last_access
+        return ((delta.seconds < 7200) and (len(self) > 0)) or (delta.seconds < 60)
+        
+    def set_user(self, user):
+        self._user = user
+        
+    def user(self):
+        return self._user
 
 class SessionManager(object):
+    _singleton = None
+    
     def __init__(self):
-        pass
-
-    def _create_session(self, name = None):
-        session = Grumble.HttpSession(key_name = name)
-        session.put()
+        assert SessionManager._singleton is None, "SessionManager is a singleton"
+        SessionManager._singleton = self
+        self._sessions = {}
+        self._queue = Queue.Queue()
+        self._lock = threading.Lock()
+        self._thread = threading.Thread(target = SessionManager._monitor)
+        self._thread.setDaemon(True)
+        atexit.register(SessionManager._exiting)
+        self._thread.start()
+    
+    @staticmethod
+    def _monitor():
+        SessionManager._singleton._monitor_()
+        
+    def _monitor_(self):
+        while True:
+            #self._lock.acquire()
+            #try:
+            for (id, session) in self._sessions.items():
+                if not session.valid():
+                    logger.debug("Session %s not valid anymore. Harvesting", id)
+                    del self._sessions[id]
+            #finally:
+            #    self._lock.release()
+            try:
+                return self._queue.get(timeout = 1.0)
+            except:
+                pass
+        
+    @staticmethod
+    def _exiting():
+        SessionManager._singleton._exiting_()
+        
+    def _exiting_(self):
+        try:
+            self._queue.put(True)
+        except:
+            pass
+        self._thread.join()
+        
+    def _get_session(self, cookie):
+        #self._lock.acquire()
+        #try:
+        session = None
+        if cookie:
+            logger.debug("Sessions: %s", self._sessions)
+            session = self._sessions.get(cookie)
+        if session is None:
+            logger.info("No session for cookie %s. Creating", cookie if cookie else "[None]")
+            session = SessionData(cookie)
+            if not cookie:
+                logger.info("New session cookie %s", session.id())
+            self._sessions[session.id()] = session
+        else:
+            logger.info("Found session with id %s", session.id())
+            session.touch()
+            logger.info("Existing session found. User %s", session.user())
         return session
+        #finally:
+        #    self._lock.release()
+
+    def _get_user(self, cookie):
+        ret = None
+        db = anydbm.open(os.path.join(gripe.root_dir(), "data", "userids.dat"), "c")
+        try:
+            logger.debug("Looking up cookie in userids.dat")
+            data = gripe.json_util.JSON.db_get(db, cookie)
+            if data:
+                ret = Session.get_usermanager().get(data.uid) if data.uid else None
+                logger.debug("Found cookie in userids.dat. Userid %s", ret)
+                data.last_access = datetime.datetime.now()
+                data.db_put()
+            return ret
+        finally:
+            db.close()
 
     def init_session(self, cookie = None):
-        if not cookie:
-            session = self._create_session()
-        else:
-            key = grumble.Key(cookie)
-            session = Grumble.HttpSession.get(key)
-            if not session.exists():
-                session = self._create_session(key.name)
-        data = session.session_data
-        user = None
-        if "userid" in data:
-            user = usermanager.get(data["userid"])
-            if not user.exists():
-                user = None
-        return (session.id(), data, user)
+        session = self._get_session(cookie)
+        if not session.user():
+            session.set_user(self._get_user(cookie))
+        return session
 
-    def persist(self, session_id, data):
-        session = Grumble.HttpSession.get(session_id)
-        session.session_data = data
-        session.put()
+    def remember_user(self, cookie, uid):
+        db = anydbm.open(os.path.join(gripe.root_dir(), "data", "userids.dat"), "c")
+        try:
+            data = gripe.json_util.JSONObject()
+            data.uid = uid
+            data.last_access = datetime.datetime.now()
+            data.db_put(db, cookie) 
+        finally:
+            db.close()
 
-    def logout(self, session_id):
-        session = HttpSession.get(session_id)
-        grumble.delete(session)
+    def persist(self, data):
+        self._sessions[data.id()] = data
 
-sessionmanagerfactory = resolve(gripe.Config.app.get("sessionmanager", None)) or SessionManager
-sessionmanager = sessionmanagerfactory()
-
-
-class GrumbleRequestLogger(object):
-    def log(self, reqctx):
-        request = reqctx.request
-        response = reqctx.response
-        with grumble.Tx.begin():
-            access = Grumble.HttpAccess()
-            access.remote_addr = request.remote_addr
-            access.user = reqctx.user.name() if (hasattr(reqctx, "user") and reqctx.user) else None
-            access.path = request.path_qs
-            access.method = request.method
-            access.status = response.status
-            access.put()
-
-requestloggerfactory = resolve(gripe.Config.app.get("requestlogger", None)) or GrumbleRequestLogger
-requestlogger = requestloggerfactory()
+    def logout(self, cookie):
+        db = anydbm.open(os.path.join(gripe.root_dir(), "data", "userids.dat"), "c")
+        try:
+            if cookie in db:
+                del db[cookie]
+        finally:
+            db.close()
+        
+        if cookie in self._sessions:
+            del self._sessions[cookie]
 
 class RequestCtx(object):
     def __init__(self, request, response, defaults):
@@ -107,24 +175,42 @@ class RequestCtx(object):
 class Session(object):
     _tl = threading.local()
 
+    _managers = {}
+
+    @classmethod
+    def _get_manager(cls, manager, default):
+        if manager not in Session._managers:
+            Session._managers[manager] = gripe.Config.resolve("app.%smanager" % manager, gripe.resolve(default, None))()
+        return Session._managers[manager]
+
+    @classmethod
+    def get_usermanager(cls):
+        return Session._get_manager("user", "grit.auth.UserManager")
+
+    @classmethod
+    def get_rolemanager(cls):
+        return Session._get_manager("role", "grit.role.RoleManager")
+
+    @classmethod
+    def get_sessionmanager(cls):
+        return Session._get_manager("session", "grit.SessionManager")
+
     def __init__(self, reqctx):
         request = reqctx.request
         self.count = 0
         self._request = request
-        (self._session_id, self._data, self._user) = sessionmanager.init_session(request.cookies.get("grit"))
-        if self._session_id:
-            request.cookies["grit"] = self._session_id
-            request.response.set_cookie("grit", str(self._session_id), httponly=True)
+        self._data = Session.get_sessionmanager().init_session(request.cookies.get("grit"))
+        if self._data is not None:
+            request.cookies["grit"] = self._data.id()
+            request.response.set_cookie("grit", self._data.id(), httponly=True, max_age = 8640000) # 24*3600*100 = 100 days ~ 3 months
         else:
             del request.cookies["grit"]
             request.response.delete_cookie("grit")
 
         request.session = self
-        request.user = self._user
-        reqctx.user = self._user
         reqctx.session = self
         Session._tl.session = self
-        logging.debug("Session.__init__: _data: %s", self._data)
+        logger.debug("Session.__init__: _data: %s", self._data)
 
     #
     # Context Manager/pipeline entry protocol methods
@@ -132,16 +218,16 @@ class Session(object):
 
     @classmethod
     def begin(cls, reqctx):
-        logging.debug("Session.begin")
+        logger.debug("Session.begin")
         return Session._tl.session if hasattr(Session._tl, "session") else Session(reqctx)
 
     def __enter__(self):
-        logging.debug("Session.__enter__")
+        logger.debug("Session.__enter__")
         self.count += 1
         return self
 
     def __exit__(self, exception_type, exception_value, trace):
-        logging.debug("Session.__exit__")
+        logger.debug("Session.__exit__")
         self.count -= 1
         if not self.count:
             self._end()
@@ -169,44 +255,47 @@ class Session(object):
     def __contains__(self, item):
         return item in self._data
 
-    def login(self, userid, password):
-        logging.debug("Session.login(%s, %s)", userid, password)
-        userid = usermanager.login(userid, password)
-        if userid:
-            self._data["userid"] = userid
-        return userid
+    def login(self, userid, password, remember_me = False):
+        logger.debug("Session.login(%s, %s, %s)", userid, password, remember_me)
+        user = Session.get_usermanager().login(userid, password)
+        if user:
+            self._data.set_user(user)
+            self._user = user
+            if remember_me:
+                Session.get_sessionmanager().remember_user(self._data.id(), userid)
+        return user
 
     def logout(self):
         if hasattr(request, "session"):
             del request.session
         if hasattr(request, "user"):
             del request.user
-        sessionmanager.logout(self._session_id)
+        Session.get_sessionmanager().logout(self._session_id)
         del request.cookies["grit"]
         request.response.delete_cookie("grit")
 
     def _end(self):
-        logging.debug("session._end")
-        sessionmanager.persist(self._session_id, self._data)
+        logger.debug("session._end")
+        Session.get_sessionmanager().persist(self._data)
         if hasattr(self._request, "session"):
             del self._request.session
         if hasattr(self._request, "user"):
             del self._request.user
-        if hasattr(self._tl, "session"):
-            del self._tl.session
+        if hasattr(Session._tl, "session"):
+            del Session._tl.session
 
     @classmethod
     def get(cls):
         return Session._tl.session if hasattr(Session._tl, "session") else None
 
     def user(self):
-        return self._user
+        return self._data.user()
 
     def userid(self):
-        return usermanager.id(self._user)
+        return self.user().uid() if self.user() else None
 
     def roles(self):
-        return usermanager.roles(self._user)
+        return self.user().roles() if self.user() else ()
 
 class SessionBridge(object):
     def userid(self):
@@ -216,7 +305,7 @@ class SessionBridge(object):
     def roles(self):
         session = Session.get()
         return session.roles() if session else None
-
+        
 class TxWrapper(object):
     def __init__(self, tx, request):
         if not hasattr(tx, "request"):
@@ -225,15 +314,15 @@ class TxWrapper(object):
 
     @classmethod
     def begin(cls, reqctx):
-        logging.debug("TxWrapper.begin")
+        logger.debug("TxWrapper.begin")
         return TxWrapper(grumble.Tx.begin(), reqctx.request)
 
     def __enter__(self):
-        logging.debug("TxWrapper.__enter__")
+        logger.debug("TxWrapper.__enter__")
         return self._tx.__enter__()
 
     def __exit__(self, exception_type, exception_value, trace):
-        logging.debug("TxWrapper.__exit__(%s, %s)", exception_type, exception_value)
+        logger.debug("TxWrapper.__exit__(%s, %s)", exception_type, exception_value)
         return self._tx.__exit__(exception_type, exception_value, trace)
 
 class Auth(object):
@@ -244,43 +333,44 @@ class Auth(object):
 
     def auth_needed(self):
         if not hasattr(self.reqctx, "session"):
-            logging.debug("Auth.needs_auth: no session")
+            logger.debug("Auth.needs_auth: no session")
             return False
         if not (hasattr(self.reqctx, "roles") and self.reqctx.roles):
-            logging.debug("Auth.needs_auth: no specific role needed")
+            logger.debug("Auth.needs_auth: no specific role needed")
             return False
         self.session = self.reqctx.session
         self.roles = self.reqctx.roles
         return True
 
     def logged_in(self):
-        if not (hasattr(self.reqctx, "user") and self.reqctx.user):
-            logging.debug("Auth.needs_login: no user. Redirecting to /login")
-            self.session["redirecturl"] = self.request.path_qs
-            self.response.status = "302 Moved Temporarily"
-            self.response.headers["Location"] = "/login"
-            return False
-        else:
-            self.user = self.reqctx.user
+        if self.session.user():
+            self.request.user = self.session.user()
+            self.reqctx.user = self.session.user()
             return True
+        logger.debug("Auth.logged_in: no user. Redirecting to /login")
+        self.session["redirecturl"] = self.request.path_qs
+        self.response.status = "302 Moved Temporarily"
+        self.response.headers["Location"] = "/login"
+        return False
 
     def confirm_role(self):
-        logging.debug("Auth.confirm_role(%s)", self.reqctx.roles)
-        if not self.user.has_role(self.reqctx.roles):
-            logging.debug("Auth.confirm_role: user %s doesn't have any role in %s", self.user.email, self.reqctx.roles)
+        logger.debug("Auth.confirm_role(%s)", self.reqctx.roles)
+        if not self.session.user().has_role(self.reqctx.roles):
+            logger.warn("Auth.confirm_role: user %s doesn't have any role in %s", Session.get_usermanager().id(self.user), self.reqctx.roles)
             self.response.status = "401 Unauthorized"
 
     @classmethod
     def begin(cls, reqctx):
-        logging.debug("Auth.begin")
+        logger.debug("Auth.begin")
         return Auth(reqctx)
 
     def __enter__(self):
-        logging.debug("Auth.__enter__")
+        logger.debug("Auth.__enter__")
         self.auth_needed() and self.logged_in() and self.confirm_role()
+        return self
 
     def __exit__(self, exception_type, exception_value, trace):
-        logging.debug("Auth.__exit__(%s, %s)", exception_type, exception_value)
+        logger.debug("Auth.__exit__(%s, %s)", exception_type, exception_value)
         return False
 
 class Dispatcher(object):
@@ -291,34 +381,44 @@ class Dispatcher(object):
 
     @classmethod
     def begin(cls, reqctx):
-        logging.debug("Dispatcher.begin")
+        logger.debug("Dispatcher.begin")
         return Dispatcher(reqctx)
 
     def __enter__(self):
-        logging.debug("Dispatcher.__enter__")
+        logger.debug("Dispatcher.__enter__")
         if hasattr(self.reqctx, "app"):
-            logging.debug("Dispatcher.__enter__: dispatching to app %s", self.reqctx.app)
+            logger.debug("Dispatcher.__enter__: dispatching to app %s", self.reqctx.app)
             self.reqctx.app.router.dispatch(self.request, self.response)
         elif hasattr(self.reqctx, "handler"):
-            logging.debug("Dispatcher.__enter__: dispatching to handler %s", self.reqctx.handler)
+            logger.debug("Dispatcher.__enter__: dispatching to handler %s", self.reqctx.handler)
             self.request.route_kwargs = {}
             h = self.reqctx.handler(self.request, self.response)
             if hasattr(h, "set_request_context") and callable(h.set_request_context):
                 h.set_request_context(reqctx)
             h.dispatch()
+        return self
 
     def __exit__(self, exception_type, exception_value, trace):
         # FIXME: Do fancy HTTP error code stuffs maybe
-        logging.debug("Dispatcher.__exit__(%s, %s)", exception_type, exception_value)
+        logger.debug("Dispatcher.__exit__(%s, %s)", exception_type, exception_value)
         return False
 
 class RequestLogger(object):
     """
-        Pipeline entry logging requests and their results to a grumble model.
+        Pipeline entry logger requests and their results to a grumble model.
         This entry uses the __exit__ handler. It should come in the pipeline
         before (so it's __exit__ comes after) TxWrapper, so the request can be
         logged even in the case of an exception and the resulting rollback.
     """
+    
+    _requestlogger = None
+    
+    @classmethod
+    def get_requestlogger(cls):
+        if cls._requestlogger is None:
+            cls._requestlogger = gripe.Config.resolve("app.requestlogger", grit.log.HttpAccessLogger)()
+        return cls._requestlogger
+
     def __init__(self, reqctx):
         self.reqctx = reqctx
         self.request = reqctx.request
@@ -326,17 +426,16 @@ class RequestLogger(object):
 
     @classmethod
     def begin(cls, reqctx):
-        logging.debug("RequestLogger.begin")
+        logger.debug("RequestLogger.begin")
         return RequestLogger(reqctx)
 
     def __enter__(self):
-        logging.debug("RequestLogger.__enter__")
+        logger.debug("RequestLogger.__enter__")
 
     def __exit__(self, exception_type, exception_value, trace):
-        logging.debug("RequestLogger.__exit__(%s, %s)", exception_type, exception_value)
-        global requestlogger
-        if requestlogger:
-            requestlogger.log(self.reqctx)
+        logger.debug("RequestLogger.__exit__(%s, %s)", exception_type, exception_value)
+        if self._requestlogger:
+            self._requestlogger.log(self.reqctx)
 
 class ReqHandler(webapp2.RequestHandler):
     content_type = "application/xhtml+xml"
@@ -345,18 +444,18 @@ class ReqHandler(webapp2.RequestHandler):
 
     def __init__(self, request = None, response = None):
         super(ReqHandler, self).__init__(request, response)
-        logging.debug("Creating request handler for %s", request.path)
+        logger.debug("Creating request handler for %s", request.path)
         self.session = request.session if hasattr(request, "session") else None
         self.user = request.user if hasattr(request, "user") else None
 
     @classmethod
     def _get_env(cls):
         if not hasattr(cls, "env"):
-            loader = ChoiceLoader([ \
-                FileSystemLoader("%s/%s" % (gripe.root_dir(), cls.template_dir)), \
-                PackageLoader("grit", "template") \
+            loader = jinja2.ChoiceLoader([ \
+                jinja2.FileSystemLoader("%s/%s" % (gripe.root_dir(), cls.template_dir)), \
+                jinja2.PackageLoader("grit", "template") \
             ])
-            env = Environment(loader = loader)
+            env = jinja2.Environment(loader = loader)
             if hasattr(cls, "get_env") and callable(cls.get_env):
                 env = cls.get_env(env)
             cls.env = env
@@ -415,7 +514,7 @@ class ReqHandler(webapp2.RequestHandler):
         if not ret:
             ret = cname
         ret = gripe.Config.app.get(cname, ret)
-        logging.info("ReqHandler: using template %s", ret)
+        logger.info("ReqHandler: using template %s", ret)
         return ret
 
     def _get_content_type(self):
@@ -424,7 +523,8 @@ class ReqHandler(webapp2.RequestHandler):
         elif hasattr(self, "content_type"):
             return self.content_type
         else:
-            return "text/plain"
+            content_type = gripe.ContentType.for_path(self.request.path)
+            return content_type.content_type if content_type else "text/plain"            
 
     def render(self, values = None, param = None):
         ctx = self._get_context(values, param)
@@ -436,11 +536,11 @@ class Login(ReqHandler):
     content_type = "text/html"
 
     def get(self):
-        logging.debug("main::login.get")
+        logger.debug("main::login.get")
         self.render()
 
     def post(self):
-        logging.debug("main::login.post(%s/%s)", self.request.get("userid"), self.request.get("password"))
+        logger.debug("main::login.post(%s/%s)", self.request.get("userid"), self.request.get("password"))
         url = "/"
         if "redirecturl" in self.session:
             url = self.session["redirecturl"]
@@ -449,20 +549,21 @@ class Login(ReqHandler):
             url = self.request.get("redirecturl", "/")
         userid = self.request.get("userid")
         password = self.request.get("password")
+        remember_me = self.request.get("remember", False)
         assert self.session is not None, "Session missing from request handler"
-        if self.session is not None and self.session.login(userid, password):
-            logging.debug("Login OK")
+        if self.session.login(userid, password, remember_me):
+            logger.debug("Login OK")
             self.response.status = "302 Moved Temporarily"
             self.response.headers["Location"] = str(url)
         else:
-            logging.debug("Login FAILED")
+            logger.debug("Login FAILED")
             self.response.status_int = 401
 
 class Logout(ReqHandler):
     content_type = "text/html"
 
     def get(self):
-        logging.debug("main::logout.get")
+        logger.debug("main::logout.get")
         self.request.session.logout(self.request)
         self.render()
 
@@ -471,7 +572,7 @@ class Logout(ReqHandler):
 
 class StaticHandler(ReqHandler):
     def get(self, **kwargs):
-        logging.info("StaticHandler.get(%s)", self.request.path)
+        logger.info("StaticHandler.get(%s)", self.request.path)
         path = ''
         if "abspath" in kwargs:
             path = kwargs["abspath"]
@@ -481,7 +582,7 @@ class StaticHandler(ReqHandler):
                 path = os.path.join(path, kwargs["relpath"])
         path += self.request.path if not kwargs.get('alias') else kwargs.get("alias")
         if not os.path.exists(path):
-            logging.info("Static file %s does not exist", path)
+            logger.info("Static file %s does not exist", path)
             self.request.response.status = "404 Not Found"
         else:
             self.response.content_length = str(os.path.getsize(path))
@@ -510,16 +611,16 @@ class ErrorPage(ReqHandler):
         return "error_%s" % self.response.status_int
 
     def get(self):
-        logging.info("main::ErrorPage_%s.get", self.status)
+        logger.info("main::ErrorPage_%s.get", self.status)
         self.render({ "request": self.request, "response": self.response})
 
 def handle_request(request, *args, **kwargs):
     root = kwargs["root"]
-    logging.debug("main::WSGIApplication::handle_request path: %s method: %s", request.path_qs, request.method)
+    logger.debug("main::WSGIApplication::handle_request path: %s method: %s", request.path_qs, request.method)
 
     reqctx = RequestCtx(request, request.response, kwargs)
     def run_pipeline(l):
-        logging.debug("run_pipeline(%s)", l)
+        logger.debug("run_pipeline(%s)", l)
         if l:
             handler_cls = l.pop(0)
             with handler_cls.begin(reqctx):
@@ -536,8 +637,8 @@ def handle_request(request, *args, **kwargs):
     request.response = rv
 
 def handle_404(request, response, exception):
-    #logging.exception(exception)
-    logging.info("404 for %s", request.path_qs)
+    #logger.exception(exception)
+    logger.info("404 for %s", request.path_qs)
     #handler = ErrorPage(404, request, response, exception)
     #handler.get()
     response.set_status(404)
@@ -545,7 +646,7 @@ def handle_404(request, response, exception):
 class WSGIApplication(webapp2.WSGIApplication):
     def __init__(self, *args, **kwargs):
         super(WSGIApplication, self).__init__(*args, **kwargs)
-        grumble.set_sessionbridge(SessionBridge())
+        #grumble.set_sessionbridge(SessionBridge())
         self.router.add(webapp2.Route("/login", handler=handle_request, defaults = { "root": self, "handler": Login, "roles": [] }))
         self.router.add(webapp2.Route("/logout", handler=handle_request, defaults = { "root": self, "handler": Logout, "roles": [] }))
         self.pipeline = []
@@ -560,7 +661,7 @@ class WSGIApplication(webapp2.WSGIApplication):
             if pipeline:
                 assert isinstance(pipeline, list), "Pipeline entry in app.container config must be list"
                 for p in pipeline:
-                    pipeline_class = resolve(p)
+                    pipeline_class = gripe.resolve(p)
                     assert pipeline_class, "Invalid entry %s in pipeline config" % p
                     assert hasattr(pipeline_class, "begin"), "Pipeline entry %s has no 'begin' method" % p
                     self.pipeline.append(pipeline_class)
@@ -575,11 +676,8 @@ class WSGIApplication(webapp2.WSGIApplication):
 
             app_path  = mp.get("app")
             if app_path:
-                (module, dot, app_obj) = app_path.rpartition(".")
-                mod = importlib.import_module(module)
-                assert hasattr(mod, app_obj), "Imported %s, but no object %s found" % (module, app_obj)
-                wsgi_sub_app = getattr(mod, app_obj)
-                assert isinstance(wsgi_sub_app, webapp2.WSGIApplication)
+                wsgi_sub_app = gripe.resolve(app_path, None)
+                assert wsgi_sub_app, "WSGI app %s not found" % app_path
                 handler = handle_request
                 defaults["app"] = wsgi_sub_app
             else:

@@ -17,7 +17,7 @@ class MainPage(webapp2.RequestHandler):
             Really !!!!
             <h2>User: %s</h2>
         </html>
-        """ % self.request.user.email)
+        """ % self.request.user.uid())
 
 app = webapp2.WSGIApplication([('/', MainPage)],
                               debug=True)

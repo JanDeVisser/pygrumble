@@ -13,10 +13,18 @@
     "container": {
         "pipeline": [ "grit.RequestLogger", "grit.TxWrapper", "grit.Session", "grit.Auth" ]
     },
+    "rolemanager": "grit.role.RoleManager",
+    "roles": [
+        { "role": "athlete",   "has_roles": []              },
+        { "role": "coach",     "has_roles": []              },
+        { "role": "user",      "has_roles": []              },
+        { "role": "moderator", "has_roles": [ "user" ]      },
+        { "role": "admin",     "has_roles": [ "moderator" ] }
+    ],
     "mounts": [
         { "path": "/", "app": "index.app", "roles": [ "admin" ] },
         { "path": "/image/.+|/css/.+|/javascript/.+", "roles": [] },
-        { "path": "/json/.+|/img/.+", "app": "grit.handlers.app", "roles": [ "admin" ]},
-        { "path": "/users/?|/users/.+", "app": "gristle.app", "roles": [ "admin" ]}
-    ]
+        { "path": "/json/.+|/img/.+", "app": "grit.handlers.app", "roles": [ "admin" ]}
+    ],
+    "components": [ "gristle" ]
 }

@@ -14,8 +14,39 @@
         <st:column label="Email" type="link" property="email" url="/users/$key" width="25%"/>
         <st:column label="Name" type="link" property="display_name" url="/users/$key" width="75%"/>
         <st:dataform>
-            <st:field id="email" type="text" label="Email"/>
-            <st:field id="display_name" type="text" label="Email"/>
+            <st:field property="email" type="text" label="Email"/>
+            <st:field property="display_name" type="text" label="Email"/>
+            <st:action mode="new;edit" label="Save" action="save"/>
+            <st:action mode="view;new;edit" label="Cancel" action="cancel"/>
+        </st:dataform>
+    </st:table>
+</st:tab>
+
+<st:tab code="groups" label="Groups">
+    <st:table name="groups" url="/json/usergroup">
+        <st:header>
+            <st:action label="New" action="new"/>
+        </st:header>
+        <st:column label="Name" property="group" width="100%"/>
+        <st:dataform>
+            <st:field property="group" type="text" label="Name"/>
+            <st:action mode="new;edit" label="Save" action="save"/>
+            <st:action mode="view;new;edit" label="Cancel" action="cancel"/>
+        </st:dataform>
+    </st:table>
+</st:tab>
+
+
+<st:tab code="roles" label="Roles">
+    <st:table name="roles" url="/json/role">
+        <st:header>
+            <st:action label="New" action="new"/>
+        </st:header>
+        <st:column label="Name" property="role" width="50%"/>
+        <st:column label="Label" property="display_name" width="50%"/>
+        <st:dataform>
+            <st:field property="role" type="text" label="Name"/>
+            <st:field property="display_name" type="text" label="Label"/>
             <st:action mode="new;edit" label="Save" action="save"/>
             <st:action mode="view;new;edit" label="Cancel" action="cancel"/>
         </st:dataform>
