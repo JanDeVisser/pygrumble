@@ -1,0 +1,11 @@
+Hi Jan,
+    
+This is a test.
+
+Thanks,
+
+jan
+
+ctx["subject"] = {{subject}}
+ctx["recipients"] = {{recipients}}
+ctx["recipient_str"] = {{recipient_str}}

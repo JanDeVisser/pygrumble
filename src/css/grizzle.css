@@ -13,6 +13,9 @@ root {
 body {
     font-family: Verdana,Arial,sans serif;
     margin: 0 0 0 0;
+    position: relative;
+    min-height: 100%;
+    top: 0px;
 }
 
 tr.tableheader {
@@ -110,33 +113,18 @@ div.menubar {
     width: 230px;
     background-color: #BFE4FB;
     height: 100%;
-}
-
-.sidebarwrapper {
-    padding: 10px 5px 0 10px;
-    background-color: #BFE4FB;
-    height: 100%;
-    position: fixed;
-    top: 50px;
-    bottom: -0px;
-    left: 0px;
-    width: 210px;
+    margin-right: 4px;
+    margin-top: 5px;
+    margin-left: 10px;
+    padding-top: 5px;
 }
 
 .mainpage {
+	float: left;
     margin: 0 0 0 230px;
-    height: 100%
-}
-
-.documentwrapper {
     height: 100%;
-    padding: 5px;
-    clip: rect(1px, 0px, 0px, 0px);
-}
-
-.document {
-    height: 100%;
-    width: 95%;
+    width: 100%;
+	padding: 5px;
 }
 
 .tools {

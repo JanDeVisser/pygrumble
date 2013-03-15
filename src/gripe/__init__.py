@@ -58,7 +58,7 @@ def resolve(funcname, default = None):
         mod = importlib.import_module(module)
         return getattr(mod, fnc) if (hasattr(mod, fnc) and callable(getattr(mod, fnc))) else default
     else:
-        return default
+        return resolve(default, None) if isinstance(default, basestring) else default
 
 class ContentType(object):
     Binary, Text = range(2)

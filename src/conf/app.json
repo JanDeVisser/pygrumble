@@ -13,7 +13,6 @@
     "container": {
         "pipeline": [ "grit.RequestLogger", "grit.TxWrapper", "grit.Session", "grit.Auth" ]
     },
-    "rolemanager": "grit.role.RoleManager",
     "roles": [
         { "role": "athlete",   "has_roles": []              },
         { "role": "coach",     "has_roles": []              },
@@ -26,5 +25,5 @@
         { "path": "/image/.+|/css/.+|/javascript/.+", "roles": [] },
         { "path": "/json/.+|/img/.+", "app": "grit.handlers.app", "roles": [ "admin" ]}
     ],
-    "components": [ "gristle" ]
+    "components": [ "grizzle" ]
 }

@@ -1,8 +1,8 @@
 # To change this template, choose Tools | Templates
 # and open the template in the editor.
 
-__author__="jan"
-__date__ ="$19-Jan-2013 11:19:59 AM$"
+__author__ = "jan"
+__date__ = "$19-Jan-2013 11:19:59 AM$"
 
 import base64
 import datetime
@@ -28,7 +28,7 @@ class PropertyRequired(gripe.Error):
         self.propname = propname
 
     def __str__(self):
-        return "Property %s requires a value" % (self.propname, )
+        return "Property %s requires a value" % (self.propname,)
 
 class InvalidChoice(gripe.Error):
     """Raised when a value is specified for a property that is not in the
@@ -89,13 +89,13 @@ class Tx(object):
                     cur = tx.get_cursor()
                     create_db = False
                     if isinstance(pgsql_conf.wipe_database, bool) and pgsql_conf.wipe_database:
-                        cur.execute('DROP DATABASE IF EXISTS "%s"' % (database, ))
+                        cur.execute('DROP DATABASE IF EXISTS "%s"' % (database,))
                         create_db = True
                     else:
-                        cur.execute("SELECT COUNT(*) FROM pg_catalog.pg_database WHERE datname = %s", (database, ))
+                        cur.execute("SELECT COUNT(*) FROM pg_catalog.pg_database WHERE datname = %s", (database,))
                         create_db = (cur.fetchone()[0] == 0)
                     if create_db:
-                        cur.execute('CREATE DATABASE "%s"' % (database, ))
+                        cur.execute('CREATE DATABASE "%s"' % (database,))
 
         if pgsql_conf.schema:
             with Tx.begin("admin") as tx:
@@ -103,10 +103,10 @@ class Tx(object):
                 create_schema = False
                 schema = pgsql_conf.schema
                 if isinstance(pgsql_conf.wipe_schema, bool) and pgsql_conf.wipe_schema:
-                    cur.execute('DROP SCHEMA IF EXISTS "%s" CASCADE' % (schema, ))
+                    cur.execute('DROP SCHEMA IF EXISTS "%s" CASCADE' % (schema,))
                     create_schema = True
                 else:
-                    cur.execute("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = %s", (schema, ))
+                    cur.execute("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = %s", (schema,))
                     create_schema = (cur.fetchone()[0] == 0)
                 if create_schema:
                     cur.execute('CREATE SCHEMA "%s" AUTHORIZATION %s' % (schema, pgsql_conf["user"]["user_id"]))
@@ -250,7 +250,7 @@ class ModelManager(object):
                 ColumnDefinition("_parent", "TEXT", False, None, True))
         self.columns += columns
         if self.audit:
-            self.columns += ( ColumnDefinition("_ownerid", "TEXT", False, None, True), \
+            self.columns += (ColumnDefinition("_ownerid", "TEXT", False, None, True), \
                 ColumnDefinition("_acl", "TEXT", False, None, False), \
                 ColumnDefinition("_createdby", "TEXT", False, None, False), \
                 ColumnDefinition("_created", "TIMESTAMP", False, None, False), \
@@ -264,7 +264,7 @@ class ModelManager(object):
             cur = tx.get_cursor()
             sql = 'SELECT "%s" FROM %s WHERE "%s" = %%s' % \
                 ('", "'.join(self.column_names), self.tablename, self.key_col.name)
-            cur.execute(sql, (key.name, ))
+            cur.execute(sql, (key.name,))
             values = cur.fetchone()
             if values:
                 ret = zip(self.column_names, values)
@@ -293,7 +293,7 @@ class ModelManager(object):
             v = [values[c] for c in cols]
             if insert:
                 sql = 'INSERT INTO %s ( "%s" ) VALUES ( %s )' % \
-                    (self.tablename, '", "'.join(cols), ', '.join(['%s']*len(cols)))
+                    (self.tablename, '", "'.join(cols), ', '.join(['%s'] * len(cols)))
             else:
                 sql = 'UPDATE %s SET %s WHERE "%s" = %%s' % \
                     (self.tablename, ", ".join(['"%s" = %%s' % c for c in cols]), self.key_col.name)
@@ -305,7 +305,7 @@ class ModelManager(object):
         with Tx.begin() as tx:
             cur = tx.get_cursor()
             sql = 'DELETE FROM %s WHERE "%s" = %%s' % (self.tablename, self.key_col.name)
-            cur.execute(sql, (key.name, ))
+            cur.execute(sql, (key.name,))
 
     def query(self, ancestor, filters, what = "key_name"):
         key_ix = 0
@@ -336,9 +336,9 @@ class ModelManager(object):
             else:
                 sql += ' WHERE "_ancestors" = %s' % "'/'"
         if filters:
-            filtersql = " AND ".join(['%s %%s' % e for (e,v) in filters])
+            filtersql = " AND ".join(['%s %%s' % e for (e, v) in filters])
             sql += glue + filtersql
-            vals += [v for (e,v) in filters]
+            vals += [v for (e, v) in filters]
         tx = Tx.get()
         assert tx, "ModelManager.query: no transaction active"
         cur = tx.get_cursor()
@@ -379,7 +379,7 @@ class ModelManager(object):
                 if self._recon == "drop":
                     cur.execute('DROP TABLE IF EXISTS ' + self.tablename)
                     self.create_table(cur)
-                else: # _recon is 'all' or 'add'
+                else:  # _recon is 'all' or 'add'
                     if not self.table_exists(cur):
                         self.create_table(cur)
                     else:
@@ -395,7 +395,7 @@ class ModelManager(object):
         return cur.fetchone() is not None
 
     def create_table(self, cur):
-        cur.execute('CREATE TABLE %s ( )' % (self.tablename, ))
+        cur.execute('CREATE TABLE %s ( )' % (self.tablename,))
         self.update_table(cur)
 
     def update_table(self, cur):
@@ -431,7 +431,7 @@ class ModelManager(object):
                             alter += " DEFAULT %s"
                             vars.append(column.defval)
                         if alter != "":
-                            cur.execute('ALTER TABLE %s ALTER COLUMN "%s" %s' % ( self.tablename, colname, alter ), vars)
+                            cur.execute('ALTER TABLE %s ALTER COLUMN "%s" %s' % (self.tablename, colname, alter), vars)
                     self.columns.remove(column)
         for c in self.columns:
             vars = []
@@ -719,7 +719,7 @@ class CompoundProperty(object):
             p._on_store(instance)
 
     def validate(self, value):
-        for (p,v) in zip(self.compound, value):
+        for (p, v) in zip(self.compound, value):
             p.validate(v)
         if self.validator:
             self.validator(value)
@@ -743,14 +743,14 @@ class CompoundProperty(object):
 
     def __set__(self, instance, value):
         instance._load()
-        for (p,v) in zip(self.compound, value):
+        for (p, v) in zip(self.compound, value):
             p.__set__(instance, v)
 
     def __delete__(self, instance):
         return NotImplemented
 
     def convert(self, value):
-        return tuple(p.convert(v) for (p,v) in zip(self.compound, value))
+        return tuple(p.convert(v) for (p, v) in zip(self.compound, value))
 
     def from_json_value(self, instance, values):
         for p in filter(lambda p: not p.private, self.compound):
@@ -879,7 +879,7 @@ class Model(object):
         if self.name():
             s = self.name()
             if label:
-                s += " (%s)"  % label
+                s += " (%s)" % label
             return "<%s: %s>" % (self.kind(), s)
         else:
             super(self.__class__, self).__repr__()
@@ -913,7 +913,7 @@ class Model(object):
                 self._ancestors = "/"
             elif isinstance(ancestors, basestring):
                 self._ancestors = ancestors
-                (a,sep,p) = ancestors.rpartition("/")
+                (a, sep, p) = ancestors.rpartition("/")
                 assert p == str(parent)
                 self._parent = Key(p)
         else:
@@ -929,7 +929,7 @@ class Model(object):
                 v[name] = value
             parent = v["_parent"] if "_parent" in v else None
             ancestors = v["_ancestors"] if "_ancestors" in v else None
-            self._key_name =  v["_key_name"] if "_key_name" in v else None
+            self._key_name = v["_key_name"] if "_key_name" in v else None
             self._ownerid = v["_ownerid"] if "_ownerid" in v else None
             _set_acl(self, v["_acl"] if "_acl" in v else None)
             for prop in self._properties.values():
@@ -1020,7 +1020,7 @@ class Model(object):
 
     def pathlist(self):
         pl = self.path().split("/")
-        del pl[0] # First element is "/" because the path starts with a "/"
+        del pl[0]  # First element is "/" because the path starts with a "/"
         return [Model.get(k) for k in pl]
 
     def root(self):
@@ -1100,7 +1100,15 @@ class Model(object):
         hasattr(self, "sub_update") and callable(self.sub_update) and self.sub_update(descriptor)
         self.put()
         return self.to_dict()
-    
+
+    def invoke(self, method, args, kwargs):
+        self._load()
+        args = args or []
+        kwargs = kwargs or {}
+        assert hasattr(self, method) and callable(getattr(self, method)), "%s.%s has not method %s. Can't invoke" % (self.kind(), self.key(), method)
+        logger.info("Invoking %s on %s.%s using arguments *%s, **%s", method, self.kind(), self.key(), args, kwargs)
+        return getattr(self, method)(*args, **kwargs)
+
     def get_user_permissions(self):
         roles = set(get_sessionbridge().roles())
         if get_sessionbridge().userid() == self.ownerid():
@@ -1132,7 +1140,7 @@ class Model(object):
         return set(Model.acl.get(role, ""))
 
     def get_all_permissions(self, role):
-       return self.get_object_permissions(role) | self.get_class_permissions(role) | self.get_global_permissions(role)
+        return self.get_object_permissions(role) | self.get_class_permissions(role) | self.get_global_permissions(role)
 
     def set_permissions(self, role, perms):
         assert role, "Model.set_permissions: Role must not be None"
@@ -1200,8 +1208,8 @@ class Model(object):
         modelclass._kind = fullname
 
     @classmethod
-    def get(cls, key, values = None):
-        k = Key(key)
+    def get(cls, id, values = None):
+        k = Key(id)
         if cls != Model:
             ret = Tx.get_from_cache(k)
             if not ret:
@@ -1212,11 +1220,23 @@ class Model(object):
                 if values:
                     ret._populate(values)
             else:
-                #print "%s.get - Cache hit" % cls.__name__
+                # print "%s.get - Cache hit" % cls.__name__
                 pass
         else:
             assert k.kind
             return Model.for_name(k.kind).get(k, values)
+        return ret
+
+    @classmethod
+    def get_by_key(cls, key, values = None):
+        assert cls != Model, "Cannot use get_by_key on unconstrained Models"
+        k = Key(cls, key)
+        ret = Tx.get_from_cache(k)
+        if not ret:
+            ret = super(Model, cls).__new__(cls)
+            assert (cls.kind().endswith(k.kind)) or not k.kind, "%s.get(%s.%s) -> wrong key kind" % (cls.kind(), k.kind, k.name)
+            ret._id = k.id
+            ret._key_name = k.name
         return ret
 
     @classmethod
@@ -1229,7 +1249,7 @@ class Model(object):
             q.ancestor(kwargs["ancestor"])
         ix = 0
         while ix < len(args):
-            q.filter(args[ix], args[ix+1])
+            q.filter(args[ix], args[ix + 1])
             ix += 2
         return q
 
@@ -1494,7 +1514,7 @@ class PasswordProperty(StringProperty):
     def _on_store(self, instance):
         value = self.__get__(instance, instance.__class__)
         self.__set__(instance, self.hash(value))
-    
+
     @classmethod
     def hash(cls, password):
         return password if password and password.startswith("sha://") else "sha://%s" % sha.sha(password if password else "").hexdigest()
@@ -1583,13 +1603,13 @@ class ReferenceConverter(PropertyConverter):
         return value.to_dict() if self.serialize else value.id()
 
     def from_jsonvalue(self, value):
-        clazz = prop.reference_class
+        clazz = self.reference_class
         if isinstance(value, basestring):
-            value = clazz.get(newval) if clazz else Model.get(newval)
+            value = clazz.get(value) if clazz else Model.get(value)
         elif isinstance(value, dict) and ("key" in value):
             value = clazz.get(value["key"])
-        elif not isinstance(newval, clazz):
-            assert 0, "Cannot update %s.% to %s (wrong type %s)" % (self.__class__.__name__, name, value, str(type(newval)))
+        elif not isinstance(value, clazz):
+            assert 0, "Cannot update ReferenceProperty to %s (wrong type %s)" % (value, str(type(value)))
         return value
 
 class ReferenceProperty(ModelProperty):

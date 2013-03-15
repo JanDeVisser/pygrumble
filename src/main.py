@@ -5,12 +5,13 @@
 
 import sys
 import os.path
-if os.path.dirname(__file__) not in sys.path:
-    sys.path.insert(0, os.path.dirname(__file__))
-print sys.path
+# if os.path.dirname(__file__) not in sys.path:
+#    sys.path.insert(0, os.path.dirname(__file__))
+# print sys.path
 
 import os
 import re
+import gripe
 import grit
 import grumble
 
@@ -18,7 +19,7 @@ from grumble import image
 
 if __name__ != '__main__':
     import autoreload
-    autoreload.start(interval=1.0)
+    autoreload.start(interval = 1.0)
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/app.json'))
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/database.json'))
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/logging.json'))
@@ -31,13 +32,13 @@ if __name__ == '__main__':
 
     request = webapp2.Request.blank('/')
     response = request.get_response(app)
-    #print response
+    # print response
     assert response.status_int == 302, "Expected 302 Moved Temporarily, got %s" % response.status
 
     cookie = response.headers["Set-Cookie"]
     parts = cookie.split(";")
     cookie = parts[0]
-    location  = response.headers["Location"]
+    location = response.headers["Location"]
     assert location == "http://localhost/login", "Expected to be redirected to /login, but got redirected to %s instead" % location
     print "Requested / and got redirected to /login"
 
@@ -45,7 +46,7 @@ if __name__ == '__main__':
     request.headers['Cookie'] = cookie
     print request.cookies['grit']
     response = request.get_response(app)
-    #print response
+    # print response
     assert response.status_int == 200, "Expected 200 OK, got %s" % response.status
     print "Requested /login and got OK"
 
@@ -56,9 +57,9 @@ if __name__ == '__main__':
     request.POST["password"] = "wbw417"
     request.POST["remember"] = "X"
     response = request.get_response(app)
-    #print response
+    # print response
     assert response.status_int == 302, "Expected 302 Moved Temporarily, got %s" % response.status
-    location  = response.headers["Location"]
+    location = response.headers["Location"]
     assert location == "http://localhost/"
     print "POSTed login data and got redirected to /"
 
@@ -67,7 +68,7 @@ if __name__ == '__main__':
     response = request.get_response(app)
     assert response.status_int == 200, "Expected 200 OK, got %s" % response.status
     print response.body
-    #assert re.match(u"Really", response.body)
+    # assert re.match(u"Really", response.body)
     print "Requested / and got OK"
 
     request = webapp2.Request.blank("/image/throbber.gif")
@@ -117,7 +118,7 @@ if __name__ == '__main__':
     k = d["key"]
     print "Updated Test and got OK"
 
-    with open("image/Desert.jpg", "rb") as fh:
+    with open("%s/image/Desert.jpg" % gripe.root_dir(), "rb") as fh:
         img = fh.read()
     request = webapp2.Request.blank("/img/test/icon/%s" % k, POST = { "contentType": "image/jpeg", "image": ("Desert.jpg", img) })
     request.headers['Cookie'] = cookie
@@ -136,7 +137,7 @@ if __name__ == '__main__':
     response = request.get_response(app)
     assert response.status_int == 200, "Expected 200 OK, got %s" % response.status
     etag = response.etag
-    with open("image/Desert_1.jpg", "wb") as fh:
+    with open("%s/image/Desert_1.jpg" % gripe.root_dir(), "wb") as fh:
         fh.write(response.body)
     print "Downloaded Test image and got OK"
 
@@ -147,7 +148,7 @@ if __name__ == '__main__':
     assert response.status_int == 304, "Expected 304 Not Modified, got %s" % response.status
     print "Downloaded Test image again and got Not Modified"
 
-    with open("image/Koala.jpg", "rb") as fh:
+    with open("%s/image/Koala.jpg" % gripe.root_dir(), "rb") as fh:
         img = fh.read()
     request = webapp2.Request.blank("/img/test/icon/%s" % k, POST = { "contentType": "image/jpeg", "image": ("Koala.jpg", img) })
     request.headers['Cookie'] = cookie

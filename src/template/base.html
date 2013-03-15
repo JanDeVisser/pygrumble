@@ -6,7 +6,7 @@
   <head>
     {% block head %}
     {% endblock %}
-    <link rel="stylesheet" type="text/css" href="/css/gristle.css"/>
+    <link rel="stylesheet" type="text/css" href="/css/grizzle.css"/>
     <style type="text/css">
         {% block css %}
 	{% endblock css %}
@@ -32,43 +32,37 @@
   </head>
   <body onload="$$.run();">
     <div id="topbar" class="topbar">
-	{% block topbar %}
-	<div class="tools">
-            {% if user %}
-		{{ user.display_name|d(user.email) }} |
-		<a class="whitelink" href="/">Home</a> |
-		<a class="whitelink" href="{{ url['logout']|e }}">Logout</a>
-            {% endif %}
-        </div>
-	{% endblock topbar %}
+		{% block topbar %}
+			<div class="tools">
+	        {% if user %}
+				{{ user.display_name|d(user.email) }} |
+				<a class="whitelink" href="/">Home</a> |
+				<a class="whitelink" href="{{ url['logout']|e }}">Logout</a>
+	        {% endif %}
+		    </div>
+		{% endblock topbar %}
     </div>
-    <span id="document" class="document">
 	<div id="sidebar" class="sidebar">
-	    <div id="sidebarwrapper" class="sidebarwrapper">
 		{% block sidebar %}
 		{% endblock sidebar %}
-	    </div>
 	</div>
-	<div id="documentwrapper" class="documentwrapper">
-	    <div class="mainpage" id="mainpage">
-                {% block pagecontent %}
-                    <div class="tabbox" id="tabbox">
-                    </div>
-                    <div class="pagebox" id="pagebox" width="100%">
-                        <div id="page_pleasewait" class="tabpage">
-                            <span style="text-align: center;"><img src="/image/throbber.gif" height="32" width="32"/>&#160;Please wait</span>
-                        </div>
-                        <st:tabs>
-                            {% block tabs %}
-                            {% endblock tabs %}
-                        </st:tabs>
-                        {% block mainpage %}
-                        {% endblock mainpage %}
-                    </div>
-                {% endblock pagecontent %}
-	    </div>
-        </div>
-    </span>
+    <div class="mainpage" id="mainpage">
+        {% block pagecontent %}
+            <div class="tabbox" id="tabbox">
+            </div>
+            <div class="pagebox" id="pagebox" width="100%">
+                <div id="page_pleasewait" class="tabpage">
+                    <span style="text-align: center;"><img src="/image/throbber.gif" height="32" width="32"/>&#160;Please wait</span>
+                </div>
+                <st:tabs>
+                    {% block tabs %}
+                    {% endblock tabs %}
+                </st:tabs>
+                {% block mainpage %}
+                {% endblock mainpage %}
+            </div>
+        {% endblock pagecontent %}
+    </div>
   </body>
 </html>
 

@@ -1,8 +1,8 @@
 # To change this template, choose Tools | Templates
 # and open the template in the editor.
 
-__author__="jan"
-__date__ ="$16-Nov-2012 10:01:52 PM$"
+__author__ = "jan"
+__date__ = "$16-Nov-2012 10:01:52 PM$"
 
 import json
 import logging
@@ -136,7 +136,7 @@ class BridgedHandler(grit.ReqHandler, ModelBridge):
 class PageHandler(BridgedHandler, grit.ReqHandler):
     def get(self, key = None, kind = None):
         self._initialize_bridge(key, kind)
-	if self.allow_access():
+        if self.allow_access():
             self.initialize_bridge()
             redir = self.must_redirect_to()
             if not redir:
@@ -158,7 +158,7 @@ class JSHandler(BridgedHandler):
 
     def get(self, key = None, kind = None):
         self._initialize_bridge(key, kind)
-	if self.allow_access():
+        if self.allow_access():
             self.initialize_bridge()
             objs = self.get_objects()
             obj = objs[0] if objs and len(objs) else None
@@ -204,7 +204,7 @@ class ImageHandler(PropertyBridgedHandler):
     def get(self, key = None, kind = None, prop = None):
         logging.debug("ImageHandler.get(%s.%s, %s)", kind, prop, key)
         self._initialize_bridge(key, kind, prop)
-	if self.allow_access() and self.key():
+        if self.allow_access() and self.key():
             self.initialize_bridge()
             if self.object() and self.can_read():
                 if getattr(self.object(), self.property() + "_hash") in self.request.if_none_match:
@@ -228,6 +228,9 @@ class JSONHandler(BridgedHandler):
     def delete_obj(self):
         self.object() and self.can_delete() and grumble.delete(self.object())
 
+    def invoke(self, d):
+        self.object() and self.can_update() and self.object().invoke(d["name"], d.get("args"), d.get("kwargs"))
+
     def dump(self, obj):
         if obj:
             logging.info("retstr=%s", json.dumps(obj))
@@ -239,7 +242,7 @@ class JSONHandler(BridgedHandler):
     def post(self, kind = None):
         logging.debug("JSONHandler.post(%s)", kind)
         self._initialize_bridge(None, kind)
-	if self.allow_access():
+        if self.allow_access():
             self.initialize_bridge()
             descriptors = self.load()
             descriptors = descriptors if isinstance(descriptors, list) else [descriptors]
@@ -248,7 +251,10 @@ class JSONHandler(BridgedHandler):
                 self.key(None, True)
                 if "key" in d:
                     self.key(d["key"], True)
-                    self.update(d)
+                    if "_method" in d and "name" in d["_method"]:
+                        self.invoke(d["_method"])
+                    else:
+                        self.update(d)
                 elif self.can_create():
                     self.create(d)
                 if self.object():
@@ -261,7 +267,7 @@ class JSONHandler(BridgedHandler):
     def get(self, key = None, kind = None):
         logging.debug("JSONHandler.get(%s, %s)", key, kind)
         self._initialize_bridge(key, kind)
-	if self.allow_access():
+        if self.allow_access():
             self.initialize_bridge()
             objs = self.get_objects()
             ret = [o.to_dict() for o in objs] if objs else None
@@ -273,7 +279,7 @@ class JSONHandler(BridgedHandler):
     def delete(self, key = None, kind = None):
         logging.debug("JSONHandler.delete(%s, %s)", key, kind)
         self._initialize_bridge(key, kind)
-	if self.allow_access():
+        if self.allow_access():
             self.initialize_bridge()
             objs = self.get_objects()
             for o in objs:
@@ -287,15 +293,15 @@ class RedirectHandler(BridgedHandler):
     def get(self, key = None, kind = None):
         logging.info("RedirectHandler(%s): path: %s key: %s", self.__class__.__name__, self.request.path, str(key))
         self._initialize_bridge(kind)
-	if self.allow_access():
+        if self.allow_access():
             self.initialize_bridge()
             self.redirect(self.get_redirect_url())
         else:
             self.error(401)
 
-app = webapp2.WSGIApplication( [
-        webapp2.Route(r'/json/<kind>', handler=JSONHandler, name='json-update'),
-        webapp2.Route(r'/json/<kind>/<key>', handler=JSONHandler, name='json-query'),
-        webapp2.Route(r'/img/<kind>/<prop>/<key>', handler=ImageHandler, name='image'),
-    ], debug=True)
+app = webapp2.WSGIApplication([
+        webapp2.Route(r'/json/<kind>', handler = JSONHandler, name = 'json-update'),
+        webapp2.Route(r'/json/<kind>/<key>', handler = JSONHandler, name = 'json-query'),
+        webapp2.Route(r'/img/<kind>/<prop>/<key>', handler = ImageHandler, name = 'image'),
+    ], debug = True)
 

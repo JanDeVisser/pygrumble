@@ -1,11 +1,15 @@
 # To change this template, choose Tools | Templates
 # and open the template in the editor.
 
+import uuid
+import random
+
 import gripe
 import grit.role
 
-__author__="jan"
-__date__ ="$3-Mar-2013 10:11:27 PM$"
+
+__author__ = "jan"
+__date__ = "$3-Mar-2013 10:11:27 PM$"
 
 logger = gripe.get_logger("grit")
 
@@ -102,24 +106,12 @@ class User(AbstractUser):
         logger.info("User.get_user(%s) registry %s", id, User._users)
         return User._users.get(id)
 
-    @classmethod
-    def login(cls, id, password):
-        logger.info("User.login(%s, %s)", id, password)
-        user = cls.get_user(id)
-        logger.info("User.login(%s, %s) -> %s", id, password, user)
-        return user if user and (user.password == password) else None
-
 class AbstractUserManager(object):
-    def __init__(self):
-        logger.info("Config.users %s", gripe.Config.users)
-        if gripe.Config.users and hasattr(gripe.Config.users, "groups"):
-            for group in gripe.Config.users.groups:
-                UserGroup(group)
-        if gripe.Config.users and hasattr(gripe.Config.users, "users"):
-            for user in gripe.Config.users.users:
-                User(user)
-        else:
-            logger.warn("No users tag in users.json configuration file")
+    def confirmation_code(self):
+        return uuid.uuid1().hex
+
+    def gen_password(self):
+        return "".join(random.sample("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890!@#$%^&*()_+=-", 10))
 
     def get(self, userid):
         assert 0, "Abstract method AbstractUserManager.get must be implemented for class %s" % self.__class__
@@ -148,12 +140,66 @@ class AbstractUserManager(object):
     def has_role(self, user, roles):
         return user.has_role(roles) if user else False
 
+    def admin_pwd_reset(self, userid):
+        assert 0, "Abstract method AbstractUserManager.admin_pwd_reset must be implemented for class %s" % self.__class__
+
+    def request_pwd_reset(self, userid):
+        assert 0, "Abstract method AbstractUserManager.request_pwd_reset must be implemented for class %s" % self.__class__
+
+    def confirm_pwd_reset(self, userid, code, newpasswd):
+        assert 0, "Abstract method AbstractUserManager.confirm_pwd_reset must be implemented for class %s" % self.__class__
+
 class UserManager(AbstractUserManager):
+    _pwd_resets = { }
+
+    def __init__(self):
+        logger.info("Config.users %s", gripe.Config.users)
+        if gripe.Config.users and hasattr(gripe.Config.users, "groups"):
+            for group in gripe.Config.users.groups:
+                UserGroup(group)
+        if gripe.Config.users and hasattr(gripe.Config.users, "users"):
+            for user in gripe.Config.users.users:
+                User(user)
+        else:
+            logger.warn("No users tag in users.json configuration file")
+
     def get(self, userid):
         return User.get_user(userid)
 
     def login(self, userid, password):
-        return User.login(userid, password)
+        logger.info("UserManager.login(%s, %s)", userid, password)
+        user = self.get(userid)
+        logger.info("UserManager.login(%s, %s) -> %s", userid, password, user)
+        return user if user and (user.password == password) else None
+
+    def admin_pwd_reset(self, userid):
+        user = self.get(userid)
+        if user:
+            newpasswd = self._gen_password()
+            user.password = newpasswd
+            return newpasswd
+        else:
+            return None
+
+    def request_pwd_reset(self, userid):
+        user = self.get(userid)
+        if user:
+            code = self._confirmation_code()
+            UserManager._pwd_resets[code] = userid
+            return code
+        else:
+            return None
+
+    def confirm_pwd_reset(self, userid, code, newpasswd):
+        if userid and code:
+            if UserManager._pwd_resets.get(code) != userid:
+                return False
+            else:
+                user = self.get(userid)
+                user.password = newpasswd
+                return True
+        else:
+            return False
 
 if __name__ == "__main__":
     print "Hello World";

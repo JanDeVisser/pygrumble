@@ -9,6 +9,7 @@ class HttpAccess(grumble.Model):
     path = grumble.TextProperty()
     method = grumble.TextProperty()
     status = grumble.TextProperty()
+    elapsed = grumble.IntegerProperty()
 
 class HttpAccessLogger(object):
     def log(self, reqctx):
@@ -21,5 +22,6 @@ class HttpAccessLogger(object):
             access.path = request.path_qs
             access.method = request.method
             access.status = response.status
+            access.elapsed = (reqctx.time_elapsed.seconds * 1000) + (reqctx.time_elapsed.microseconds / 1000)
             access.put()
 
