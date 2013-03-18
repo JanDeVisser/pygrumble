@@ -1094,11 +1094,11 @@ class Model(object):
             else:
                 try:
                     prop.from_json_value(self, descriptor)
-                except NotSerializableError:
+                except gripe.NotSerializableError:
                     pass
         self.put()
-        hasattr(self, "sub_update") and callable(self.sub_update) and self.sub_update(descriptor)
-        self.put()
+        if hasattr(self, "on_update") and callable(self.on_update):
+            self.on_update(descriptor) and self.put()
         return self.to_dict()
 
     def invoke(self, method, args, kwargs):
@@ -1266,6 +1266,8 @@ class Model(object):
             kwargs["key_name"] = k
         obj = cls(**kwargs)
         obj.update(descriptor)
+        if hasattr(obj, "on_create") and callable(obj.on_update):
+            obj.on_create(descriptor) and obj.put()
         return obj
 
     @classmethod

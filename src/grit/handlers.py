@@ -10,8 +10,11 @@ import traceback
 import urllib
 import webapp2
 
+import gripe
 import grit
 import grumble
+
+logger = gripe.get_logger("grit")
 
 class ModelBridge(object):
     def __init__(self, kind):
@@ -71,8 +74,9 @@ class ModelBridge(object):
         return None
 
     def create(self, descriptor):
-        self._obj = self.kind().create(descriptor, self.get_parent())
-        self._key = self._obj and self._obj.id()
+        if self.can_create():
+            self._obj = self.kind().create(descriptor, self.get_parent())
+            self._key = self._obj and self._obj.id()
         return self._obj
 
     def prepare_query(self, q):
@@ -229,7 +233,13 @@ class JSONHandler(BridgedHandler):
         self.object() and self.can_delete() and grumble.delete(self.object())
 
     def invoke(self, d):
-        self.object() and self.can_update() and self.object().invoke(d["name"], d.get("args"), d.get("kwargs"))
+        assert "name" in d, "JSONHandler.invoke called without method name"
+        method = d["name"]
+        assert hasattr(self, method) and callable(getattr(self, method)), "%s has not method %s. Can't invoke" % (self.__class__.__name__, method)
+        args = d.get("args") or []
+        kwargs = d.get("kwargs") or {}
+        logger.info("Invoking %s on %s using arguments *%s, **%s", method, self.__class__.__name__, args, kwargs)
+        return getattr(self, method)(*args, **kwargs)
 
     def dump(self, obj):
         if obj:
@@ -251,14 +261,15 @@ class JSONHandler(BridgedHandler):
                 self.key(None, True)
                 if "key" in d:
                     self.key(d["key"], True)
-                    if "_method" in d and "name" in d["_method"]:
-                        self.invoke(d["_method"])
-                    else:
+                if "_invoke" in d and "name" in d["_method"]:
+                    ret.append(self.invoke(d["_invoke"]))
+                else:
+                    if self.key():
                         self.update(d)
-                elif self.can_create():
-                    self.create(d)
-                if self.object():
-                    ret.append(self.object().to_dict())
+                    else:
+                        self.create(d)
+                    if self.object():
+                        ret.append(self.object().to_dict())
             ret = ret[0] if len(ret) == 1 else ret
             self.dump(ret)
             return

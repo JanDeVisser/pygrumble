@@ -126,7 +126,7 @@ This is a test.
 Thanks,
 
 jan
-""", *[ "%s/main.py" % gripe.root_dir() ])
+""", *[ "%s/image/Desert.jpg" % gripe.root_dir() ])
 
 
     msg = TemplateMailMessage("testmessage")

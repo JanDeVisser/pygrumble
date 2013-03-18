@@ -38,6 +38,27 @@
 				{{ user.display_name|d(user.email) }} |
 				<a class="whitelink" href="/">Home</a> |
 				<a class="whitelink" href="{{ url['logout']|e }}">Logout</a>
+			{% else %}
+				<a class="whitelink" href="/">Home</a> |
+				<a class="whitelink" onclick="login();" href="#">Login</a> |				
+				<a class="whitelink" onclick="signup();" href="#">Sign up</a>
+            	<st:form name="login" url="/login" popup="true">
+                	<st:field id="userid" type="text" property="email" label="Email" required="true"/>
+                	<st:field id="password" type="password" property="password" label="Password" required="true"/>
+	                <st:footer>
+	                    <st:action mode="new" label="Log in" action="save"/>
+	                    <st:action mode="new" label="I forgot my password" action="save"/>
+	                    <st:action mode="new" label="Cancel" action="cancel"/>
+	                </st:footer>
+            	</st:form>			
+            	<st:form name="signup" url="/signup" popup="true">
+                	<st:field id="userid" type="text" property="email" label="Email" required="true"/>
+                	<st:field id="password" type="password" property="password" label="Password" required="true" confirm="true"/>
+	                <st:footer>
+	                    <st:action mode="new" label="Sign up" action="save"/>
+	                    <st:action mode="new" label="Cancel" action="cancel"/>
+	                </st:footer>
+            	</st:form>			
 	        {% endif %}
 		    </div>
 		{% endblock topbar %}

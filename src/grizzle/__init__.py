@@ -35,13 +35,6 @@ class User(grumble.Model, grit.auth.AbstractUser):
     def groups(self):
         return { gfu.group for gfu in self.groupsforuser_set }
 
-    def generate_new_password(self):
-        newpasswd = grit.auth.AbstractUserManager.gen_password()
-        self.password = newpasswd
-        self.put()
-        msg = gripe.smtp.TemplateMailMessage("adminpasswordreset")
-        return msg.send(self.email, "Password Reset", {"password": newpasswd})
-
 class GroupsForUser(grumble.Model):
     _flat = True
     user = grumble.ReferenceProperty(reference_class = User)
@@ -60,17 +53,46 @@ class UserManager(grit.auth.AbstractUserManager):
             user = None
         return user
 
-    def request_pwd_reset(self, userid):
-        user = self.get(userid)
+
+class ManageUsers(grit.handlers.PageHandler):
+    def get_template(self):
+        return "user" if self.key() else "users"
+
+    def get(self, key = None):
+        return super(ManageUsers, self).get(key, "user")
+
+class JSONUser(grit.handlers.JSONHandler):
+    def _set_password(self, user):
+        um = grit.Session.get().get_usermanager()
+        newpasswd = um.gen_password()
+        user.password = newpasswd
+        user.confirmation_code = None
+        user.put()
+        msg = gripe.smtp.TemplateMailMessage("adminpasswordreset")
+        return msg.send(user.email, "Password Reset", {"password": newpasswd})
+
+    def create_user(self, descriptor):
+        user = User.create(descriptor)
+        return self._set_password(user)
+
+    def generate_new_password(self, userid):
+        um = grit.Session.get().get_usermanager()
+        user = um.get(userid)
+        return self._set_password(user) if user else None
+
+    def request_password_reset(self, userid):
+        um = grit.Session.get().get_usermanager()
+        user = um.get(userid)
         if user:
-            code = self._confirmation_code()
+            code = um.confirmation_code()
             user.confirmation_code = code
             user.put()
-            return code
+            msg = gripe.smtp.TemplateMailMessage("passwordreset")
+            return msg.send(user.email, "Password Reset", {"confirmation_code": code})
         else:
             return None
 
-    def confirm_pwd_reset(self, userid, code, newpasswd):
+    def confirm_password_reset(self, userid, code, newpasswd):
         if userid and code:
             user = User.query("email = ", userid, "confirmation_code = ", code, ancestor = None).fetch()
             if user:
@@ -86,28 +108,8 @@ class UserManager(grit.auth.AbstractUserManager):
             return False
 
 
-class ManageUsers(grit.handlers.PageHandler):
-    def get_template(self):
-        return "user" if self.key() else "users"
-
-    def get(self, userid = None):
-        return super(ManageUsers, self).get(userid, "user")
-
-
 app = webapp2.WSGIApplication([
-        webapp2.Route(r'/users', handler = ManageUsers, name = 'manage-users'),
-        webapp2.Route(r'/users/<userid>', handler = ManageUsers, name = 'manage-user'),
+        webapp2.Route(r'/users', handler = ManageUsers, name = 'manage-users', defaults = { "kind": "user" }),
+        webapp2.Route(r'/users/<key>', handler = ManageUsers, name = 'manage-user', defaults = { "kind": "user" }),
+        webapp2.Route(r'/user/<key>/json', handler = JSONUser, name = 'manage-user-json', defaults = { "kind": "user" }),
     ], debug = True)
-
-
-
-
-
-
-
-
-
-
-
-
-
