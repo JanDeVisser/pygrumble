@@ -9,13 +9,7 @@ import os.path
 #    sys.path.insert(0, os.path.dirname(__file__))
 # print sys.path
 
-import os
-import re
-import gripe
 import grit
-import grumble
-
-from grumble import image
 
 if __name__ != '__main__':
     import autoreload
@@ -29,6 +23,10 @@ app = grit.app
 
 if __name__ == '__main__':
     import webapp2
+    import re
+    import gripe
+    import grumble
+    import grumble.image
 
     request = webapp2.Request.blank('/')
     response = request.get_response(app)
@@ -86,7 +84,7 @@ if __name__ == '__main__':
     class Test(grumble.Model):
         quux = grumble.StringProperty()
         froz = grumble.IntegerProperty()
-        icon = image.ImageProperty()
+        icon = grumble.image.ImageProperty()
 
     request = webapp2.Request.blank("/json/test", POST = '{ "quux": "Jan de Visser", "froz": 42 }')
     request.headers['Cookie'] = cookie

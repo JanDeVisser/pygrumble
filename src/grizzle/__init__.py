@@ -11,7 +11,7 @@ import grit.auth
 import grit.handlers
 import grit.role
 
-logger = gripe.get_logger(__name__)
+logger = gripe.get_logger("grizzle")
 
 class UserGroup(grumble.Model, grit.auth.AbstractUserGroup):
     _flat = True

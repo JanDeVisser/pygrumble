@@ -10,6 +10,7 @@
         "application_name": "Grumble test app",
         "application_url": "http://localhost:8080/"
     },
+    "icon": "/ceilingcat.jpg",
     "container": {
         "pipeline": [ "grit.RequestLogger", "grit.TxWrapper", "grit.Session", "grit.Auth" ]
     },
@@ -21,7 +22,7 @@
         { "role": "admin",     "has_roles": [ "moderator" ] }
     ],
     "mounts": [
-        { "path": "/", "app": "index.app", "roles": [ "admin" ] },
+        { "path": "/", "app": "index.app", "roles": [] },
         { "path": "/image/.+|/css/.+|/javascript/.+", "roles": [] },
         { "path": "/json/.+|/img/.+", "app": "grit.handlers.app", "roles": [ "admin" ]}
     ],

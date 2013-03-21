@@ -637,3 +637,18 @@ function import_file(url, callback) {
 
     head.appendChild(script);
 }
+
+
+function login() {
+	var form = $("login")
+    if (form && !form.ispopup) {
+        form.popup(com.sweattrails.api.MODE_NEW)
+    }
+}
+
+function signup() {
+	var form = $("signup")
+    if (form && !form.ispopup) {
+        form.popup(com.sweattrails.api.MODE_NEW)
+    }
+}

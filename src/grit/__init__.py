@@ -403,11 +403,16 @@ class Dispatcher(object):
             logger.info("Dispatcher: dispatching to app %s", self.reqctx.app)
             self.reqctx.app.router.dispatch(self.request, self.response)
         elif hasattr(self.reqctx, "handler"):
-            logger.info("Dispatcher: dispatching to handler %s", self.reqctx.handler)
+            handler = self.reqctx.handler
+            if isinstance(handler, basestring):
+                h = gripe.resolve(handler, None)
+                assert h, "WSGI handler %s not found" % handler
+                handler = h
+            logger.info("Dispatcher: dispatching to handler %s", handler)
             self.request.route_kwargs = {}
-            h = self.reqctx.handler(self.request, self.response)
+            h = handler(self.request, self.response)
             if hasattr(h, "set_request_context") and callable(h.set_request_context):
-                h.set_request_context(reqctx)
+                h.set_request_context(self.reqctx)
             h.dispatch()
         return self
 
@@ -624,21 +629,22 @@ class WSGIApplication(webapp2.WSGIApplication):
         super(WSGIApplication, self).__init__(*args, **kwargs)
         grumble.set_sessionbridge(SessionBridge())
         self.router.add(webapp2.Route("/signup", handler = handle_request, name = "signup",
-                                      defaults = { "root": self, "handler": grit.usermgmt.Signup, "roles": [] }))
+                                      defaults = { "root": self, "handler": "grit.usermgmt.Signup", "roles": [] }))
         self.router.add(webapp2.Route("/login", handler = handle_request, name = "login",
-                                      defaults = { "root": self, "handler": grit.usermgmt.Login, "roles": [] }))
+                                      defaults = { "root": self, "handler": "grit.usermgmt.Login", "roles": [] }))
         self.router.add(webapp2.Route("/logout", handler = handle_request, name = "logout",
-                                      defaults = { "root": self, "handler": grit.usermgmt.Logout, "roles": [] }))
+                                      defaults = { "root": self, "handler": "grit.usermgmt.Logout", "roles": [] }))
         self.router.add(webapp2.Route("/changepwd", handler = handle_request, name = "change-password",
-                                      defaults = { "root": self, "handler": grit.usermgmt.ChangePassword, "roles": [] }))
+                                      defaults = { "root": self, "handler": "grit.usermgmt.ChangePassword", "roles": [] }))
         self.router.add(webapp2.Route("/resetpwd", handler = handle_request, name = "reset-password",
-                                      defaults = { "root": self, "handler": grit.usermgmt.ResetPassword, "roles": [] }))
+                                      defaults = { "root": self, "handler": "grit.usermgmt.ResetPassword", "roles": [] }))
         self.router.add(webapp2.Route("/confirmreset", handler = handle_request, name = "confirm-reset",
-                                      defaults = { "root": self, "handler": grit.usermgmt.ConfirmReset, "roles": [] }))
+                                      defaults = { "root": self, "handler": "grit.usermgmt.ConfirmReset", "roles": [] }))
         self.pipeline = []
 
         config = gripe.Config.app
         self.icon = config.get("icon", "/icon.png")
+        logger.info("Application icon: %s", self.icon)
         self.router.add(webapp2.Route("/favicon.ico", handler = StaticHandler, defaults = { "root": self, "roles": [], "alias": self.icon }))
 
         container = config.get("container")
@@ -647,6 +653,7 @@ class WSGIApplication(webapp2.WSGIApplication):
             if pipeline:
                 assert isinstance(pipeline, list), "Pipeline entry in app.container config must be list"
                 for p in pipeline:
+                    logger.info("Adding pipeline entry %s", p)
                     pipeline_class = gripe.resolve(p)
                     assert pipeline_class, "Invalid entry %s in pipeline config" % p
                     assert hasattr(pipeline_class, "begin"), "Pipeline entry %s has no 'begin' method" % p
@@ -654,7 +661,9 @@ class WSGIApplication(webapp2.WSGIApplication):
         self.pipeline.append(Dispatcher)
 
         for mp in config["mounts"]:
-            path = "<:^%s$>" % mp["path"]
+            raw_path = mp.get("path")
+            assert raw_path, "Must specify a path for each mount in app.conf"
+            path = "<:^%s$>" % raw_path
             roles = mp.get("roles", [])
             roles = [roles] if isinstance(roles, basestring) else roles
             handler = None
@@ -666,12 +675,14 @@ class WSGIApplication(webapp2.WSGIApplication):
                 assert wsgi_sub_app, "WSGI app %s not found" % app_path
                 handler = handle_request
                 defaults["app"] = wsgi_sub_app
+                logger.info("WSGIApplication(): Adding handler app %s for path %s", app_path, raw_path)
             else:
                 handler = StaticHandler
                 if "abspath" in mp:
                     defaults["abspath"] = mp["abspath"]
                 if "relpath" in mp:
                     defaults["relpath"] = mp["relpath"]
+                logger.info("WSGIApplication(): Adding static handler for path %s", raw_path)
             self.router.add(webapp2.Route(path, handler = handler, defaults = defaults))
         self.error_handlers[404] = handle_404
 

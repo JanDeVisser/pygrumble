@@ -29,9 +29,9 @@ com.sweattrails.api.Form = function(id, container, ds, popup) {
 
 com.sweattrails.api.Form.prototype.setContainer = function(c) {
     if (typeof(c) == "string") {
-	this.container = document.getElementById(this.id)
+    	this.container = document.getElementById(this.id)
     } else {
-	this.container = c
+    	this.container = c
     }
     this.table = null
 }
@@ -87,24 +87,25 @@ com.sweattrails.api.Form.prototype.newTR = function() {
 
 com.sweattrails.api.Form.prototype.render = function() {
     console.log("Form[" + this.id + "].render()")
-    this.container && (this.container.hidden = false)
-    if ((arguments.length > 0) && arguments[0]) {
-        this.mode = arguments[0]
-    } else if (this.init_mode) {
-        this.mode = this.init_mode
-        this.init_mode = null
-    } else {
-        this.mode = com.sweattrails.api.MODE_VIEW
-    }
-    var obj = null
-    if (this.mode != com.sweattrails.api.MODE_NEW) {
-        this.datasource.execute()
-    } else {
-        if (typeof(this.initialize) == "function") {
-            obj = this.initialize()
-        }
-        this.datasource.setObject(obj)
-        this.renderData(this.datasource.object)
+    if (!this.container  || !this.container.hidden) {
+	    if ((arguments.length > 0) && arguments[0]) {
+	        this.mode = arguments[0]
+	    } else if (this.init_mode) {
+	        this.mode = this.init_mode
+	        this.init_mode = null
+	    } else {
+	        this.mode = com.sweattrails.api.MODE_VIEW
+	    }
+	    var obj = null
+	    if (this.mode != com.sweattrails.api.MODE_NEW) {
+	        this.datasource.execute()
+	    } else {
+	        if (typeof(this.initialize) == "function") {
+	            obj = this.initialize()
+	        }
+	        this.datasource.setObject(obj)
+	        this.renderData(this.datasource.object)
+	    }
     }
 }
 
@@ -459,6 +460,7 @@ com.sweattrails.api.TextField.prototype.renderView = function(value) {
 
 com.sweattrails.api.PasswordField = function(fld, elem) {
     this.field = fld
+    this.confirm = elem.getAttribute("confirm") && (elem.getAttribute("confirm") == "true")
 }
 
 com.sweattrails.api.PasswordField.prototype.renderEdit = function(value) {
@@ -472,17 +474,19 @@ com.sweattrails.api.PasswordField.prototype.renderEdit = function(value) {
     if (this.maxlength) this.control.maxLength = this.maxlength
     this.control.onchange = this.field.onValueChange.bind(this.field)
     this.div.appendChild(this.control)
-    this.check = document.createElement("input")
-    this.check.value =  ""
-    this.check.name = this.field.id + "-check"
-    this.check.id = this.field.id + "-check"
-    this.check.type = "password"
-    this.div.appendChild(this.check)
+    if (this.confirm) {
+	    this.check = document.createElement("input")
+	    this.check.value =  ""
+	    this.check.name = this.field.id + "-check"
+	    this.check.id = this.field.id + "-check"
+	    this.check.type = "password"
+	    this.div.appendChild(this.check)
+    }
     return this.div
 }
 
 com.sweattrails.api.PasswordField.prototype.validate = function() {
-	if (this.control.value != this.check.value) {
+	if (this.confirm && (this.control.value != this.check.value)) {
 		return "Password values do not match"
 	} else {
 		return null

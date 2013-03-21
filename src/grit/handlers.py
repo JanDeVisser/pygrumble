@@ -21,8 +21,9 @@ class ModelBridge(object):
         self.kind(kind)
 
     def _initialize_bridge(self, key = None, kind = None):
-        self.kind(kind)
-        self.key(key or self.request.get("id", None))
+        if kind:
+            self.kind(kind)
+            self.key(key or self.request.get("id", None))
 
     def kind(self, kind = None):
         if hasattr(self, "_kind"):
@@ -98,7 +99,9 @@ class ModelBridge(object):
 
     def get_objects(self):
         ret = []
-        if self.key() and self.object():
+        if not hasattr(self, "_kind"):
+            return None
+        elif self.key() and self.object():
             ret = [ self.object() ]
         else:
             body = self.request.body

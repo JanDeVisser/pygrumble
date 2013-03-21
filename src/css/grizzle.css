@@ -19,7 +19,7 @@ body {
 }
 
 tr.tableheader {
-    background-color: #47BCFD;
+    background-color: #A30000;
 }
 
 th {
@@ -41,7 +41,7 @@ span.tab {
 }
 
 span.tab_selected {
-    background-color:  #47BCFD;
+    background-color:  #A30000;
     margin: 0px;
     padding-top: 5px;
     padding-bottom: 5px;
@@ -105,13 +105,13 @@ div.menubar {
     margin: 0 0 0 0;
     width: 100%;
     height: 50px;
-    background-color: #BFE4FB;
+    background-color: #A30000;
 }
 
 .sidebar {
     float: left;
     width: 230px;
-    background-color: #BFE4FB;
+    background-color: #A30000;
     height: 100%;
     margin-right: 4px;
     margin-top: 5px;

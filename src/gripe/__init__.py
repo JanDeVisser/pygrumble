@@ -1,5 +1,5 @@
-__author__="jan"
-__date__ ="$18-Feb-2013 11:06:29 AM$"
+__author__ = "jan"
+__date__ = "$18-Feb-2013 11:06:29 AM$"
 
 import importlib
 import json
@@ -21,7 +21,7 @@ class NotSerializableError(Error):
         self.propname = propname
 
     def __str__(self):
-        return "Property %s is not serializable" % (self.propname, )
+        return "Property %s is not serializable" % (self.propname,)
 
 _root_dir = None
 def root_dir():
@@ -40,7 +40,7 @@ def read_file(fname):
         filename = os.path.join(root_dir(), fname)
         fp = open(filename, "rb")
     except IOError as e:
-        #print "IOError reading config file %s: %s" % (filename, e.strerror)
+        # print "IOError reading config file %s: %s" % (filename, e.strerror)
         return None
     else:
         with fp:
@@ -64,7 +64,7 @@ class ContentType(object):
     Binary, Text = range(2)
     _by_ext = {}
     _by_content_type = {}
-    
+
     def __init__(self, ext, ct, type):
         self.content_type = ct
         self.extension = ext
@@ -141,6 +141,7 @@ class Config(object):
                         if comp:
                             config.merge(comp)
                     del config["components"]
+                # print >> sys.stderr, "Config.%s: %s" % (section, json.dumps(config))
                 setattr(cls, section, config)
         cls._loaded = True
 
@@ -166,33 +167,32 @@ class Enum(tuple):
 
 # Configure logging
 
-_log_level = None
+_log_defaults = None
 _log_date_fmt = '%Y-%m-%d %H:%M:%S'
 _log_root_fmt = '%(name)-12s:%(asctime)s:%(levelname)-7s:%(message)s'
 _log_sub_fmt = '%(asctime)s:%(levelname)-7s:%(message)s'
 
+class LogConfig(object):
+    def __init__(self, conf = None, defaults = None):
+        conf = conf or object()
+        self.log_level = defaults.log_level if defaults else logging.INFO
+        self.log_level = getattr(logging, conf.level.upper()) if hasattr(conf, "level") else self.log_level
+        self.destination = defaults.destination if defaults else "stderr"
+        self.destination = conf.destination.lower() if hasattr(conf, "destination") and conf.destination else self.destination
+        assert self.destination in ("stderr", "file"), "Invalid logging destination %s" % self.destination
+        self.flat = defaults.log_level if defaults else False
+        self.flat = conf.flat if hasattr(conf, "flat") else self.flat
+
 def get_logger(name):
-    global _log_level
-    if _log_level is None:
-        _log_level = logging.INFO
-        if hasattr(Config, "logging") and hasattr(Config.logging, "level"):
-            _log_level = getattr(logging, Config.logging.level.upper())
-        logging.basicConfig(stream = sys.stderr, level = _log_level, datefmt = _log_date_fmt, format = _log_root_fmt)
+    global _log_defaults
 
     logger = logging.getLogger(name)
     assert logger, "logging.getLogger(%s) returned None" % name
     logger.propagate = False
     formatter = logging.Formatter(_log_sub_fmt, _log_date_fmt)
-    destination = "stderr"
-    level = _log_level
-    if hasattr(Config, "logging") and name in Config.logging:
-        level = Config.logging[name].level
-        level = getattr(logging, level.upper()) if level else _log_level
-        if "destination" in Config.logging[name]:
-            destination = Config.logging[name].destination
-        assert destination in ("stderr", "file"), "Invalid logging destination %s" % destination
-    logger.setLevel(level)
-    if "file" in destination:
+    conf = LogConfig(Config.logging[name] if hasattr(Config, "logging") and name in Config.logging else None, _log_defaults)
+    logger.setLevel(conf.log_level)
+    if "file" in conf.destination:
         try:
             os.mkdir("%s/logs" % root_dir())
         except:
@@ -200,7 +200,12 @@ def get_logger(name):
             pass
         append = Config.logging[name].append if Config.logging[name].append is not None else False
         mode = "a" if append else "w"
-        fh = logging.FileHandler("%s/logs/%s.log" % (root_dir(), name), mode)
+        if conf.flat:
+            (fname, dot, junk) = name.partition(".")
+        else:
+            fname = name
+        # fh = logging.FileHandler("%s/logs/%s.log" % (root_dir(), name), mode)
+        fh = logging.FileHandler("%s/logs/%s.log" % (root_dir(), fname))
         fh.setFormatter(formatter)
         logger.addHandler(fh)
     else:
@@ -208,5 +213,7 @@ def get_logger(name):
         ch.setFormatter(formatter)
         logger.addHandler(ch)
     return logger
-    
+
+_log_defaults = LogConfig(Config.logging if hasattr(Config, "logging") else None)
+logging.basicConfig(stream = sys.stderr, level = _log_defaults.log_level, datefmt = _log_date_fmt, format = _log_root_fmt)
 logger = get_logger(__name__)

@@ -56,6 +56,21 @@ class Logout(grit.ReqHandler):
     def post(self):
         self.get()
 
+class Signup(grit.ReqHandler):
+    content_type = "text/html"
+
+    def get(self):
+        logger.debug("main::SignUp.get")
+        self.request.session.logout(self.request)
+        urls = {
+            "login": self.for_uri("login"),
+            "reset-password": self.uri_for("reset-password")
+        }
+        self.render(urls = urls)
+
+    def post(self):
+        self.get()
+
 class RequestPasswordReset(grit.ReqHandler):
     '''
     classdocs

@@ -147,7 +147,7 @@ com.sweattrails.api.ActionContainer.prototype.render = function() {
         this.progressbar.hidden = true
         this.throbber = document.createElement("img")
         this.throbber.id = this.progressbar.id + "-throbber"
-        this.throbber.src = "/images/throbber.gif"
+        this.throbber.src = "/image/throbber.gif"
         this.throbber.height = this.throbber.width = 32
         this.progressbar.appendChild(this.throbber)
         this.progressmsg = document.createElement("span")
@@ -170,7 +170,7 @@ com.sweattrails.api.ActionContainer.prototype.progressOff = function() {
     this.actionsdiv.hidden = false
     this.progressbar.hidden = true
     this.progressbar.className = "progressmessage"
-    this.throbber.src = "/images/throbber.gif"
+    this.throbber.src = "/image/throbber.gif"
     this.progressmsg.innerHTML = ""
 }
 
@@ -180,7 +180,7 @@ com.sweattrails.api.ActionContainer.prototype.progress = function(msg) {
         this.actionsdiv.hidden = true
         this.progressbar.hidden = false
         this.progressbar.className = "progressmessage"
-        this.throbber.src = "/images/throbber.gif"
+        this.throbber.src = "/image/throbber.gif"
         this.progressmsg.innerHTML = msg
     } else {
         this.progressOff()
@@ -192,7 +192,7 @@ com.sweattrails.api.ActionContainer.prototype.error = function(msg) {
         this.actionsdiv.hidden = true
         this.progressbar.hidden = false
         this.progressbar.className = "errormessage"
-        this.throbber.src = "/images/error.png"
+        this.throbber.src = "/image/error.png"
         this.progressmsg.innerHTML = msg
     } else {
         this.progressOff()
