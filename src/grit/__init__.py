@@ -6,6 +6,7 @@
 import anydbm
 import atexit
 import datetime
+import hashlib
 import importlib
 import jinja2
 import json
@@ -153,6 +154,8 @@ class SessionManager(object):
                 logger.debug("Found cookie in userids.dat. Userid %s", ret)
                 data.last_access = datetime.datetime.now()
                 data.db_put()
+            else:
+                logger.debug("Cookie not found in userids.dat")
             return ret
 
     def init_session(self, cookie = None):
@@ -173,6 +176,7 @@ class SessionManager(object):
             self._sessions[data.id()] = data
 
     def logout(self, cookie):
+        cookie = str(cookie)
         with self._dblock:
             if cookie in self.db():
                 del self.db()[cookie]
@@ -280,13 +284,13 @@ class Session(object):
 
     def logout(self):
         logger.debug("Session.logout()")
-        if hasattr(request, "session"):
-            del request.session
-        if hasattr(request, "user"):
-            del request.user
-        Session.get_sessionmanager().logout(self._data.id())
-        del request.cookies["grit"]
-        request.response.delete_cookie("grit")
+        if hasattr(self._request, "session"):
+            del self._request.session
+        if hasattr(self._request, "user"):
+            del self._request.user
+        Session.get_sessionmanager().logout(str(self._data.id()))
+        del self._request.cookies["grit"]
+        self._request.response.delete_cookie("grit")
 
     def _end(self):
         logger.debug("session._end")
@@ -353,17 +357,19 @@ class Auth(object):
         if not hasattr(self.reqctx, "session"):
             logger.debug("Auth.needs_auth: no session")
             return False
+        self.session = self.reqctx.session
+        if self.session.user():
+            self.request.user = self.session.user()
+            self.reqctx.user = self.session.user()
         if not (hasattr(self.reqctx, "roles") and self.reqctx.roles):
             logger.debug("Auth.needs_auth: no specific role needed")
             return False
-        self.session = self.reqctx.session
         self.roles = self.reqctx.roles
         return True
 
     def logged_in(self):
-        if self.session.user():
-            self.request.user = self.session.user()
-            self.reqctx.user = self.session.user()
+        if self.user:
+            logger.debug("Auth.logged_in: User present: %s", self.session.userid())
             return True
         logger.debug("Auth.logged_in: no user. Redirecting to /login")
         self.session["redirecturl"] = self.request.path_qs
@@ -389,6 +395,8 @@ class Auth(object):
         return False
 
 class Dispatcher(object):
+    apps = {}
+
     def __init__(self, reqctx):
         self.reqctx = reqctx
         self.request = reqctx.request
@@ -400,8 +408,14 @@ class Dispatcher(object):
 
     def __enter__(self):
         if hasattr(self.reqctx, "app"):
-            logger.info("Dispatcher: dispatching to app %s", self.reqctx.app)
-            self.reqctx.app.router.dispatch(self.request, self.response)
+            app_path = self.reqctx.app
+            logger.info("Dispatcher: dispatching to app %s", app_path)
+            app = self.apps.get(app_path)
+            if not app:
+                app = gripe.resolve(app_path, None)
+                assert app, "WSGI app %s not found" % app_path
+                self.apps[app_path] = app
+            app.router.dispatch(self.request, self.response)
         elif hasattr(self.reqctx, "handler"):
             handler = self.reqctx.handler
             if isinstance(handler, basestring):
@@ -552,6 +566,8 @@ class ReqHandler(webapp2.RequestHandler):
 
 
 class StaticHandler(ReqHandler):
+    etags = {}
+
     def get(self, **kwargs):
         logger.info("StaticHandler.get(%s)", self.request.path)
         path = ''
@@ -566,19 +582,31 @@ class StaticHandler(ReqHandler):
             logger.info("Static file %s does not exist", path)
             self.request.response.status = "404 Not Found"
         else:
-            self.response.content_length = str(os.path.getsize(path))
-            content_type = gripe.ContentType.for_path(path)
-            self.response.content_type = content_type.content_type
-            if content_type.is_text():
-                self.response.charset = "utf-8"
-                mode = "r"
+            if_none_match = self.request.if_none_match
+            hashvalue = self.etags.get(path)
+            if if_none_match and hashvalue and hashvalue in if_none_match:
+                logger.debug("Client has up-to-date resource %s", path)
+                self.response.status = "304 Not Modified"
             else:
-                mode = "rb"
-            with open(path, mode) as fh:
+                self.response.content_length = str(os.path.getsize(path))
+                content_type = gripe.ContentType.for_path(path)
+                self.response.content_type = content_type.content_type
                 if content_type.is_text():
-                    self.response.text = unicode(fh.read())
+                    self.response.charset = "utf-8"
+                    mode = "r"
                 else:
-                    self.response.out.write(fh.read())
+                    mode = "rb"
+                with open(path, mode) as fh:
+                    buf = fh.read()
+                if path not in self.etags:
+                    hashvalue = hashlib.md5(buf).hexdigest()
+                    self.etags[path] = hashvalue
+                    if if_none_match and hashvalue in if_none_match:
+                        logger.debug("Client has up-to-date resource %s. I had to hash it though", path)
+                        self.response.status = "304 Not Modified"
+                        return
+                self.response.etag = hashvalue
+                self.response.body = str(buf)
 
 class ErrorPage(ReqHandler):
     content_type = "text/html"
@@ -626,6 +654,7 @@ def handle_404(request, response, exception):
 
 class WSGIApplication(webapp2.WSGIApplication):
     def __init__(self, *args, **kwargs):
+        self.apps = {}
         super(WSGIApplication, self).__init__(*args, **kwargs)
         grumble.set_sessionbridge(SessionBridge())
         self.router.add(webapp2.Route("/signup", handler = handle_request, name = "signup",
@@ -674,7 +703,7 @@ class WSGIApplication(webapp2.WSGIApplication):
                 wsgi_sub_app = gripe.resolve(app_path, None)
                 assert wsgi_sub_app, "WSGI app %s not found" % app_path
                 handler = handle_request
-                defaults["app"] = wsgi_sub_app
+                defaults["app"] = app_path
                 logger.info("WSGIApplication(): Adding handler app %s for path %s", app_path, raw_path)
             else:
                 handler = StaticHandler

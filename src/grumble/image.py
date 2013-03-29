@@ -1,8 +1,8 @@
 # To change this template, choose Tools | Templates
 # and open the template in the editor.
 
-__author__="jan"
-__date__ ="$11-Feb-2013 2:47:51 PM$"
+__author__ = "jan"
+__date__ = "$11-Feb-2013 2:47:51 PM$"
 
 import md5
 import os
@@ -37,7 +37,7 @@ class ImageProperty(grumble.CompoundProperty):
         ct_kwargs = { "suffix": "_ct"}
         hash_kwargs = { "suffix": "_hash"}
         if "verbose_name" in kwargs:
-            bin_kwargs["verbose_name"] = kwargs["verbpse_name"]
+            bin_kwargs["verbose_name"] = kwargs["verbose_name"]
         super(ImageProperty, self).__init__(
             BinaryProperty(**bin_kwargs),
             grumble.StringProperty(**ct_kwargs),
@@ -48,7 +48,7 @@ class ImageProperty(grumble.CompoundProperty):
         v = None
         if isinstance(value, tuple) or isinstance(value, list):
             l = len(value)
-            assert l in [2,3], "Cannot assign sequence of length %s to ImageProperty" % len
+            assert l in [2, 3], "Cannot assign sequence of length %s to ImageProperty" % len
             if l == 3:
                 v = value
             else:

@@ -24,18 +24,21 @@ com.sweattrails.api.getHttpRequest = function(jsonRequest) {
     httpRequest.onreadystatechange = function() {
         if (this.readyState == 4) {
             if ((this.status >= 200 && this.status <= 200) || this.status == 304) {
+            	var object
                 if (this.responseText != "") {
-                    var object = JSON.parse(this.responseText)
-                    var posted = this.request.post
-                    this.request.post = false
-                    this.request.object = null
-                    this.request.params = []
-                    this.request.onSuccess(object)
-                    if (posted && this.request.onSubmitted) {
-                        this.request.onSubmitted()
-                    }
-                    this.request.semaphore = 0
+                	object = JSON.parse(this.responseText)
+                } else {
+                	object = {}
+            	}
+                var posted = this.request.post
+                this.request.post = false
+                this.request.object = null
+                this.request.params = []
+                this.request.onSuccess(object)
+                if (posted && this.request.onSubmitted) {
+                    this.request.onSubmitted()
                 }
+                this.request.semaphore = 0
             } else if ([301, 302, 303, 307, 308].indexOf(this.status) >= 0) {
                 this.request.post = false
                 this.request.object = null
@@ -72,12 +75,13 @@ com.sweattrails.api.JSONRequest.prototype.execute = function() {
         for (p in this.params) {
             parameters.append(p, this.params[p])
         }
-        $$.log(((this.post) ? "POST " : "GET " ) + this.url)
+        console.log(((this.post) ? "POST " : "GET " ) + this.url)
         httpRequest.open((this.post) ? "POST" : "GET", this.url, this.async);
         httpRequest.send(parameters)
     } else {
-        $$.log(((this.post) ? "POST " : "GET " ) + this.url)
+        console.log(((this.post) ? "POST " : "GET " ) + this.url)
         httpRequest.open((this.post) ? "POST" : "GET", this.url, this.async);
+        httpRequest.setRequestHeader("ST-JSON-Request", "true")
         httpRequest.send(this.body)
     }
     return true
@@ -97,21 +101,21 @@ com.sweattrails.api.JSONRequest.prototype.onSubmitted = function() {
 }
 
 com.sweattrails.api.JSONRequest.prototype.onRedirect = function(code, where) {
-    $$.log("Redirect " + code + " to " + where)
+    console.log("Redirect " + code + " to " + where)
     this.post = true
     if (this.datasource) {
     	if (this.datasource.onRedirect) {
-    		$$.log("Calling onRedirected on datasource")
+    		console.log("Calling onRedirected on datasource")
     		this.datasource.onRedirect(code, where)
     	}
     }
 }
 
 com.sweattrails.api.JSONRequest.prototype.onError = function(code) {
-    $$.log("HTTP Error " + code)
+    console.log("HTTP Error " + code)
     this.post = false
     if (this.datasource && this.datasource.onError) {
-		$$.log("Calling onError on datasource")
+		console.log("Calling onError on datasource")
     	this.datasource.onError(code)
     }
 }
@@ -119,6 +123,9 @@ com.sweattrails.api.JSONRequest.prototype.onError = function(code) {
 /**
  * DataSource -
  */
+
+com.sweattrails.api.internal.DataSource = function() {
+}
 
 com.sweattrails.api.internal.DataSource.prototype.addView = function(v) {
     if (!this.view) {
@@ -280,7 +287,7 @@ com.sweattrails.api.JSONDataSource.prototype.addObject = function(obj, prefix) {
         } else if (typeof(v) == "function") {
             continue
         } else {
-            $$.log("--" + prefix + p + "=" + v)
+            console.log("--" + prefix + p + "=" + v)
             this.parameter(prefix + p, v)
         }
     }
@@ -348,7 +355,7 @@ com.sweattrails.api.CustomDataSource.prototype = new com.sweattrails.api.interna
 com.sweattrails.api.CustomDataSource.prototype.reset = function() {
     this.data = this.func()
     for (var ix = 0; ix < this.data.length; ix++) {
-        $$.log(ix + ": " + this.data[ix].key + ", " + this.data[ix].value)
+        console.log(ix + ": " + this.data[ix].key + ", " + this.data[ix].value)
     }
     this.ix = 0
     this.object = null

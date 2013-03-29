@@ -29,6 +29,7 @@ com.sweattrails.api.internal.SaveAction.prototype.onClick = function() {
     if (this.onsubmitted) {
         this.action.owner.onsubmitted = this.onsubmitted.bind(this.action.owner)
     }
+	this.container.inprogress = this
     this.action.owner.submit();
 }
 
@@ -45,7 +46,6 @@ com.sweattrails.api.internal.HTMLAction = function(elem) {
         this.nodes.push(elem.childNodes[nix])
     }
 }
-
 
 com.sweattrails.api.internal.HTMLAction.prototype.render = function(parent) {
     for (var nix = 0; nix < this.nodes.length; nix++) {
@@ -101,20 +101,8 @@ com.sweattrails.api.ActionContainer.prototype.build = function(elem) {
 }
 
 com.sweattrails.api.ActionContainer.prototype.buildAction = function(a) {
-    var name = a.getAttribute("name")
-    var label = a.getAttribute("label")
-    var modes = a.getAttribute("mode")
-    var ac = a.getAttribute("action")
-    var impl = null
-    if (ac) {
-	var factory = com.sweattrails.api.internal.actions[ac]
-	if (factory) {
-	    impl = new factory(a)
-	} else {
-	    impl = new com.sweattrails.api.internal.CustomAction(a)
-	}
-    }
-    var action = new com.sweattrails.api.Action(name, label, modes, impl)
+    var action = new com.sweattrails.api.Action(a)
+    action.container = this
     this.add(action)
     return action
 }
@@ -122,47 +110,52 @@ com.sweattrails.api.ActionContainer.prototype.buildAction = function(a) {
 
 com.sweattrails.api.ActionContainer.prototype.erase = function() {
     if (this.actionbar) {
-	this.owner.container.removeChild(this.actionbar)
-	this.actionbar = null
+    	this.owner.container.removeChild(this.actionbar)
+    	this.actionbar = null
     }
 }
 
-com.sweattrails.api.ActionContainer.prototype.render = function() {
+com.sweattrails.api.ActionContainer.prototype.getActiveActions = function() {
     var a = []
     var aix = 0
     var action = null
     for (aix = 0; aix < this.actions.length; aix++) {
-	action = this.actions[aix]
-	if (action.isActive()) a.push(action)
+		action = this.actions[aix]
+		if (action.isActive()) a.push(action)
     }
+    return a
+}
+
+com.sweattrails.api.ActionContainer.prototype.render = function() {
+	a = this.getActiveActions()
     if (a.length > 0) {
-	this.actionbar = document.createElement("div")
-        this.actionsdiv = document.createElement("div")
-        this.actionsdiv.className = "buttonbar-" + this.location
-    	this.actionsdiv.id = this.id + "-actionbar"
-        this.actionbar.appendChild(this.actionsdiv)
-        this.progressbar = document.createElement("div")
-        this.progressbar.className = "buttonbar-" + this.location
-    	this.progressbar.id = this.id + "-progressbar"
-        this.progressbar.hidden = true
-        this.throbber = document.createElement("img")
-        this.throbber.id = this.progressbar.id + "-throbber"
-        this.throbber.src = "/image/throbber.gif"
-        this.throbber.height = this.throbber.width = 32
-        this.progressbar.appendChild(this.throbber)
-        this.progressmsg = document.createElement("span")
-        this.progressmsg.id = this.progressbar.id + "-message"
-        this.progressbar.appendChild(this.progressmsg)
-        this.actionbar.appendChild(this.progressbar)
-	this.owner.container.appendChild(this.actionbar)
-	for (aix = 0; aix < a.length; aix++) {
-	    if (aix > 0) {
-		var span = document.createElement("span")
-		span.innerHTML = " | "
-		this.actionsdiv.appendChild(span)
-	    }
-	    a[aix].render(this.actionsdiv)
-	}
+		this.actionbar = document.createElement("div")
+	    this.actionsdiv = document.createElement("div")
+	    this.actionsdiv.className = "buttonbar-" + this.location
+		this.actionsdiv.id = this.id + "-actionbar"
+	    this.actionbar.appendChild(this.actionsdiv)
+	    this.progressbar = document.createElement("div")
+	    this.progressbar.className = "buttonbar-" + this.location
+		this.progressbar.id = this.id + "-progressbar"
+	    this.progressbar.hidden = true
+	    this.throbber = document.createElement("img")
+	    this.throbber.id = this.progressbar.id + "-throbber"
+	    this.throbber.src = "/image/throbber.gif"
+	    this.throbber.height = this.throbber.width = 32
+	    this.progressbar.appendChild(this.throbber)
+	    this.progressmsg = document.createElement("span")
+	    this.progressmsg.id = this.progressbar.id + "-message"
+	    this.progressbar.appendChild(this.progressmsg)
+	    this.actionbar.appendChild(this.progressbar)
+		this.owner.container.appendChild(this.actionbar)
+		for (var aix = 0; aix < a.length; aix++) {
+		    if (aix > 0) {
+				var span = document.createElement("span")
+				span.innerHTML = " | "
+				this.actionsdiv.appendChild(span)
+		    }
+		    a[aix].render(this.actionsdiv)
+		}
     }
 }
 
@@ -199,24 +192,64 @@ com.sweattrails.api.ActionContainer.prototype.error = function(msg) {
     }
 }
 
+com.sweattrails.api.ActionContainer.prototype.onDataSubmitted = function() {
+	this.inprogress && this.inprogress.onDataSubmitted && this.inprogress.onDataSubmitted()
+	this.inprogress = null
+}
 
-com.sweattrails.api.Action = function(name, label, modes, impl) {
+com.sweattrails.api.ActionContainer.prototype.onDataError = function(errorinfo) {
+	this.inprogress && this.inprogress.onDataError && this.inprogress.onDataError(errorinfo)
+	this.inprogress = null
+}
+
+com.sweattrails.api.ActionContainer.prototype.onDataEnd = function() {
+	this.inprogress && this.inprogress.onDataEnd && this.inprogress.onDataEnd()
+	this.inprogress = null
+}
+
+// --------------------------------------------------------------------------
+// --------------------------------------------------------------------------
+
+com.sweattrails.api.Action = function(a) {
     this.type = "action"
-    this.label = label
-    this.impl = impl
-    this.modes = modes
-    if (this.impl) this.impl.action = this
-    this.action = (this.impl && this.impl.id) || "unknown"
+    var name = a.getAttribute("name")
     this.name = this.id = (name || this.action)
+    this.label = a.getAttribute("label")
+    this.modes = a.getAttribute("mode")
+    var ac = a.getAttribute("action")
+    var impl = null
+    if (ac) {
+    	var factory = com.sweattrails.api.internal.actions[ac]
+		if (factory) {
+			this.impl = new factory(a)
+		} else {
+			this.impl = new com.sweattrails.api.internal.CustomAction(a)
+		}
+    }
+    this.action = (this.impl && this.impl.id) || "unknown"
+    if (this.impl) this.impl.action = this
     $$.register(this)
+    if (a.getAttribute("isactive")) {
+    	this.isactive = getfunc(a.getAttribute("isactive"))
+    }
+    if (a.getAttribute("ondone")) {
+    	this.onDataEnd = getfunc(a.getAttribute("ondone"))
+    }
+    if (a.getAttribute("redirect")) {
+    	this.onDataEnd = this.doRedirect.bind(this, a.getAttribute("redirect"))
+    }
 }
 
 com.sweattrails.api.Action.prototype.isActive = function() {
-    if (!this.modes || !this.owner.mode) {
-        return true
-    } else {
-        return (this.modes.indexOf(this.owner.mode) > -1)
-    }
+	if (this.modes && this.owner.mode && (this.modes.indexOf(this.owner.mode) < 0)) {
+		return false
+	} else {
+		return this.isactive ? this.isactive() : true
+	}
+}
+
+com.sweattrails.api.Action.prototype.doRedirect = function(redirect) {
+	document.location = redirect
 }
 
 com.sweattrails.api.Action.prototype.render = function(parent) {
@@ -237,8 +270,8 @@ com.sweattrails.api.Action.prototype.render = function(parent) {
 }
 
 com.sweattrails.api.Action.prototype.onClick = function() {
-    if (this.impl) {
-	this.impl.onClick()
+	if ((this.owner.inprogress == null) && this.impl) {
+    	this.impl.onClick()
     }
 }
 

@@ -13,9 +13,7 @@ root {
 body {
     font-family: Verdana,Arial,sans serif;
     margin: 0 0 0 0;
-    position: relative;
-    min-height: 100%;
-    top: 0px;
+    padding: 0 0 0 0;
 }
 
 tr.tableheader {
@@ -108,22 +106,35 @@ div.menubar {
     background-color: #A30000;
 }
 
+.sidebarwrapper {
+	float: left;
+	width: 230px;
+	margin-left: -100%;
+	font-size: 90%;
+}
+
 .sidebar {
     float: left;
     width: 230px;
     background-color: #A30000;
     height: 100%;
-    margin-right: 4px;
-    margin-top: 5px;
-    margin-left: 10px;
+    padding-right: 4px;
     padding-top: 5px;
+    padding-left: 10px;
+}
+
+.documentwrapper {
+	float: left;
+	width: 100%;
+}
+
+.mainpagewrapper {
+	margin: 0 0 0 244px;
 }
 
 .mainpage {
 	float: left;
-    margin: 0 0 0 230px;
-    height: 100%;
-    width: 100%;
+	width: 98%;
 	padding: 5px;
 }
 
@@ -142,6 +153,16 @@ a.whitelink:link {
 a.whitelink:visited {
     text-decoration: none;
     color: #D3D3D3;
+}
+
+a.greylink:link {
+    text-decoration: none;
+    color: #708090;
+}
+
+a.greylink:visited {
+    text-decoration: none;
+    color: #708090;
 }
 
 a.menulink {
@@ -165,10 +186,72 @@ a.disabledmenulink {
 .menu {
     position: absolute;
     background-color: white;
-    border: thin solid black;
+    color: black;
+	border: thin solid black;
     padding: 10px;
     margin-left: 0px;
     margin-top: 0px;
+    margin-bottom: 5px;
+    border-radius: 5px;
+}
+
+.popup {
+    position: absolute;
+    background-color: white;
+    color: black;
+	border: thin solid black;
+    padding: 10px;
+    margin-left: -200px;
+    margin-top: 0px;
+    margin-bottom: 5px;
+    border-radius: 5px;
+}
+
+.popup::after {
+	position: absolute;
+	content: url("/image/error.png");
+	right: -10px;
+	top: -10px;
+}
+
+.overlay {
+	 position: absolute;
+	 left: 0px;
+	 top: 0px;
+	 width:100%;
+	 height:100%;
+	 text-align:center;
+	 background: rgba(105, 105, 105, 0.8);
+	 z-index: 1000;
+}
+
+.modal {
+	width: 33%;
+	margin-top: 20%;
+	margin-left: auto;
+	margin-right: auto;
+	background-color: white;
+	color: black;
+	border: thin solid black;
+	padding: 10px;
+	border-radius: 5px;
+}
+
+.modal::aftera {
+	position: absolute;
+	content: url("/image/error.png");
+	right: -10px;
+	top: -10px;
+}
+
+.login {
+    position: absolute;
+    background-color: white;
+    color: black;
+	border: thin solid black;
+    padding: 10px;
+    margin-left: -100px;
+    margin-top: 15px;
     margin-bottom: 5px;
     border-radius: 5px;
 }

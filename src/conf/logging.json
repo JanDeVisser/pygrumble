@@ -2,6 +2,6 @@
     "_description": "Logging configuration",
     "author": "jan",
     "version": "1.0",
-    "level": "debug", destination: "file", "flat": true,
-    "gripe.pgsql": { "flat" = false }
+    "level": "debug", "destination": "file", "flat": true,
+    "gripe.pgsql": { "flat": false }
 }

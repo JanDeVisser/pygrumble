@@ -4,6 +4,8 @@ Created on 2013-03-12
 @author: jan
 '''
 
+import json
+
 import gripe
 import grit
 
@@ -21,21 +23,27 @@ class Login(grit.ReqHandler):
         self.render(urls = urls)
 
     def post(self):
-        logger.debug("main::login.post(%s/%s)", self.request.get("userid"), self.request.get("password"))
+        json_request = False
+        params = self.request
+        if self.request.headers.get("ST-JSON-Request"):
+            params = json.loads(self.request.body)
+            json_request = True
+        userid = params.get("userid")
+        password = params.get("password")
+        remember_me = params.get("remember_me", False)
+        logger.debug("main::login.post(%s/%s)", userid, password)
         url = "/"
         if "redirecturl" in self.session:
             url = self.session["redirecturl"]
             del self.session["redirecturl"]
         else:
             url = self.request.get("redirecturl", "/")
-        userid = self.request.get("userid")
-        password = self.request.get("password")
-        remember_me = self.request.get("remember", False)
         assert self.session is not None, "Session missing from request handler"
         if self.session.login(userid, password, remember_me):
             logger.debug("Login OK")
-            self.response.status = "302 Moved Temporarily"
-            self.response.headers["Location"] = str(url)
+            if not json_request:
+                self.response.status = "302 Moved Temporarily"
+                self.response.headers["Location"] = str(url)
         else:
             logger.debug("Login FAILED")
             self.response.status_int = 401
@@ -43,15 +51,26 @@ class Login(grit.ReqHandler):
 class Logout(grit.ReqHandler):
     content_type = "text/html"
 
+    def get_template(self):
+        if gripe.Config.app and gripe.Config.app.logout and gripe.Config.app.logout.template:
+            return gripe.Config.app.logout.template
+        else:
+            return None
+
     def get(self):
         logger.debug("main::logout.get")
-        self.request.session.logout(self.request)
-        urls = {
-            "login": self.for_uri("login"),
-            "reset-password": self.uri_for("reset-password"),
-            "signup": self.uri_for("signup")
-        }
-        self.render(urls = urls)
+        assert hasattr(self, "session") and self.session is not None, "Logout request handler has no session"
+        self.session.logout()
+        if gripe.Config.app and gripe.Config.app.logout and gripe.Config.app.logout.redirect:
+            logger.debug("Logout: redirect to %s", gripe.Config.app.logout.redirect)
+            self.redirect(gripe.Config.app.logout.redirect)
+        else:
+            urls = {
+                "login": self.uri_for("login"),
+                "reset-password": self.uri_for("reset-password"),
+                "signup": self.uri_for("signup")
+            }
+            self.render(urls = urls)
 
     def post(self):
         self.get()

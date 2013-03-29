@@ -167,24 +167,31 @@ class Enum(tuple):
 
 # Configure logging
 
+_loggers = {}
 _log_defaults = None
 _log_date_fmt = '%Y-%m-%d %H:%M:%S'
 _log_root_fmt = '%(name)-12s:%(asctime)s:%(levelname)-7s:%(message)s'
-_log_sub_fmt = '%(asctime)s:%(levelname)-7s:%(message)s'
+_log_sub_fmt = '%(name)-12s:%(asctime)s:%(levelname)-7s:%(message)s'
 
 class LogConfig(object):
     def __init__(self, conf = None, defaults = None):
         conf = conf or object()
         self.log_level = defaults.log_level if defaults else logging.INFO
-        self.log_level = getattr(logging, conf.level.upper()) if hasattr(conf, "level") else self.log_level
+        self.log_level = getattr(logging, conf.level.upper()) if hasattr(conf, "level") and conf.level else self.log_level
         self.destination = defaults.destination if defaults else "stderr"
         self.destination = conf.destination.lower() if hasattr(conf, "destination") and conf.destination else self.destination
         assert self.destination in ("stderr", "file"), "Invalid logging destination %s" % self.destination
         self.flat = defaults.log_level if defaults else False
         self.flat = conf.flat if hasattr(conf, "flat") else self.flat
+        self.append = defaults.append if defaults else False
+        self.append = conf.append if hasattr(conf, "append") else self.append
 
 def get_logger(name):
     global _log_defaults
+    global _loggers
+
+    if name in _loggers:
+        return _loggers[name]
 
     logger = logging.getLogger(name)
     assert logger, "logging.getLogger(%s) returned None" % name
@@ -198,7 +205,7 @@ def get_logger(name):
         except:
             # Ignored. Probably already exists
             pass
-        append = Config.logging[name].append if Config.logging[name].append is not None else False
+        append = conf.append if conf.append is not None else False
         mode = "a" if append else "w"
         if conf.flat:
             (fname, dot, junk) = name.partition(".")
@@ -212,6 +219,7 @@ def get_logger(name):
         ch = logging.StreamHandler(sys.stderr)
         ch.setFormatter(formatter)
         logger.addHandler(ch)
+    _loggers[name] = logger
     return logger
 
 _log_defaults = LogConfig(Config.logging if hasattr(Config, "logging") else None)

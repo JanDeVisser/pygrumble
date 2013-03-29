@@ -174,6 +174,7 @@ com.sweattrails.api.internal.Tab.prototype.select = function() {
         }
     }
     this.header.className = "tab_selected"
+    this.href.className = "whitelink"
     this.page.hidden = false
 }
 
@@ -182,6 +183,7 @@ com.sweattrails.api.internal.Tab.prototype.unselect = function() {
         impl.onUnselect()
     }
     this.header.className = "tab"
+    this.href.className = "greylink"
     this.page.hidden = true
 }
 
@@ -268,12 +270,13 @@ com.sweattrails.api.TabManager.prototype.drawTab = function(tab) {
     span.onclick = onclick
     tabbox.appendChild(span)
     tab.header = span
-    var href = document.createElement("a")
-    href.href = "#"
-    href.innerHTML = tab.label
-    href.tab = tab
-    href.onclick = onclick
-    span.appendChild(href)
+    tab.href = document.createElement("a")
+    tab.href.className = "whitelink"
+    tab.href.href = "#"
+    tab.href.innerHTML = tab.label
+    tab.href.tab = tab
+    tab.href.onclick = onclick
+    span.appendChild(tab.href)
 
     tab.page = document.getElementById("page_" + tab.code)
     if (tab.page == null) {
@@ -639,16 +642,5 @@ function import_file(url, callback) {
 }
 
 
-function login() {
-	var form = $("login")
-    if (form && !form.ispopup) {
-        form.popup(com.sweattrails.api.MODE_NEW)
-    }
-}
+// ------------------------------------------------------------------------
 
-function signup() {
-	var form = $("signup")
-    if (form && !form.ispopup) {
-        form.popup(com.sweattrails.api.MODE_NEW)
-    }
-}

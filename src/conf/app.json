@@ -14,6 +14,7 @@
     "container": {
         "pipeline": [ "grit.RequestLogger", "grit.TxWrapper", "grit.Session", "grit.Auth" ]
     },
+    "logout": { "redirect": "/" },
     "roles": [
         { "role": "athlete",   "has_roles": []              },
         { "role": "coach",     "has_roles": []              },
