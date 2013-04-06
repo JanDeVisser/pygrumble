@@ -1,8 +1,8 @@
 # To change this template, choose Tools | Templates
 # and open the template in the editor.
 
-__author__="jan"
-__date__ ="$3-Mar-2013 5:24:57 PM$"
+__author__ = "jan"
+__date__ = "$3-Mar-2013 5:24:57 PM$"
 
 import gripe
 import grit
@@ -22,11 +22,18 @@ class HasRoles(object):
         else:
             if hasattr(self, "_explicit_roles") and callable(self._explicit_roles):
                 return self._explicit_roles()
-            elif hasattr(self, "has_roles"):
-                return self.has_roles if self.has_roles else set()
+            elif hasattr(self, "_roles"):
+                return self._roles if self._roles else set()
             else:
-                assert 0, "Class %s must implement either _explicit_roles() or provide a has_roles attribute" % self.__class__.__name__
+                assert 0, "Class %s must implement either _explicit_roles() or provide a _roles attribute" % self.__class__.__name__
 
+    def urls(self):
+        ret = {}
+        for role in self.role_objects():
+            if hasattr(role, "_urls"):
+                ret.update(role._urls() if callable(role._urls) else role._urls)
+            else:
+                assert 0, "Class %s must implement _urls as either a method or attribute" % role.__class__.__name__
 
     def has_role(self, roles):
         """
@@ -61,9 +68,10 @@ class AbstractRole(HasRoles):
         return ret
 
 class Role(AbstractRole):
-    def __init__(self, role, has_roles):
+    def __init__(self, role, has_roles, urls):
         self.role = role
         self.has_roles = has_roles
+        self._urls = urls
 
     def __str__(self):
         return self.role
@@ -94,7 +102,7 @@ class RoleManager(object):
     def initialize(self):
         if gripe.Config.app and "roles" in gripe.Config.app:
             for role in gripe.Config.app.roles:
-                self.add_role(Role(role.role, role.has_roles))
+                self.add_role(Role(role.role, role.has_roles, role.urls))
         else:
             logger.warn("No roles defined in app configuration")
 

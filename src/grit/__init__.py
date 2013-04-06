@@ -469,6 +469,30 @@ class RequestLogger(object):
             RequestLogger.get_requestlogger().log(self.reqctx)
         return False
 
+class Url(object):
+    def __init__(self, *args):
+        if (len(args) == 1) and isinstance(args[0], dict):
+            d = args[0]
+            self.__init__(d.get("id"), d.get("url"), d.get("label"))
+        if (len(args) == 1) and isinstance(args[0], gripe.json_util.JSONObject):
+            u = args[0]
+            self.__init__(u.id, u.url, u.label)
+        else:
+            assert len(args) > 1, "Cannot initialize Url with these args: %s" % args
+            self._id = args[0]
+            self._url = args[1]
+            self._label = args[2] if len(args) > 2 else None
+
+    def id(self):
+        return self._id
+
+    def label(self):
+        return self._label
+
+    def url(self):
+        return self._url
+
+
 class ReqHandler(webapp2.RequestHandler):
     content_type = "application/xhtml+xml"
     template_dir = "template"
@@ -515,21 +539,40 @@ class ReqHandler(webapp2.RequestHandler):
 #        ctx['tab'] = self.request.get('tab', None)
 #        return ctx
 #
-    def _get_context(self, ctx = None, urls = None):
-        if not ctx:
-            ctx = {}
+    def _get_context(self, ctx = None):
+        ctx = {}
         ctx['app'] = gripe.Config.app.get("about", {})
         ctx['user'] = self.user
         ctx['session'] = self.session
         ctx['params'] = self.request.params
-        ctx['url'] = {
-            'logout': '/logout'
-        }
+        if 'url' not in ctx:
+            ctx["url"] = []
+        urls = self.user.urls() if self.user else None
         if urls:
-            ctx['url'].update(urls)
+            ctx['url'].extend(urls)
         if hasattr(self, "get_context") and callable(self.get_context):
             ctx = self.get_context(ctx)
         return ctx
+
+    def get_urls(self, *args):
+        urls = []
+        ret = {}
+
+        for u in args:
+            if isinstance(u, list) or isinstance(u, tuple):
+                urls.extend(u)
+            else:
+                urls.append(u)
+        for u in urls:
+            if isinstance(u, Url):
+                ret[u.id] = u
+            elif isinstance(u, basestring):
+                url = Url(u, self.uri_for(u))
+                ret[url.id] = url
+            else:
+                url = Url(u)
+                ret[url.id] = url
+        return ret
 
     def _get_template(self):
         ret = self.template \
@@ -559,8 +602,8 @@ class ReqHandler(webapp2.RequestHandler):
             content_type = gripe.ContentType.for_path(self.request.path)
             return content_type.content_type if content_type else "text/plain"
 
-    def render(self, values = None, urls = None):
-        ctx = self._get_context(values, urls)
+    def render(self):
+        ctx = self._get_context()
         self.response.content_type = self._get_content_type()
         self.response.out.write(self._get_env().get_template(self._get_template() + "." + self.file_suffix).render(ctx))
 

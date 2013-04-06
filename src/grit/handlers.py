@@ -141,15 +141,19 @@ class BridgedHandler(grit.ReqHandler, ModelBridge):
         pass
 
 class PageHandler(BridgedHandler, grit.ReqHandler):
+    def get_context(self, ctx):
+        objs = self.get_objects()
+        obj = objs[0] if objs and len(objs) else None
+        ctx["object"] = obj
+        return ctx
+
     def get(self, key = None, kind = None):
         self._initialize_bridge(key, kind)
         if self.allow_access():
             self.initialize_bridge()
             redir = self.must_redirect_to()
             if not redir:
-                objs = self.get_objects()
-                obj = objs[0] if objs and len(objs) else None
-                self.render({ "object": obj } if obj else {})
+                self.render()
             else:
                 if isinstance(redir, str):
                     self.redirect(redir)
@@ -163,13 +167,17 @@ class JSHandler(BridgedHandler):
     template_dir = "/js"
     file_suffix = "js"
 
+    def get_context(self, ctx):
+        objs = self.get_objects()
+        obj = objs[0] if objs and len(objs) else None
+        ctx["object"] = obj
+        return ctx
+
     def get(self, key = None, kind = None):
         self._initialize_bridge(key, kind)
         if self.allow_access():
             self.initialize_bridge()
-            objs = self.get_objects()
-            obj = objs[0] if objs and len(objs) else None
-            self.render({ "object": obj } if obj else {})
+            self.render()
         else:
             self.error(401)
 

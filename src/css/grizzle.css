@@ -107,10 +107,10 @@ div.menubar {
 }
 
 .sidebarwrapper {
-	float: left;
-	width: 230px;
-	margin-left: -100%;
-	font-size: 90%;
+    float: left;
+    width: 230px;
+    margin-left: -100%;
+    font-size: 90%;
 }
 
 .sidebar {
@@ -124,18 +124,18 @@ div.menubar {
 }
 
 .documentwrapper {
-	float: left;
-	width: 100%;
+    float: left;
+    width: 100%;
 }
 
 .mainpagewrapper {
-	margin: 0 0 0 244px;
+    margin: 0 0 0 244px;
 }
 
 .mainpage {
-	float: left;
-	width: 98%;
-	padding: 5px;
+    float: left;
+    width: 98%;
+    padding: 5px;
 }
 
 .tools {
@@ -221,8 +221,9 @@ a.disabledmenulink {
 	 width:100%;
 	 height:100%;
 	 text-align:center;
-	 background: rgba(105, 105, 105, 0.8);
-	 z-index: 1000;
+	 background: rgb(105, 105, 105);
+	 opacity: 0.3;
+	 z-index: 1002;
 }
 
 .modal {
@@ -235,6 +236,8 @@ a.disabledmenulink {
 	border: thin solid black;
 	padding: 10px;
 	border-radius: 5px;
+	z-index: 1001;
+	opacity: 1;
 }
 
 .modal::aftera {

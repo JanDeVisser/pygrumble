@@ -14,13 +14,12 @@ logger = gripe.get_logger("grit")
 class Login(grit.ReqHandler):
     content_type = "text/html"
 
+    def get_context(self, ctx):
+        ctx["url"].update(self.get_urls("reset-password", "signup"))
+
     def get(self):
         logger.debug("main::login.get")
-        urls = {
-            "reset-password": self.uri_for("reset-password"),
-            "signup": self.uri_for("signup")
-        }
-        self.render(urls = urls)
+        self.render()
 
     def post(self):
         json_request = False
@@ -57,6 +56,9 @@ class Logout(grit.ReqHandler):
         else:
             return None
 
+    def get_context(self, ctx):
+        ctx["url"].update(self.get_urls("login", "reset-password", "signup"))
+
     def get(self):
         logger.debug("main::logout.get")
         assert hasattr(self, "session") and self.session is not None, "Logout request handler has no session"
@@ -65,12 +67,7 @@ class Logout(grit.ReqHandler):
             logger.debug("Logout: redirect to %s", gripe.Config.app.logout.redirect)
             self.redirect(gripe.Config.app.logout.redirect)
         else:
-            urls = {
-                "login": self.uri_for("login"),
-                "reset-password": self.uri_for("reset-password"),
-                "signup": self.uri_for("signup")
-            }
-            self.render(urls = urls)
+            self.render()
 
     def post(self):
         self.get()
@@ -78,14 +75,13 @@ class Logout(grit.ReqHandler):
 class Signup(grit.ReqHandler):
     content_type = "text/html"
 
+    def get_context(self, ctx):
+        ctx["url"].update(self.get_urls("login", "reset-password", "signup"))
+
     def get(self):
         logger.debug("main::SignUp.get")
         self.request.session.logout(self.request)
-        urls = {
-            "login": self.for_uri("login"),
-            "reset-password": self.uri_for("reset-password")
-        }
-        self.render(urls = urls)
+        self.render()
 
     def post(self):
         self.get()
@@ -117,7 +113,7 @@ class ConfirmPasswordReset(grit.ReqHandler):
     '''
     content_type = "text/html"
 
-    def post(self, code = None):
+    def get(self, code = None):
         if not code:
             code = self.request.get("code")
         if code:

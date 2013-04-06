@@ -16,11 +16,28 @@
     },
     "logout": { "redirect": "/" },
     "roles": [
-        { "role": "athlete",   "has_roles": []              },
-        { "role": "coach",     "has_roles": []              },
-        { "role": "user",      "has_roles": []              },
-        { "role": "moderator", "has_roles": [ "user" ]      },
-        { "role": "admin",     "has_roles": [ "moderator" ] }
+        { 
+        	"role": "athlete",
+        	"has_roles": []              
+    	},
+        {
+        	"role": "coach",
+        	"has_roles": []
+    	},
+        { 
+        	"role": "user",
+        	"urls": [ { "label": "Logout", "url": "/logout", "level": 99 } ],
+        	"has_roles": []             
+    	},
+        {
+        	"role": "moderator", 
+        	"has_roles": [ "user" ]      
+    	},
+        { 
+        	"role": "admin",     
+        	"urls": [ { "label": "User Management", "url": "/users", "level": 10 } ],
+        	"has_roles": [ "moderator" ] 
+    	}
     ],
     "mounts": [
         { "path": "/", "app": "index.app", "roles": [] },

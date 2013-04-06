@@ -55,19 +55,20 @@ com.sweattrails.api.Form.prototype.makePopup = function() {
 }
 
 com.sweattrails.api.Form.prototype.makeModal = function() {
-    var overlay = document.getElementById("overlay")
-    if (!overlay) {
-    	overlay = document.createElement("div")
-        overlay.id = "overlay"
-        overlay.className = "overlay"
-        overlay.hidden = true
-        document.getElementsByTagName("body")[0].appendChild(overlay)
+	var body = document.getElementsByTagName("body")[0]
+    this.overlay = document.getElementById("overlay")
+    if (!this.overlay) {
+    	this.overlay = document.createElement("div")
+        this.overlay.id = "overlay"
+        this.overlay.className = "overlay"
+        this.overlay.hidden = true
+        body.appendChild(this.overlay)
     }
     var container = document.createElement("div")
     container.id = this.id + "-modal"
     container.className = "modal"
     container.hidden = true
-    overlay.appendChild(container)
+    body.appendChild(container)
     this.container = container
     this.modal = true
 }
@@ -223,7 +224,7 @@ com.sweattrails.api.Form.prototype.close = function() {
         if (this.ispopup) {
             this.container.hidden = true
             if (this.modal) {
-            	document.getElementById("overlay").hidden = true
+            	this.overlay.hidden = true
             }
         } else {
             this.render(com.sweattrails.api.MODE_VIEW)
