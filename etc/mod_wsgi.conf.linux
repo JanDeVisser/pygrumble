@@ -1,10 +1,10 @@
-
+WSGIPythonPath /home/jan/Projects/Grumble/src
 <VirtualHost *:80>
 	ServerAdmin webmaster@localhost
 
 	DocumentRoot /usr/share/doc/
 	WSGIScriptAlias / "/home/jan/Projects/Grumble/src/main.py"
-	WSGIDaemonProcess wolverine user=jan group=jan processes=2 threads=25 python-path=/home/jan/Projects/Grumble/src
+	WSGIDaemonProcess wolverine user=jan group=jan threads=25 python-path=/home/jan/Projects/Grumble/src
 	WSGIProcessGroup wolverine
 	WSGICallableObject app
 	<Directory />
