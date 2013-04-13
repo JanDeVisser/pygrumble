@@ -31,6 +31,7 @@ class HasRoles(object):
         ret = {}
         for role in self.role_objects():
             if hasattr(role, "_urls"):
+                logger.info("urls: %s %s %s", self, role, type(role._urls))
                 ret.update(role._urls() if callable(role._urls) else role._urls)
             else:
                 assert 0, "Class %s must implement _urls as either a method or attribute" % role.__class__.__name__
@@ -70,7 +71,7 @@ class AbstractRole(HasRoles):
 class Role(AbstractRole):
     def __init__(self, role, has_roles, urls):
         self.role = role
-        self.has_roles = has_roles
+        self._roles = has_roles
         self._urls = urls
 
     def __str__(self):
@@ -107,4 +108,5 @@ class RoleManager(object):
             logger.warn("No roles defined in app configuration")
 
 if __name__ == "__main__":
+    rolemanager = RoleManager()
     print rolemanager._roles

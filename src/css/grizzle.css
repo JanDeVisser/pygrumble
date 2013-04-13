@@ -209,9 +209,11 @@ a.disabledmenulink {
 
 .popup::after {
 	position: absolute;
-	content: url("/image/error.png");
+	content: url("/image/close.png");
 	right: -10px;
 	top: -10px;
+	width: 32px;
+	height: 32px;
 }
 
 .overlay {
@@ -223,13 +225,14 @@ a.disabledmenulink {
 	 text-align:center;
 	 background: rgb(105, 105, 105);
 	 opacity: 0.3;
-	 z-index: 1002;
+	 z-index: 1000;
 }
 
 .modal {
+	position: absolute;
 	width: 33%;
 	margin-top: 20%;
-	margin-left: auto;
+	margin-left: 33%;
 	margin-right: auto;
 	background-color: white;
 	color: black;
