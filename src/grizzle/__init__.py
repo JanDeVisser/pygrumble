@@ -21,6 +21,9 @@ class UserGroup(grumble.Model, grit.auth.AbstractUserGroup):
     def gid(self):
         return self.group
 
+    def _explicit_roles(self):
+        return set(self.has_roles)
+
 class User(grumble.Model, grit.auth.AbstractUser):
     _flat = True
     email = grumble.TextProperty(is_key = True)
@@ -34,6 +37,9 @@ class User(grumble.Model, grit.auth.AbstractUser):
 
     def groups(self):
         return { gfu.group for gfu in self.groupsforuser_set }
+
+    def _explicit_roles(self):
+        return set(self.has_roles)
 
 class GroupsForUser(grumble.Model):
     _flat = True

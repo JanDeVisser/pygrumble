@@ -40,7 +40,7 @@ class AbstractAuthObject(grit.role.HasRoles):
             if role:
                 s |= role.role_objects()
             else:
-                logging.warn("Undefined role %s mentioned in '%s'.has_roles", rname, self.email)
+                logger.warn("Undefined role %s mentioned in '%s'.has_roles", rname, self.email)
         return s
 
 
@@ -53,8 +53,8 @@ class UserGroup(AbstractUserGroup):
     _groups = {}
     def __init__(self, group):
         self._id = group.get("groupid")
-        self.has_roles = group.get("has_roles")
-        self.has_roles = self.has_roles or []
+        self._roles = group.get("has_roles")
+        self._roles = self._roles or []
         UserGroup._groups[self._id] = self
 
     def gid(self):
@@ -84,10 +84,10 @@ class User(AbstractUser):
         self._id = user.get("email")
         self.display_name = user.get("display_name")
         self.password = user.get("password")
-        self.has_roles = user.get("has_roles")
-        self.has_roles = self.has_roles or []
-        self.has_groups = user.get("has_groups")
-        self.has_groups = self.has_groups or []
+        self._roles = user.get("has_roles")
+        self._roles = self._roles or []
+        self._groups = user.get("has_groups")
+        self._groups = self._groups or []
         User._users[self._id] = self
 
     def uid(self):
@@ -95,7 +95,7 @@ class User(AbstractUser):
 
     def groups(self):
         ret = set()
-        for gid in self.has_groups:
+        for gid in self._groups:
             group = UserGroup.get_group(gid)
             if group:
                 ret.add()
@@ -202,4 +202,10 @@ class UserManager(AbstractUserManager):
             return False
 
 if __name__ == "__main__":
-    print "Hello World";
+#    groupmanager = GroupManager()
+    usermanager = UserManager()
+    print UserGroup._groups
+    print User._users
+
+    print User.get_user("jan@de-visser.net").roles(False)
+

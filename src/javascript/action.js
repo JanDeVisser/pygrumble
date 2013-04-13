@@ -29,7 +29,7 @@ com.sweattrails.api.internal.SaveAction.prototype.onClick = function() {
     if (this.onsubmitted) {
         this.action.owner.onsubmitted = this.onsubmitted.bind(this.action.owner)
     }
-	this.container.inprogress = this
+	this.action.container.inprogress = this
     this.action.owner.submit();
 }
 
