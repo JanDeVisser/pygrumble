@@ -922,7 +922,7 @@ class Model(object):
 
     def _populate(self, values):
         logger.debug("%s._populate(%s)", self.kind(), values)
-        if values:
+        if values is not None:
             self._values = {}
             v = {}
             for (name, value) in values:
@@ -943,7 +943,7 @@ class Model(object):
             self._exists = False
 
     def _load(self):
-        if (not hasattr(self, "_values") or not self._values) and (self._id or self._key_name):
+        if (not hasattr(self, "_values") or (self._values is None)) and (self._id or self._key_name):
             self._populate(self.modelmanager.get_properties(self.key()))
 
     def _store(self):
@@ -953,7 +953,7 @@ class Model(object):
         if hasattr(self, "key_prop"):
             scoped = getattr(self.__class__, "key_prop").scoped
             key = self.key_prop
-            self._key_name = "%s/%s" % (parent(), key) if scoped else key
+            self._key_name = "%s/%s" % (self.parent(), key) if scoped else key
             include_key_name = scoped
         elif not self._key_name:
             self._key_name = uuid.uuid1().hex if not self._key_name else self._key_name
@@ -1033,7 +1033,7 @@ class Model(object):
 
     def set_ownerid(self, ownerid):
         self._load()
-        self._ownerid = owner
+        self._ownerid = ownerid
 
     def put(self):
         self._store()
@@ -1258,7 +1258,6 @@ class Model(object):
         if descriptor is None:
             descriptor = {}
         logger.info("Creating new %s model from descriptor %s", cls.__name__, descriptor)
-        obj = None
         kwargs = { "parent": parent }
         kwargs.update(descriptor)
         k = cls.get_new_key(descriptor, parent)
@@ -1322,6 +1321,7 @@ class Key(object):
     def __init__(self, *args):
         if len(args) == 1:
             value = args[0]
+            assert value is not None, "Cannot initialize Key from None"
             if isinstance(value, basestring):
                 self._assign(value)
             elif isinstance(value, dict):
@@ -1337,7 +1337,9 @@ class Key(object):
                 self.kind = value.kind
                 self.id = value.id
                 self.name = value.name
-            if not self.id:
+            else:
+                assert 0, "Cannot initialize Key from %s, type %s" % (value, type(value))
+            if not hasattr(self, "id"):
                 self.id = base64.urlsafe_b64encode("%s:%s" % (self.kind, self.name))
         elif len(args) == 2:
             kind = args[0]

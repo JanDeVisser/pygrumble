@@ -3,7 +3,6 @@
 # To change this template, choose Tools | Templates
 # and open the template in the editor.
 
-import anydbm
 import atexit
 import datetime
 import hashlib
@@ -15,7 +14,6 @@ import os.path
 import Queue
 import re
 import threading
-from datetime import timedelta
 import uuid
 import webapp2
 import sys
@@ -29,6 +27,14 @@ import grit.log
 import grumble
 
 logger = gripe.get_logger(__name__)
+
+class UserData(grumble.Model):
+    _flat = True
+    _audit = False
+    cookie = grumble.TextProperty(is_key = True)
+    last_access = grumble.DateTimeProperty(auto_now = True)
+    userid = grumble.TextProperty()
+
 
 class SessionData(dict):
     def __init__(self, id):
@@ -70,8 +76,6 @@ class SessionManager(object):
         self._thread = threading.Thread(target = SessionManager._monitor)
         self._thread.setDaemon(True)
         atexit.register(SessionManager._exiting)
-        self._db = None
-        self._dblock = threading.RLock()
         self._lastharvest = None
         self._thread.start()
 
@@ -89,17 +93,11 @@ class SessionManager(object):
 
             delta = datetime.datetime.now() - self._lastharvest if self._lastharvest else None
             if (not delta) or (delta.days > 0):
-                logger.info("Weeding userids.dat")
-                with self._dblock:
-                    for cookie in self.db():
-                        data = gripe.json_util.JSON.db_get(self.db(), cookie)
-                        # @type d timedelta
-                        d = datetime.datetime.now() - data.last_access
-                        if d.days >= 100:  # TODO Make configurable
-                            logger.info("Cookie %s not used in %d days. Weeding.", cookie, d.days)
-                            del self.db()[cookie]
-                        else:
-                            logger.debug("Cookie %s last accessed  %d days ago. Keeping it.", cookie, d.days)
+                logger.info("Weeding UserData")
+                mm = UserData.modelmanager
+                cutoff = datetime.datetime.now() - datetime.timedelta(100) 
+                result = mm.delete_query(None, { "last_access <= ", cutoff} )
+                logger.info("Weeded %s cookies", result)
                 self._lastharvest = datetime.datetime.now()
 
             try:
@@ -139,24 +137,19 @@ class SessionManager(object):
                 logger.info("Existing session found. User %s", session.user())
             return session
 
-    def db(self):
-        if self._db is None:
-            self._db = anydbm.open(os.path.join(gripe.root_dir(), "data", "userids.dat"), "c")
-        return self._db
-
     def _get_user(self, cookie):
         ret = None
-        with self._dblock:
-            logger.debug("Looking up cookie in userids.dat")
-            data = gripe.json_util.JSON.db_get(self.db(), cookie)
-            if data:
-                ret = Session.get_usermanager().get(data.uid) if data.uid else None
-                logger.debug("Found cookie in userids.dat. Userid %s", ret)
-                data.last_access = datetime.datetime.now()
-                data.db_put()
+        if cookie:
+            logger.debug("Looking up cookie %s in UserData", cookie)
+            userdata = UserData.get_by_key(cookie)
+            if userdata and userdata.exists():
+                ret = Session.get_usermanager().get(userdata.userid) if userdata.userid else None
+                logger.debug("Found cookie in UserData. Userid %s", ret)
+                userdata.last_access = datetime.datetime.now()
+                userdata.put()
             else:
-                logger.debug("Cookie not found in userids.dat")
-            return ret
+                logger.debug("Cookie not found in UserData")
+        return ret
 
     def init_session(self, cookie = None):
         session = self._get_session(cookie)
@@ -165,11 +158,11 @@ class SessionManager(object):
         return session
 
     def remember_user(self, cookie, uid):
-        with self._dblock:
-            data = gripe.json_util.JSONObject()
-            data.uid = uid
-            data.last_access = datetime.datetime.now()
-            data.db_put(self.db(), cookie)
+        userdata = UserData()
+        userdata.cookie = cookie
+        userdata.userid = uid
+        userdata.last_access = datetime.datetime.now()
+        userdata.put()
 
     def persist(self, data):
         with self._lock:
@@ -177,9 +170,9 @@ class SessionManager(object):
 
     def logout(self, cookie):
         cookie = str(cookie)
-        with self._dblock:
-            if cookie in self.db():
-                del self.db()[cookie]
+        userdata = UserData.get_by_key(cookie)
+        if userdata:
+            grumble.delete(userdata)
         with self._lock:
             if cookie in self._sessions:
                 del self._sessions[cookie]
@@ -473,15 +466,16 @@ class Url(object):
     def __init__(self, *args):
         if (len(args) == 1) and isinstance(args[0], dict):
             d = args[0]
-            self.__init__(d.get("id"), d.get("url"), d.get("label"))
+            self.__init__(d.get("id"), d.get("url"), d.get("label"), d.get("level"))
         if (len(args) == 1) and isinstance(args[0], gripe.json_util.JSONObject):
             u = args[0]
-            self.__init__(u.id, u.url, u.label)
+            self.__init__(u.id, u.url, u.label, u.level)
         else:
             assert len(args) > 1, "Cannot initialize Url with these args: %s" % args
             self._id = args[0]
             self._url = args[1]
             self._label = args[2] if len(args) > 2 else None
+            self._level = int(args[3]) if (len(args) > 3) and args[3] else 10
 
     def id(self):
         return self._id

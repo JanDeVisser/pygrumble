@@ -72,6 +72,9 @@ class Role(AbstractRole):
     def __init__(self, role, has_roles, urls):
         self.role = role
         self._roles = has_roles
+        self._urls = []
+        for u in urls:
+            url = grit.Url()
         self._urls = urls
 
     def __str__(self):
