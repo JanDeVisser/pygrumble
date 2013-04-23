@@ -461,8 +461,14 @@ class RequestLogger(object):
             logger.debug("Logging request")
             RequestLogger.get_requestlogger().log(self.reqctx)
         return False
-
+        
 class Url(object):
+    def __new__(cls, *args, **kwargs):
+        if len(args) == 1 and isinstance(args[0], Url):
+            return args[0]
+        else:
+            return super(Url, cls).__new__(cls)
+    
     def __init__(self, *args):
         if (len(args) == 1) and isinstance(args[0], dict):
             d = args[0]
@@ -471,7 +477,7 @@ class Url(object):
             u = args[0]
             self.__init__(u.id, u.url, u.label, u.level)
         else:
-            assert len(args) > 1, "Cannot initialize Url with these args: %s" % args
+            assert len(args) > 4, "Cannot initialize Url with these args: %s" % args
             self._id = args[0]
             self._url = args[1]
             self._label = args[2] if len(args) > 2 else None
@@ -485,7 +491,41 @@ class Url(object):
 
     def url(self):
         return self._url
+    
+    def level(self):
+        return self._level
 
+
+class UrlCategory(object):
+    def __init__(self, id, label, level, *urls):
+        self._urls = {}
+        self._id = id
+        self._label = label
+        self._level = level
+        self.append(urls)
+                
+    def append(self, *urls):
+        if len(urls) == 1):
+            if isinstance(urls, (list,tuple)):
+                self.append(*urls)
+            else:
+                u = Url(urls[0])
+                self._urls[u.id] = u
+        elif:
+            for u in urls:
+                self.append(u)
+        
+    def id(self):
+        return self._id
+    
+    def label(self):
+        return self._label
+    
+    def level(self):
+        return self._level
+    
+    def urls(self):
+        return sorted(self._url, key = lambda url: url.level())
 
 class ReqHandler(webapp2.RequestHandler):
     content_type = "application/xhtml+xml"
