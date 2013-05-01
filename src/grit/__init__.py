@@ -21,6 +21,7 @@ import sys
 
 import gripe
 import gripe.json_util
+import gripe.url
 import grit.role
 import grit.auth
 import grit.log
@@ -95,8 +96,8 @@ class SessionManager(object):
             if (not delta) or (delta.days > 0):
                 logger.info("Weeding UserData")
                 mm = UserData.modelmanager
-                cutoff = datetime.datetime.now() - datetime.timedelta(100) 
-                result = mm.delete_query(None, { "last_access <= ", cutoff} )
+                cutoff = datetime.datetime.now() - datetime.timedelta(100)
+                result = mm.delete_query(None, { "last_access <= ", cutoff})
                 logger.info("Weeded %s cookies", result)
                 self._lastharvest = datetime.datetime.now()
 
@@ -461,71 +462,6 @@ class RequestLogger(object):
             logger.debug("Logging request")
             RequestLogger.get_requestlogger().log(self.reqctx)
         return False
-        
-class Url(object):
-    def __new__(cls, *args, **kwargs):
-        if len(args) == 1 and isinstance(args[0], Url):
-            return args[0]
-        else:
-            return super(Url, cls).__new__(cls)
-    
-    def __init__(self, *args):
-        if (len(args) == 1) and isinstance(args[0], dict):
-            d = args[0]
-            self.__init__(d.get("id"), d.get("url"), d.get("label"), d.get("level"))
-        if (len(args) == 1) and isinstance(args[0], gripe.json_util.JSONObject):
-            u = args[0]
-            self.__init__(u.id, u.url, u.label, u.level)
-        else:
-            assert len(args) > 4, "Cannot initialize Url with these args: %s" % args
-            self._id = args[0]
-            self._url = args[1]
-            self._label = args[2] if len(args) > 2 else None
-            self._level = int(args[3]) if (len(args) > 3) and args[3] else 10
-
-    def id(self):
-        return self._id
-
-    def label(self):
-        return self._label
-
-    def url(self):
-        return self._url
-    
-    def level(self):
-        return self._level
-
-
-class UrlCategory(object):
-    def __init__(self, id, label, level, *urls):
-        self._urls = {}
-        self._id = id
-        self._label = label
-        self._level = level
-        self.append(urls)
-                
-    def append(self, *urls):
-        if len(urls) == 1):
-            if isinstance(urls, (list,tuple)):
-                self.append(*urls)
-            else:
-                u = Url(urls[0])
-                self._urls[u.id] = u
-        elif:
-            for u in urls:
-                self.append(u)
-        
-    def id(self):
-        return self._id
-    
-    def label(self):
-        return self._label
-    
-    def level(self):
-        return self._level
-    
-    def urls(self):
-        return sorted(self._url, key = lambda url: url.level())
 
 class ReqHandler(webapp2.RequestHandler):
     content_type = "application/xhtml+xml"
@@ -598,13 +534,13 @@ class ReqHandler(webapp2.RequestHandler):
             else:
                 urls.append(u)
         for u in urls:
-            if isinstance(u, Url):
+            if isinstance(u, gripe.url.Url):
                 ret[u.id] = u
             elif isinstance(u, basestring):
-                url = Url(u, self.uri_for(u))
+                url = gripe.url.Url(u, self.uri_for(u))
                 ret[url.id] = url
             else:
-                url = Url(u)
+                url = gripe.url.Url(u)
                 ret[url.id] = url
         return ret
 
