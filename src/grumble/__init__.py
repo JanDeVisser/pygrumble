@@ -1445,6 +1445,7 @@ class Query(object):
         return self._mm.count(self._get_ancestor(), self.filters)
 
     def delete(self):
+        # FIXME: If on_delete is not defined for the model, don't do this
         for m in self:
             m.on_delete()
         return self._mm.delete_query(self._get_ancestor(), self.filters)

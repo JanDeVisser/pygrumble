@@ -37,7 +37,7 @@
 	        {% if user %}
                     {{ user.display_name|d(user.email) }} |
                     <a class="whitelink" href="/">Home</a> |
-                    <a class="whitelink" href="{{ url['logout']|e }}">Logout</a>
+                    <a class="whitelink" href="{{urls['user']['logout'].url()|e}}">{{urls['user']['logout'].label()}}</a>
                 {% else %}
                     <a class="whitelink" href="/">Home</a> |
                     <a class="whitelink" onclick="st_show_form('login');" href="#">Login</a> |				
@@ -89,6 +89,20 @@
  		<div id="sidebarwrapper" class="sidebarwrapper">
 			<div id="sidebar" class="sidebar">
 				{% block sidebar %}
+					URLs: {{ urls|e }} {{ urls.collections() }}
+					<ul>
+						{% for u in urls.urls() %}
+                    		<li><a class="whitelink" href="{{u.url()|e}}">{{u.label()}}</a></li>
+						{% endfor %}
+					</ul>
+					{% for c in urls.collections() %}
+						{{c.label()}}
+						<ul>
+							{% for u in c.urls() %}
+	                    		<li><a class="whitelink" href="{{u.url()|e}}">{{u.label()}}</a></li>
+							{% endfor %}
+						</ul>
+					{% endfor %}						
 				{% endblock sidebar %}
 			</div>
 		</div>

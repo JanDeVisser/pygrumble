@@ -5,6 +5,7 @@ __author__ = "jan"
 __date__ = "$3-Mar-2013 5:24:57 PM$"
 
 import gripe
+import gripe.url
 import grit
 
 logger = gripe.get_logger("grit")
@@ -27,14 +28,26 @@ class HasRoles(object):
             else:
                 assert 0, "Class %s must implement either _explicit_roles() or provide a _roles attribute" % self.__class__.__name__
 
-    def urls(self):
-        ret = {}
+    def urls(self, urls = None):
+        logger.debug("%s.urls(%s)", self, urls)
+        if urls is not None:
+            if isinstance(urls, (list, tuple)):
+                self._urls = gripe.url.UrlCollection(str(self), None)
+                self._urls.append(urls)
+            if isinstance(urls, gripe.url.UrlCollection):
+                self._urls = urls
+            if isinstance(urls, dict):
+                self._urls = gripe.url.UrlCollection(urls)
+        ret = gripe.url.UrlCollection(self.__class__.__name__)
+        if not hasattr(self, "_urls"):
+            self._urls = None
         for role in self.role_objects():
             if hasattr(role, "_urls"):
                 logger.info("urls: %s %s %s", self, role, type(role._urls))
-                ret.update(role._urls() if callable(role._urls) else role._urls)
+                ret.append(role._urls() if callable(role._urls) else role._urls)
             else:
                 assert 0, "Class %s must implement _urls as either a method or attribute" % role.__class__.__name__
+        return ret
 
     def has_role(self, roles):
         """
@@ -47,6 +60,8 @@ class HasRoles(object):
         myroles = self.roles()
         logger.info("has_role: %s & %s = %s", set(roles), myroles, set(roles) & myroles)
         return len(set(roles) & myroles) > 0
+
+_role_manager = None
 
 class AbstractRole(HasRoles):
     def rolename(self):
@@ -62,7 +77,8 @@ class AbstractRole(HasRoles):
         while roles:
             role = roles.pop()
             for rname in role.roles(explicit = True):
-                has_role = grit.Session.get_rolemanager().get_role(rname)
+                # has_role = grit.Session.get_rolemanager().get_role(rname)
+                has_role = _role_manager.get_role(rname)
                 if has_role and has_role not in ret:
                     ret.add(has_role)
                     roles.append(has_role)
@@ -72,10 +88,8 @@ class Role(AbstractRole):
     def __init__(self, role, has_roles, urls):
         self.role = role
         self._roles = has_roles
-        self._urls = []
-        for u in urls:
-            url = grit.Url()
-        self._urls = urls
+        logger.debug("Role.__init__(%s, %s, %s)", role, has_roles, urls)
+        self.urls(urls)
 
     def __str__(self):
         return self.role
@@ -94,7 +108,9 @@ class Role(AbstractRole):
 
 class RoleManager(object):
     def __init__(self):
+        global _role_manager
         self._roles = {}
+        _role_manager = self
         self.initialize()
 
     def add_role(self, role):
@@ -113,3 +129,5 @@ class RoleManager(object):
 if __name__ == "__main__":
     rolemanager = RoleManager()
     print rolemanager._roles
+    admin = rolemanager.get_role('admin')
+    print admin.urls()

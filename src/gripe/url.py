@@ -5,17 +5,24 @@ Created on 2013-04-23
 '''
 
 import operator
+import gripe
+
+logger = gripe.get_logger("gripe")
 
 class UrlCollectionElem(object):
     def __new__(cls, *args, **kwargs):
         if len(args) == 1 and isinstance(args[0], cls):
+            logger.debug("UrlCollectionElem: __new__ returns existing thing")
             return args[0]
         else:
+            logger.debug("UrlCollectionElem: __new__ builds new thing")
             ret = super(UrlCollectionElem, cls).__new__(cls)
             ret._collection = None
             ret._id = ret._label = ret._level = None
+            return ret
 
     def _initialize(self, id, label, level):
+        logger.debug("UrlCollectionElem._initialize(%s, %s, %s)", id, label, level)
         self._id = id
         self.label(label)
         self.level(level)
@@ -26,7 +33,7 @@ class UrlCollectionElem(object):
     def label(self, l = None):
         if l is not None:
             self._label = str(l)
-        return self._label
+        return self._label if self._label else self.id()
 
     def level(self, lvl = None):
         if lvl is not None:
@@ -49,8 +56,8 @@ class Url(UrlCollectionElem):
             self.url(d.get("url"))
         else:
             assert 1 <= len(args) < 4, "Cannot initialize Url with these args: %s" % args
-            self._initialize(args[0], args[2] if len(args) > 2 else None, int(args[3]) if (len(args) > 3) and args[3] else 10)
-            self.url(args[1] if len(args) > 1 else None)
+            self._initialize(args[0], args[1] if len(args) > 1 else None, int(args[3]) if (len(args) > 3) and args[3] else 10)
+            self.url(args[2] if len(args) > 2 else None)
 
     def url(self, u = None):
         if u is not None:
@@ -58,6 +65,9 @@ class Url(UrlCollectionElem):
         if self._url is None and self.collection() is not None:
             self._url = self.collection().uri_for(self.id)
         return self._url
+
+    def __repr__(self):
+        return '[url id="%s" href="%s" level="%s"]%s[/url]' % (self.id(), self.url(), self.level(), self.label())
 
 class UrlCollection(UrlCollectionElem, dict):
     def __init__(self, *args):
@@ -68,7 +78,7 @@ class UrlCollection(UrlCollectionElem, dict):
                 self._initialize(d.get("id"), d.get("label"), d.get("level"))
                 self.append(d.get("urls"))
             elif isinstance(args[0], basestring):
-                self._initialize(args[0], None)
+                self._initialize(args[0], None, 10)
             else:
                 assert 0, "Cannot initialize UrlCategory with %s <%s>" % (args[0], type(args[0]))
         else:
@@ -78,6 +88,7 @@ class UrlCollection(UrlCollectionElem, dict):
                 self.append(*args[3:])
 
     def append(self, *urls):
+        logger.debug("URLCollection[%s].append(%s)", self, urls)
         for u in urls:
             if isinstance(u, (list, tuple)):
                 self.append(*u)
@@ -92,10 +103,16 @@ class UrlCollection(UrlCollectionElem, dict):
             elif u is not None:
                 u = Url(u)
                 u.collection(self)
-                self[u.id] = u
+                self[u.id()] = u
 
     def urls(self):
-        return sorted(self.items(), key = operator.attrgetter("_level", "_id"))
+        return sorted([url for url in self.values() if isinstance(url, Url)], key = operator.attrgetter("_level", "_id"))
+
+    def collections(self):
+        return sorted([c for c in self.values() if isinstance(c, UrlCollection)], key = operator.attrgetter("_level", "_id"))
+
+    def elements(self):
+        return sorted(self.values, key = operator.attrgetter("_level", "_id"))
 
     def uri_factory(self, factory = None):
         if factory is not None:

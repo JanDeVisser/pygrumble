@@ -15,7 +15,12 @@ class Login(grit.ReqHandler):
     content_type = "text/html"
 
     def get_context(self, ctx):
-        ctx["url"].update(self.get_urls("reset-password", "signup"))
+        return ctx
+
+    def get_urls(self, urls):
+        urls.append("reset-password", "Reset Password", None, 10)
+        urls.append("signup", "Sign up", None, 20)
+        return urls
 
     def get(self):
         logger.debug("main::login.get")
@@ -57,7 +62,13 @@ class Logout(grit.ReqHandler):
             return None
 
     def get_context(self, ctx):
-        ctx["url"].update(self.get_urls("login", "reset-password", "signup"))
+        return ctx
+
+    def get_urls(self, urls):
+        urls.append("login", "Login", None, 10)
+        urls.append("reset-password", "Reset Password", None, 20)
+        urls.append("signup", "Sign up", None, 30)
+        return urls
 
     def get(self):
         logger.debug("main::logout.get")
@@ -76,7 +87,13 @@ class Signup(grit.ReqHandler):
     content_type = "text/html"
 
     def get_context(self, ctx):
-        ctx["url"].update(self.get_urls("login", "reset-password", "signup"))
+        return ctx
+
+    def get_urls(self, urls):
+        urls.append("login", "Login", None, 10)
+        urls.append("reset-password", "Reset Password", None, 20)
+        urls.append("signup", "Sign up", None, 30)
+        return urls
 
     def get(self):
         logger.debug("main::SignUp.get")

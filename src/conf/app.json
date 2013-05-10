@@ -26,7 +26,7 @@
     	},
         { 
         	"role": "user",
-        	"urls": [ { "label": "Logout", "url": "/logout", "level": 99 } ],
+        	"urls": [ { "id": "logout", "label": "Logout", "url": "/logout", "level": 99 } ],
         	"has_roles": []             
     	},
         {
@@ -35,7 +35,7 @@
     	},
         { 
         	"role": "admin",     
-        	"urls": [ { "label": "User Management", "url": "/users", "level": 10 } ],
+        	"urls": [ { "id": "usermgmt", "label": "User Management", "url": "/users", "level": 10 } ],
         	"has_roles": [ "moderator" ] 
     	}
     ],

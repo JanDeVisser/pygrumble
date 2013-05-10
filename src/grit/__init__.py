@@ -97,9 +97,12 @@ class SessionManager(object):
                 logger.info("Weeding UserData")
                 mm = UserData.modelmanager
                 cutoff = datetime.datetime.now() - datetime.timedelta(100)
-                result = mm.delete_query(None, { "last_access <= ", cutoff})
-                logger.info("Weeded %s cookies", result)
-                self._lastharvest = datetime.datetime.now()
+                q = grumble.Query(UserData)
+                q.filter("last_access <= ", cutoff)
+                with grumble.Tx.begin():
+                    result = q.delete()
+                    logger.info("Weeded %s cookies", result)
+                    self._lastharvest = datetime.datetime.now()
 
             try:
                 return self._queue.get(timeout = 1.0)
@@ -362,7 +365,7 @@ class Auth(object):
         return True
 
     def logged_in(self):
-        if self.user:
+        if self.session.user():
             logger.debug("Auth.logged_in: User present: %s", self.session.userid())
             return True
         logger.debug("Auth.logged_in: no user. Redirecting to /login")
@@ -510,39 +513,40 @@ class ReqHandler(webapp2.RequestHandler):
 #        return ctx
 #
     def _get_context(self, ctx = None):
-        ctx = {}
+        logger.debug("_get_context %s", ctx)
+        if ctx is None:
+            logger.debug("_get_context: ctx is None. Building new one")
+            ctx = {}
         ctx['app'] = gripe.Config.app.get("about", {})
         ctx['user'] = self.user
         ctx['session'] = self.session
         ctx['params'] = self.request.params
-        if 'url' not in ctx:
-            ctx["url"] = []
-        urls = self.user.urls() if self.user else None
-        if urls:
-            ctx['url'].extend(urls)
+        urls = ctx.get("urls")
+        if urls is None:
+            logger.debug("_get_context: urls is None. Building new collection")
+            urls = gripe.url.UrlCollection("root")
+        else:
+            logger.debug("_get_context: urls already present in context")
+        assert urls is not None, "Hrm. urls is still None"
+        urls.uri_factory(self)
+        if self.user is not None and hasattr(self.user, "urls"):
+            u = self.user.urls()
+            if u is not None:
+                if isinstance(u, dict):
+                    urls.update(u)
+                else:
+                    urls.append(u)
+        if hasattr(self, "urls"):
+            u = self.urls()
+            if u is not None:
+                if isinstance(u, dict):
+                    urls.update(u)
+                else:
+                    urls.append(u)
+        ctx["urls"] = urls
         if hasattr(self, "get_context") and callable(self.get_context):
             ctx = self.get_context(ctx)
         return ctx
-
-    def get_urls(self, *args):
-        urls = []
-        ret = {}
-
-        for u in args:
-            if isinstance(u, list) or isinstance(u, tuple):
-                urls.extend(u)
-            else:
-                urls.append(u)
-        for u in urls:
-            if isinstance(u, gripe.url.Url):
-                ret[u.id] = u
-            elif isinstance(u, basestring):
-                url = gripe.url.Url(u, self.uri_for(u))
-                ret[url.id] = url
-            else:
-                url = gripe.url.Url(u)
-                ret[url.id] = url
-        return ret
 
     def _get_template(self):
         ret = self.template \
