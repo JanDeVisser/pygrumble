@@ -11,8 +11,41 @@ import grit
 logger = gripe.get_logger("grit")
 
 class HasRoles(object):
-    def role_objects(self):
+    def role_objects(self, include_self = True):
         assert 0, "Abstract method HasRoles.role_objects must be implemented in %s" % self.__class__
+
+    def __str__(self):
+        return self.__id__()
+
+    def __repr__(self):
+        return self.__id__()
+
+    def __eq__(self, other):
+        return self.__id__() == other.__id__() if self.__class__ == other.__class__ else False
+
+    def __id__(self, id = None):
+        idattr = self._idattr if hasattr(self, "_idattr") else None
+        if id is not None and idattr is not None:
+            if hasattr(self, idattr) and callable(getattr(self, idattr)):
+                getattr(self, idattr)(id)
+            else:
+                setattr(self, idattr, id)             
+        if idattr is not None:
+            if not hasattr(self, idattr):
+                return None
+            elif callable(getattr(self, idattr)):
+                return getattr(self, idattr)()
+            else:
+                return getattr(self, idattr) 
+        else:
+            return str(hash(self))
+
+    def label(self, lbl = None):
+        if lbl is not None:
+            self._label = lbl
+        elif not hasattr(self, "_label"):
+            self._label = str(self)
+        return self._label
 
     def roles(self, explicit = False):
         """
@@ -29,24 +62,24 @@ class HasRoles(object):
                 assert 0, "Class %s must implement either _explicit_roles() or provide a _roles attribute" % self.__class__.__name__
 
     def urls(self, urls = None):
-        logger.debug("%s.urls(%s)", self, urls)
-        if urls is not None:
-            if isinstance(urls, (list, tuple)):
-                self._urls = gripe.url.UrlCollection(str(self), None)
-                self._urls.append(urls)
-            if isinstance(urls, gripe.url.UrlCollection):
-                self._urls = urls
-            if isinstance(urls, dict):
-                self._urls = gripe.url.UrlCollection(urls)
-        ret = gripe.url.UrlCollection(self.__class__.__name__)
         if not hasattr(self, "_urls"):
-            self._urls = None
-        for role in self.role_objects():
-            if hasattr(role, "_urls"):
-                logger.info("urls: %s %s %s", self, role, type(role._urls))
-                ret.append(role._urls() if callable(role._urls) else role._urls)
+            self._urls = gripe.url.UrlCollection(str(self), self.label())
+        if urls is not None:
+            self._urls.clear()
+            if isinstance(urls, (list, tuple)):
+                self._urls.append(urls)
+            elif isinstance(urls, gripe.url.UrlCollection):
+                self._urls.copy(urls)
+            elif isinstance(urls, dict):
+                if urls.get("urls") is not None:
+                    self._urls.append(urls["urls"])
             else:
-                assert 0, "Class %s must implement _urls as either a method or attribute" % role.__class__.__name__
+                assert 0, "[%s]%s: Cannot initialize urls with %s" % (self.__class__.__name__, self, urls)
+            logger.debug("%s._urls = %s (From %s)", self, self._urls, urls)
+        ret = gripe.url.UrlCollection(self._urls)
+        for role in self.role_objects(False):
+            ret.append(role._urls)
+        logger.debug("%s.urls() = %s", self, ret)
         return ret
 
     def has_role(self, roles):
@@ -64,6 +97,7 @@ class HasRoles(object):
 _role_manager = None
 
 class AbstractRole(HasRoles):
+    
     def rolename(self):
         """
             Interface method returning the role name of self. Implementations
@@ -85,26 +119,20 @@ class AbstractRole(HasRoles):
         return ret
 
 class Role(AbstractRole):
-    def __init__(self, role, has_roles, urls):
-        self.role = role
-        self._roles = has_roles
-        logger.debug("Role.__init__(%s, %s, %s)", role, has_roles, urls)
-        self.urls(urls)
+    _idattr = "_role"
 
-    def __str__(self):
-        return self.role
-
-    def __repr__(self):
-        return self.role
-
-    def __eq__(self, other):
-        return self.role == other.role if other.__class__ == Role else False
+    def __init__(self, role):
+        #self.add_role(Role(role.role, role.has_roles, role.urls))
+        self.__id__(role.role)
+        self.label(role.label)
+        self._roles = role.has_roles
+        self.urls(role.urls if role.urls is not None else {})
 
     def rolename(self):
         """
             Implementation of AbstractRole.rolename(). Returns the role attribute.
         """
-        return self.role
+        return self.__id__()
 
 class RoleManager(object):
     def __init__(self):
@@ -122,7 +150,7 @@ class RoleManager(object):
     def initialize(self):
         if gripe.Config.app and "roles" in gripe.Config.app:
             for role in gripe.Config.app.roles:
-                self.add_role(Role(role.role, role.has_roles, role.urls))
+                self.add_role(Role(role))
         else:
             logger.warn("No roles defined in app configuration")
 

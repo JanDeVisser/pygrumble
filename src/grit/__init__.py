@@ -29,11 +29,12 @@ import grumble
 
 logger = gripe.get_logger(__name__)
 
+
 class UserData(grumble.Model):
     _flat = True
     _audit = False
-    cookie = grumble.TextProperty(is_key = True)
-    last_access = grumble.DateTimeProperty(auto_now = True)
+    cookie = grumble.TextProperty(is_key=True)
+    last_access = grumble.DateTimeProperty(auto_now=True)
     userid = grumble.TextProperty()
 
 
@@ -57,7 +58,8 @@ class SessionData(dict):
 
     def valid(self):
         delta = datetime.datetime.now() - self._last_access
-        return ((delta.seconds < 7200) and (len(self) > 0)) or (delta.seconds < 60)
+        return (((delta.seconds < 7200) and (len(self) > 0)) or
+                    (delta.seconds < 60))
 
     def set_user(self, user):
         self._user = user
@@ -74,7 +76,7 @@ class SessionManager(object):
         self._sessions = {}
         self._queue = Queue.Queue()
         self._lock = threading.RLock()
-        self._thread = threading.Thread(target = SessionManager._monitor)
+        self._thread = threading.Thread(target=SessionManager._monitor)
         self._thread.setDaemon(True)
         atexit.register(SessionManager._exiting)
         self._lastharvest = None
@@ -315,8 +317,8 @@ class Session(object):
 class SessionBridge(object):
     """
         Bridge between a grit session and the sessions required by grumble.
-        Grumble only uses a userid and roles for authorization and audit 
-        purposes. The grit WSGIApplication instantiates this class and 
+        Grumble only uses a userid and roles for authorization and audit
+        purposes. The grit WSGIApplication instantiates this class and
         sets the instance as the bridge between the grit session associated with
         the running thread and grumble.
     """
@@ -530,19 +532,9 @@ class ReqHandler(webapp2.RequestHandler):
         assert urls is not None, "Hrm. urls is still None"
         urls.uri_factory(self)
         if self.user is not None and hasattr(self.user, "urls"):
-            u = self.user.urls()
-            if u is not None:
-                if isinstance(u, dict):
-                    urls.update(u)
-                else:
-                    urls.append(u)
+            urls.copy(self.user.urls())
         if hasattr(self, "urls"):
-            u = self.urls()
-            if u is not None:
-                if isinstance(u, dict):
-                    urls.update(u)
-                else:
-                    urls.append(u)
+            urls.copy(self.user.urls())
         ctx["urls"] = urls
         if hasattr(self, "get_context") and callable(self.get_context):
             ctx = self.get_context(ctx)

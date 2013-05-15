@@ -14,26 +14,7 @@ __date__ = "$3-Mar-2013 10:11:27 PM$"
 logger = gripe.get_logger("grit")
 
 class AbstractAuthObject(grit.role.HasRoles):
-    def __str__(self):
-        return self.__id__()
-
-    def __repr__(self):
-        return self.__id__()
-
-    def __eq__(self, other):
-        return self.__id__() == other.__id__() if self.__class__ == other.__call__ else False
-
-    def __id__(self):
-        if hasattr(self, "uid") and callable(self.uid):
-            return self.uid()
-        elif hasattr(self, "gid") and callable(self.gid):
-            return self.gid()
-        elif hasattr(self, "_id"):
-            return self._id
-        else:
-            return str(hash(self))
-
-    def role_objects(self):
+    def role_objects(self, include_self = True):
         s = set()
         for rname in self.roles(explicit = True):
             role = grit.Session.get_rolemanager().get_role(rname)
@@ -45,6 +26,8 @@ class AbstractAuthObject(grit.role.HasRoles):
 
 
 class AbstractUserGroup(AbstractAuthObject):
+    _idattr = "gid"
+    
     def gid(self):
         assert 0, "Abstract method AbstractUserGroup.gid() must be implemented in class %s" % self.__class__
 
@@ -66,13 +49,15 @@ class UserGroup(AbstractUserGroup):
 
 
 class AbstractUser(AbstractAuthObject):
+    _idattr = "uid"
+    
     def uid(self):
         assert 0, "Abstract method AbstractUser.uid() must be implemented in class %s" % self.__class__
 
     def groups(self):
         assert 0, "Abstract method AbstractUser.groups() must be implemented in class %s" % self.__class__
 
-    def role_objects(self):
+    def role_objects(self, include_self = True):
         s = super(AbstractUser, self).role_objects()
         for g in self.groups():
             s |= g.role_objects()

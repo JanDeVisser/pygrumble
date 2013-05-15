@@ -18,23 +18,28 @@
     "roles": [
         { 
         	"role": "athlete",
+        	"label": "Athlete",
         	"has_roles": []              
     	},
         {
         	"role": "coach",
+        	"label": "Coach",
         	"has_roles": []
     	},
         { 
         	"role": "user",
+        	"label": "SweatTrails Member",
         	"urls": [ { "id": "logout", "label": "Logout", "url": "/logout", "level": 99 } ],
         	"has_roles": []             
     	},
         {
         	"role": "moderator", 
+        	"label": "Moderator",
         	"has_roles": [ "user" ]      
     	},
         { 
         	"role": "admin",     
+        	"label": "Administrator",
         	"urls": [ { "id": "usermgmt", "label": "User Management", "url": "/users", "level": 10 } ],
         	"has_roles": [ "moderator" ] 
     	}

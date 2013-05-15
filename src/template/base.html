@@ -89,19 +89,28 @@
  		<div id="sidebarwrapper" class="sidebarwrapper">
 			<div id="sidebar" class="sidebar">
 				{% block sidebar %}
-					URLs: {{ urls|e }} {{ urls.collections() }}
-					<ul>
-						{% for u in urls.urls() %}
-                    		<li><a class="whitelink" href="{{u.url()|e}}">{{u.label()}}</a></li>
-						{% endfor %}
-					</ul>
+					URLs: {{ urls|e }}
+					<p/>
+					{% for u in urls.urls() %}
+						{% if loop.first %}
+							<ul>
+						{% endif %}
+                   		<li><a class="whitelink" href="{{u.url()|e}}">{{u.label()}}</a></li>
+						{% if loop.last %}
+							</ul>
+						{% endif %}
+					{% endfor %}
 					{% for c in urls.collections() %}
-						{{c.label()}}
-						<ul>
-							{% for u in c.urls() %}
-	                    		<li><a class="whitelink" href="{{u.url()|e}}">{{u.label()}}</a></li>
-							{% endfor %}
-						</ul>
+						{% for u in c.urls() %}
+							{% if loop.first %}
+								{{c.label()}}
+								<ul>
+							{% endif %}
+                    		<li><a class="whitelink" href="{{u.url()|e}}">{{u.label()}}</a></li>
+							{% if loop.last %}
+								</ul>
+							{% endif %}
+						{% endfor %}
 					{% endfor %}						
 				{% endblock sidebar %}
 			</div>

@@ -9,16 +9,15 @@ import os.path
 #    sys.path.insert(0, os.path.dirname(__file__))
 # print sys.path
 
-import grit
-
 if __name__ != '__main__':
     import autoreload
-    autoreload.start(interval = 1.0)
+    autoreload.start(interval=1.0)
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/app.json'))
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/database.json'))
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/logging.json'))
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/model.json'))
 
+import grit
 app = grit.app
 
 if __name__ == '__main__':

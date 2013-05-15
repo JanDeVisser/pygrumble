@@ -64,8 +64,11 @@ class ManageUsers(grit.handlers.PageHandler):
     def get_template(self):
         return "user" if self.key() else "users"
 
-    def get(self, key = None):
-        return super(ManageUsers, self).get(key, "user")
+    def get(self, key = None, kind = "user"):
+        try:
+            return super(ManageUsers, self).get(key = key, kind = "user")
+        except:
+            logger.exception("exception in get()")
 
 class JSONUser(grit.handlers.JSONHandler):
     def _set_password(self, user):
