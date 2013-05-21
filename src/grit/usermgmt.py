@@ -12,8 +12,6 @@ import grit
 logger = gripe.get_logger("grit")
 
 class Login(grit.ReqHandler):
-    content_type = "text/html"
-
     def get_context(self, ctx):
         return ctx
 
@@ -46,6 +44,7 @@ class Login(grit.ReqHandler):
         if self.session.login(userid, password, remember_me):
             logger.debug("Login OK")
             if not json_request:
+                logger.debug("Sending redirect to %s", str(url))
                 self.response.status = "302 Moved Temporarily"
                 self.response.headers["Location"] = str(url)
         else:
@@ -53,8 +52,6 @@ class Login(grit.ReqHandler):
             self.response.status_int = 401
 
 class Logout(grit.ReqHandler):
-    content_type = "text/html"
-
     def get_template(self):
         if gripe.Config.app and gripe.Config.app.logout and gripe.Config.app.logout.template:
             return gripe.Config.app.logout.template
@@ -84,8 +81,6 @@ class Logout(grit.ReqHandler):
         self.get()
 
 class Signup(grit.ReqHandler):
-    content_type = "text/html"
-
     def get_context(self, ctx):
         return ctx
 
@@ -107,7 +102,6 @@ class RequestPasswordReset(grit.ReqHandler):
     '''
     classdocs
     '''
-    content_type = "text/html"
 
     def get(self):
         logger.debug("ResetPassword.get")
@@ -128,7 +122,6 @@ class ConfirmPasswordReset(grit.ReqHandler):
     '''
     classdocs
     '''
-    content_type = "text/html"
 
     def get(self, code = None):
         if not code:

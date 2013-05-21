@@ -128,35 +128,39 @@ com.sweattrails.api.ActionContainer.prototype.getActiveActions = function() {
 
 com.sweattrails.api.ActionContainer.prototype.render = function() {
 	a = this.getActiveActions()
+
+	this.actionbar = document.createElement("div")
+    this.actionsdiv = document.createElement("div")
     if (a.length > 0) {
-		this.actionbar = document.createElement("div")
-	    this.actionsdiv = document.createElement("div")
-	    this.actionsdiv.className = "buttonbar-" + this.location
-		this.actionsdiv.id = this.id + "-actionbar"
-	    this.actionbar.appendChild(this.actionsdiv)
-	    this.progressbar = document.createElement("div")
-	    this.progressbar.className = "buttonbar-" + this.location
-		this.progressbar.id = this.id + "-progressbar"
-	    this.progressbar.hidden = true
-	    this.throbber = document.createElement("img")
-	    this.throbber.id = this.progressbar.id + "-throbber"
-	    this.throbber.src = "/image/throbber.gif"
-	    this.throbber.height = this.throbber.width = 32
-	    this.progressbar.appendChild(this.throbber)
-	    this.progressmsg = document.createElement("span")
-	    this.progressmsg.id = this.progressbar.id + "-message"
-	    this.progressbar.appendChild(this.progressmsg)
-	    this.actionbar.appendChild(this.progressbar)
-		this.owner.container.appendChild(this.actionbar)
-		for (var aix = 0; aix < a.length; aix++) {
-		    if (aix > 0) {
-				var span = document.createElement("span")
-				span.innerHTML = " | "
-				this.actionsdiv.appendChild(span)
-		    }
-		    a[aix].render(this.actionsdiv)
-		}
+    	this.actionsdiv.className = "buttonbar-" + this.location
+    } else {
+    	this.actionsdiv.className = "buttonbar-empty"
     }
+	this.actionsdiv.id = this.id + "-actionbar"
+    this.actionbar.appendChild(this.actionsdiv)
+    this.progressbar = document.createElement("div")
+    this.progressbar.className = "buttonbar-" + this.location
+	this.progressbar.id = this.id + "-progressbar"
+    this.progressbar.hidden = true
+    this.throbber = document.createElement("img")
+    this.throbber.id = this.progressbar.id + "-throbber"
+    this.throbber.src = "/image/throbber.gif"
+    this.throbber.height = this.throbber.width = 32
+    this.progressbar.appendChild(this.throbber)
+    this.progressmsg = document.createElement("span")
+    this.progressmsg.id = this.progressbar.id + "-message"
+    this.progressbar.appendChild(this.progressmsg)
+    this.actionbar.appendChild(this.progressbar)
+	this.owner.container.appendChild(this.actionbar)
+
+	for (var aix = 0; aix < a.length; aix++) {
+	    if (aix > 0) {
+			var span = document.createElement("span")
+			span.innerHTML = " | "
+			this.actionsdiv.appendChild(span)
+	    }
+	    a[aix].render(this.actionsdiv)
+	}
 }
 
 com.sweattrails.api.ActionContainer.prototype.progressOff = function() {
@@ -165,6 +169,7 @@ com.sweattrails.api.ActionContainer.prototype.progressOff = function() {
     this.progressbar.className = "progressmessage"
     this.throbber.src = "/image/throbber.gif"
     this.progressmsg.innerHTML = ""
+    return true
 }
 
 
@@ -178,6 +183,7 @@ com.sweattrails.api.ActionContainer.prototype.progress = function(msg) {
     } else {
         this.progressOff()
     }
+    return true
 }
 
 com.sweattrails.api.ActionContainer.prototype.error = function(msg) {
@@ -190,6 +196,7 @@ com.sweattrails.api.ActionContainer.prototype.error = function(msg) {
     } else {
         this.progressOff()
     }
+    return true
 }
 
 com.sweattrails.api.ActionContainer.prototype.onDataSubmitted = function() {

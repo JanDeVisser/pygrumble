@@ -24,11 +24,16 @@ com.sweattrails.api.getHttpRequest = function(jsonRequest) {
     httpRequest.onreadystatechange = function() {
         if (this.readyState == 4) {
             if ((this.status >= 200 && this.status <= 200) || this.status == 304) {
-            	var object
+            	console.log("-- Received response. Status " + this.status)
+            	location = this.getResponseHeader("Location")
+            	location && console.log(" -- Location: " + location)
+            	var object = {}
                 if (this.responseText != "") {
-                	object = JSON.parse(this.responseText)
-                } else {
-                	object = {}
+                	try {
+                		object = JSON.parse(this.responseText)
+                	} catch (e) {
+                		// Ignored
+                	}
             	}
                 var posted = this.request.post
                 this.request.post = false
@@ -75,11 +80,11 @@ com.sweattrails.api.JSONRequest.prototype.execute = function() {
         for (p in this.params) {
             parameters.append(p, this.params[p])
         }
-        console.log(((this.post) ? "POST " : "GET " ) + this.url)
+        console.log(((this.post) ? "POST " : "GET " ) + this.url + "  ?" + parameters)
         httpRequest.open((this.post) ? "POST" : "GET", this.url, this.async);
         httpRequest.send(parameters)
     } else {
-        console.log(((this.post) ? "POST " : "GET " ) + this.url)
+        console.log(((this.post) ? "POST " : "GET " ) + this.url + " body")
         httpRequest.open((this.post) ? "POST" : "GET", this.url, this.async);
         httpRequest.setRequestHeader("ST-JSON-Request", "true")
         httpRequest.send(this.body)
@@ -294,6 +299,7 @@ com.sweattrails.api.JSONDataSource.prototype.addObject = function(obj, prefix) {
 }
 
 com.sweattrails.api.JSONDataSource.prototype.setParameters = function() {
+	console.log("setParameters - json: " + this.submitAsJSON + " object " + JSON.stringify(this.object))
     if (this.submitAsJSON) {
         this.request.body = JSON.stringify(this.object)
     } else {
@@ -320,7 +326,9 @@ com.sweattrails.api.JSONDataSourceBuilder.prototype.build = function(elem) {
     var ds = new com.sweattrails.api.JSONDataSource(elem.getAttribute("url"))
     this.submitAsJSON = true
     if (elem.getAttribute("submit")) {
-        this.submitAsJSON = elem.getAttribute("submit") == "json"
+    	console.log("submit = " + elem.getAttribute("submit"))
+        ds.submitAsJSON = elem.getAttribute("submit") == "json"
+    	console.log("json: " + ds.submitAsJSON)
     }
     var params = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "parameter")
     for (var ix = 0; ix < params.length; ix++) {

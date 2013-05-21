@@ -91,6 +91,13 @@ div.buttonbar-footer {
     margin-bottom: 5px;
 }
 
+div.buttonbar-empty {
+    padding-top: 5px;
+    padding-left: 2px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
 div.menubar {
     border-bottom: thin solid black;
     padding-bottom: 5px;

@@ -114,8 +114,8 @@ com.sweattrails.api.Form.prototype.newTR = function() {
 }
 
 com.sweattrails.api.Form.prototype.render = function() {
-    console.log("Form[" + this.id + "].render()")
-    if (!this.container || !this.container.hidden) {
+    console.log("Form[" + this.id + "].render() " + this.container.className)
+    if (!this.container || !this.container.hidden || (this.container.className == "tabpage")) {
     	console.log("Container visible")
 	    if ((arguments.length > 0) && arguments[0]) {
 	        this.mode = arguments[0]
@@ -212,10 +212,6 @@ com.sweattrails.api.Form.prototype.popup = function(mode) {
     this.container.hidden = false
     this.ispopup = true
     this.render(mode)
-    /*console.log("-- divwidth -- " + this.container.clientWidth)
-    console.log("-- left -- " + this.container.offsetParent.offsetLeft)
-    console.log("-- left + divwidth -- " + (this.container.offsetParent.offsetLeft + this.container.clientWidth))
-    console.log("-- winwidth --" + window.innerWidth)*/
 }
 
 com.sweattrails.api.Form.prototype.close = function() {
@@ -244,7 +240,11 @@ com.sweattrails.api.Form.prototype.onDataSubmitted = function() {
 com.sweattrails.api.Form.prototype.onDataError = function(errorinfo) {
 	this.header.onDataError(errorinfo)
 	this.footer.onDataError(errorinfo)
-    this.onerror && this.onerror(errorinfo) || this.error("Error saving: " + errorinfo)
+	handled = false
+    if (this.onerror) {
+    	handled = this.onerror(errorinfo)
+    }
+	if (!handled) this.error("Error saving: " + errorinfo)
 }
 
 com.sweattrails.api.Form.prototype.onDataEnd = function() {
@@ -280,6 +280,9 @@ com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
     }
     if (elem.getAttribute("onsubmitted")) {
         form.onsubmitted = getfunc(elem.getAttribute("onsubmitted"))
+    }
+    if (elem.getAttribute("onerror")) {
+        form.onerror = getfunc(elem.getAttribute("onerror"))
     }
     if (elem.getAttribute("class")) {
     	form.className = elem.getAttribute("class")

@@ -653,6 +653,7 @@ def handle_request(request, *args, **kwargs):
     elif isinstance(rv, tuple):
         rv = webapp2.Response(*rv)
     request.response = rv
+    logger.debug("Pipeline completed with response status %s", rv.status)
 
 def handle_404(request, response, exception):
     # logger.exception(exception)

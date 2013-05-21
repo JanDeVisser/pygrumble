@@ -7,12 +7,11 @@ Created on 2013-04-23
 import operator
 import gripe
 
-logger = gripe.get_logger("grit")
+logger = gripe.get_logger("gripe")
 
 class UrlCollectionElem(object):
 
     def _initialize(self, ident, label, level):
-        logger.debug("UrlCollectionElem._initialize(%s, %s, %s)", ident, label, level)
         self._ident = self._label = self._level = None
         self._collection = None
         self._ident = ident
@@ -94,14 +93,12 @@ class UrlCollection(UrlCollectionElem, dict):
                 self.append(*args[3:])
 
     def copy(self, other):
-        logger.debug("URLCollection[%s].copy(%s)", self, other)
         for u in other.urls():
             self.append(Url(u))
         for c in other.collections():
             self.append(UrlCollection(c))        
     
     def append(self, *urls):
-        logger.debug("URLCollection[%s].append(%s)", self, urls)
         for u in urls:
             if isinstance(u, (list, tuple)):
                 self.append(*u)

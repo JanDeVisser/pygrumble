@@ -189,8 +189,8 @@ com.sweattrails.api.internal.Tab.prototype.unselect = function() {
 
 com.sweattrails.api.TabManager = function() {
     if (com.sweattrails.api.tabManager != null) {
-	alert("TabManager is a singleton!")
-	return null
+    	alert("TabManager is a singleton!")
+    	return null
     }
     this.id = "TabManager"
     this.type = "manager"
@@ -204,11 +204,10 @@ com.sweattrails.api.TabManager = function() {
 
 com.sweattrails.api.TabManager.prototype.build = function() {
     this.pagebox = document.getElementById("pagebox")
-    $$.log(this, "Pagebox is " + ((this.pagebox) ? "NOT " : "") + "null")
-    var tb = document.getElementsByTagNameNS(com.sweattrails.api.xmlns, "tabs")
+    if (!this.pagebox) return
+    var tb = this.pagebox.getElementsByTagNameNS(com.sweattrails.api.xmlns, "tabs")
     if (tb && (tb.length > 0)) {
         tabs_elem = tb[0]
-        $$.log(this, "Found tabs element")
         var tabs = getChildrenByTagNameNS(tabs_elem, com.sweattrails.api.xmlns, "tab")
         $$.log(this, "Found " + tabs.length + " tabs")
         for (var tabix = 0; tabix < tabs.length; tabix++) {
@@ -217,8 +216,6 @@ com.sweattrails.api.TabManager.prototype.build = function() {
             this.firsttab = this.firsttab || tab
             tabs_elem.removeChild(tab_elem)
         }
-    } else {
-        $$.log(this, "*** TABS ELEMENT NOT FOUND ***")
     }
 }
 
@@ -375,6 +372,16 @@ com.sweattrails.api.renderObject = function(elem, content) {
     }
 }
 
+/*
+ * MAYBE MOVE ME
+ */
+
+function login_error(errorinfo) {
+	if (errorinfo != "401") return false
+	this.header.error("Mistyped email or password")
+	this.footer.error()
+	return true
+}
 
 
 
