@@ -44,7 +44,7 @@ com.sweattrails.api.getHttpRequest = function(jsonRequest) {
                 this.request.semaphore = 0
                 this.request.log("response processed")
             } else {
-            	this.request.log("-- XMLHttp Error")
+            	this.request.log("  *** XMLHttp Error *** " + this.status)
                 if (this.request.onError != null) {
                     this.request.onError(this.status)
                 } else {
@@ -70,17 +70,14 @@ com.sweattrails.api.JSONRequest.prototype.execute = function() {
     if (this.post == null) this.post = false
     if (!this.body) {
         var parameters = new FormData()
-        var pstr = ""
         for (p in this.params) {
             parameters.append(p, this.params[p])
-            pstr += (pstr == "") ? "?" : "&"
-            pstr += p + "=" + this.params[p]
         }
-        this.log(((this.post) ? "POST " : "GET " ) + this.url + " " + pstr)
+        this.log(((this.post) ? "POST " : "GET " ) + this.url + " as form data with " + this.params.length + " parameters")
         httpRequest.open((this.post) ? "POST" : "GET", this.url, this.async);
         httpRequest.send(parameters)
     } else {
-        this.log(((this.post) ? "POST " : "GET " ) + this.url + "\n" + body)
+        this.log(((this.post) ? "POST " : "GET " ) + this.url + " as JSON data with body\n" + body)
         httpRequest.open((this.post) ? "POST" : "GET", this.url, this.async);
         httpRequest.setRequestHeader("ST-JSON-Request", "true")
         httpRequest.send(this.body)
