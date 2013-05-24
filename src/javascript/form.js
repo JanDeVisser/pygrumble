@@ -106,7 +106,8 @@ com.sweattrails.api.Form.prototype.newTR = function() {
     if (!this.table) {
         this.table = document.createElement("table")
 		this.table.width = "100%"
-        this.container.appendChild(this.table)
+		p = (this.form) ? this.form : this.container
+        p.appendChild(this.table)
     }
     var tr = document.createElement("tr")
     this.table.appendChild(tr)
@@ -142,12 +143,24 @@ com.sweattrails.api.Form.prototype.render = function() {
 com.sweattrails.api.Form.prototype.renderData = function(obj) {
     this.header.erase()
     this.footer.erase()
+    if (this.form) {
+    	this.container.removeChild(this.form)
+    	this.form = null
+    	this.table = null
+    }
     if (this.table) {
 		this.container.removeChild(this.table)
 		this.table = null
     }
     this.header.render()
     this.renderedFields = []
+    if (this.type == "form") {
+        this.form = document.createElement("form")
+		this.form.name = "form-" + this.id
+		this.form.method = this.method
+		this.form.action = this.action
+        this.container.appendChild(this.form)    	
+    }
     for (var ix in this.fields) {
     	var f = this.fields[ix]
         f.element = null
@@ -187,7 +200,13 @@ com.sweattrails.api.Form.prototype.submit = function() {
     } else {
         this.applyData()
         this.progress("Saving ...")
-        this.datasource.submit()
+        console.log("Submitting form " + this.id)
+        if (this.form) {
+        	console.log("----")
+        	this.form.submit()
+        } else {
+        	this.datasource.submit()
+        }
     }
 }
 
@@ -272,6 +291,25 @@ com.sweattrails.api.FormBuilder.prototype.process = function(f) {
 }
 
 com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
+	form.type = 'json'
+	if (elem.getAttribute("type")) {
+		form.type = elem.getAttribute("type")
+		if ("json;form".indexOf(form.type) < 0) {
+			console.log("Invalid form type " + form.type + " for form " + form.id)
+			form.type = "json"
+		}
+		if (form.type == "form") {
+			form.action = elem.getAttribute("action")
+			if (!form.action) {
+				console.log("Missing form action for form " + form.id)
+				form.type = "json"	
+			}
+			form.method = "POST"
+			if (elem.getAttribute("method")) {
+				form.method = elem.getAttribute("method")
+			}
+		}
+	}
     if (elem.getAttribute("mode")) {
         form.init_mode = elem.getAttribute("mode")
     }
@@ -319,7 +357,9 @@ com.sweattrails.api.internal.fieldtypes = {}
 com.sweattrails.api.FormField = function(form, f) {
     this.hidden = false
     if (f) {
-		this.id = f.getAttribute("id")
+        this.type = "formfield"
+		this.id = f.getAttribute("id") || f.getAttribute("property")
+		$$.register(this)
 		this.modes = f.getAttribute("mode")
 		this.readonly = f.getAttribute("readonly") == "true"
 	    this.bridge = new com.sweattrails.api.internal.DataBridge()
@@ -351,7 +391,7 @@ com.sweattrails.api.FormField = function(form, f) {
 com.sweattrails.api.FormField.prototype.setType = function(type, elem) {
     type = type || "text"
     var factory = com.sweattrails.api.internal.fieldtypes[type] || com.sweattrails.api.internal.fieldtypes.text
-    $$.log(this, "typeof: " + typeof(factory))
+    $$.log(this, "typeof: " + type)
     this.impl = new factory(this, elem)
     this.impl.field = this
 }

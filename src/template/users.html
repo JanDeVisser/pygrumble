@@ -1,13 +1,15 @@
 {% extends "base.html" %}
 
 {% block imports %}
-<script src="/js/users.js" type="text/javascript"></script>
+<!-- <script src="/js/users.js" type="text/javascript"></script> -->
 {% endblock %}
 
 {% block tabs %}
 
 <st:tab code="users" label="Users">
-    <st:table name="users" url="/json/user">
+    <st:table name="users" url="/json/user" keyname="email" valuename="display_name">
+    	<st:value text="Jan de Visser" key="jan@de-visser.net"/>
+    	<st:value text="Tim de Visser" key="tim@de-visser.net"/>
         <st:header>
             <st:action label="New" action="new"/>
         </st:header>
@@ -22,6 +24,7 @@
     </st:table>
 </st:tab>
 
+<!--
 <st:tab code="groups" label="Groups">
     <st:table name="groups" url="/json/usergroup">
         <st:header>
@@ -52,6 +55,7 @@
         </st:dataform>
     </st:table>
 </st:tab>
+-->
 
 {% endblock tabs %}
 

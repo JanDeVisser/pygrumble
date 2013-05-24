@@ -86,7 +86,7 @@ com.sweattrails.api.Column.prototype.setProperty = function(prop) {
 
 com.sweattrails.api.Column.prototype.setFunction = function(func) {
     if (typeof(func) == "function") {
-	this.bridge.get = func
+    	this.bridge.get = func
     } else {
         this.bridge.get = getfunc(func) || new Function("data", func)
     }
@@ -166,6 +166,7 @@ com.sweattrails.api.Table.prototype.render = function() {
 }
 
 com.sweattrails.api.Table.prototype.onData = function(data) {
+	$$.log(this, "Table.onData")
     this.onrender && this.onrender(data)
     this.header.erase()
     this.footer.erase()
@@ -196,6 +197,7 @@ com.sweattrails.api.Table.prototype.onData = function(data) {
 }
 
 com.sweattrails.api.Table.prototype.noData = function() {
+	$$.log(this, "Table.noData")
     var emptyrow = document.createElement("tr")
     emptyrow.id = this.id + "-emptyrow"
     this.table.appendChild(emptyrow)
@@ -208,6 +210,7 @@ com.sweattrails.api.Table.prototype.noData = function() {
 
 com.sweattrails.api.Table.prototype.renderData = function(obj) {
     if (obj == null) return
+	$$.log(this, "Table.renderData")
     var tr = document.createElement("tr")
     tr.style.backgroundColor = this.rowcolor
     if (this.rowcolor == 'white') {
@@ -239,7 +242,6 @@ com.sweattrails.api.Table.prototype.renderData = function(obj) {
             }
         }
         data = data || "&#160;"
-        console.log("column: " + coldef.label + " data: " + data)
         if ((typeof(data) == "string") || (typeof(data) == 'number')) {
             td.innerHTML = data
         } else if (typeof(data) == "object") {
@@ -251,11 +253,13 @@ com.sweattrails.api.Table.prototype.renderData = function(obj) {
 }
 
 com.sweattrails.api.Table.prototype.onDataEnd = function() {
+	$$.log(this, "Table.onDataEnd")
     this.footer.render()
     this.onrendered && this.onrendered()
 }
 
 com.sweattrails.api.Table.prototype.openForm = function(object) {
+	$$.log(this, "Table.openForm")
     if (this.form && !this.form.ispopup) {
         this.data = object
         this.form.popup((object == null) ? com.sweattrails.api.MODE_NEW : com.sweattrails.api.MODE_VIEW)
@@ -263,6 +267,7 @@ com.sweattrails.api.Table.prototype.openForm = function(object) {
 }
 
 com.sweattrails.api.Table.prototype.reset = function(data) {
+	$$.log(this, "Table.reset")
     this.datasource.reset(data)
     this.render()
 }
@@ -277,11 +282,13 @@ com.sweattrails.api.Table.prototype.submitProxyData = function(data) {
 }
 
 com.sweattrails.api.Table.prototype.onDataSubmitted = function() {
+	$$.log(this, "Table.onDataSubmitted")
     this.form && this.form.ispopup && this.form.onDataSubmitted()
     this.onsubmitted && this.onsubmitted()
 }
 
 com.sweattrails.api.Table.prototype.onDataError = function(errorinfo) {
+	$$.log(this, "Table.onDataError")
     this.form && this.form.ispopup && this.form.onDataError(errorinfo)
     this.onerror && this.onerror(errorinfo)
 }

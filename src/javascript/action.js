@@ -20,6 +20,7 @@ com.sweattrails.api.internal.SaveAction = function(elem) {
     }
     if (elem.getAttribute("redirect")) {
         var destination = elem.getAttribute("redirect")
+        console.log("SaveAction.redirect: " + destination)
         this.onsubmitted = function() { document.location = destination }
     }
     this.id = "save"
@@ -256,6 +257,7 @@ com.sweattrails.api.Action.prototype.isActive = function() {
 }
 
 com.sweattrails.api.Action.prototype.doRedirect = function(redirect) {
+	console.log("Action::doRedirect: " + redirect)
 	document.location = redirect
 }
 

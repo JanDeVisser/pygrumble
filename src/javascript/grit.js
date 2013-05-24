@@ -92,9 +92,13 @@ com.sweattrails.api.Manager.prototype.process = function() {
 
 com.sweattrails.api.Manager.prototype.run = function() {
     this.dispatch("load")
+    this.log(this, "Loaded")
     this.dispatch("build")
+    this.log(this, "Built")
     this.process()
+    this.log(this, "Processed")
     this.dispatch("start")
+    this.log(this, "Started")
 }
 
 com.sweattrails.api.Manager.prototype.render = function(id) {
@@ -311,7 +315,7 @@ com.sweattrails.api.internal.DataBridge = function() {
 com.sweattrails.api.internal.DataBridge.prototype.setValue = function(object, value) {
     var s = this.set || this.get
     if (typeof(s) == "function") {
-	s(object, value)
+    	s(object, value)
     } else if (s) {
         var p = s
         var o = object
@@ -323,7 +327,7 @@ com.sweattrails.api.internal.DataBridge.prototype.setValue = function(object, va
             }
             p = p.substring(dotix + 1)
         }
-	if (o) o[p] = value
+        if (o) o[p] = value
     }
 }
 
@@ -331,7 +335,7 @@ com.sweattrails.api.internal.DataBridge.prototype.setValue = function(object, va
 com.sweattrails.api.internal.DataBridge.prototype.getValue = function(object, context) {
     var ret = null
     if (typeof(this.get) == "function") {
-	ret = this.get(object, context)
+    	ret = this.get(object, context)
     } else if (this.get != null) {
         var p = this.get
         var o = object
@@ -339,7 +343,7 @@ com.sweattrails.api.internal.DataBridge.prototype.getValue = function(object, co
             o = o && o[p.substring(0, dotix)]
             p = p.substring(dotix + 1)
         }
-	ret = o && o[p]
+        ret = o && o[p]
     }
     return ret
 }

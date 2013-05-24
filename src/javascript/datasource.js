@@ -23,10 +23,8 @@ com.sweattrails.api.getHttpRequest = function(jsonRequest) {
     httpRequest.request = jsonRequest
     httpRequest.onreadystatechange = function() {
         if (this.readyState == 4) {
+        	this.request.log("Received response. Status " + this.status)
             if ((this.status >= 200 && this.status <= 200) || this.status == 304) {
-            	console.log("-- Received response. Status " + this.status)
-            	location = this.getResponseHeader("Location")
-            	location && console.log(" -- Location: " + location)
             	var object = {}
                 if (this.responseText != "") {
                 	try {
@@ -44,22 +42,16 @@ com.sweattrails.api.getHttpRequest = function(jsonRequest) {
                     this.request.onSubmitted()
                 }
                 this.request.semaphore = 0
-            } else if ([301, 302, 303, 307, 308].indexOf(this.status) >= 0) {
-                this.request.post = false
-                this.request.object = null
-                this.request.params = []
-                this.request.onRedirect(this.status, this.getResponseHeader("Location"))
-                if (posted && this.request.onSubmitted) {
-                    this.request.onSubmitted()
-                }
-                this.request.semaphore = 0            	
+                this.request.log("response processed")
             } else {
+            	this.request.log("-- XMLHttp Error")
                 if (this.request.onError != null) {
                     this.request.onError(this.status)
                 } else {
                     alert("XMLHttpRequest for " + this.request.url + " returned " + this.status)
                 }
                 this.request.semaphore = this.status
+                this.request.log("Error processed")
             }
         }
     }
@@ -73,18 +65,22 @@ com.sweattrails.api.JSONRequest.prototype.execute = function() {
     }
 
     this.semaphore = 1
-    if (this.async == null) this.async = true
+    if (this.datasource && ("async" in this.datasource)) this.async = this.datasource.async
+    if (!("async" in this)) this.async = true
     if (this.post == null) this.post = false
     if (!this.body) {
         var parameters = new FormData()
+        var pstr = ""
         for (p in this.params) {
             parameters.append(p, this.params[p])
+            pstr += (pstr == "") ? "?" : "&"
+            pstr += p + "=" + this.params[p]
         }
-        console.log(((this.post) ? "POST " : "GET " ) + this.url + "  ?" + parameters)
+        this.log(((this.post) ? "POST " : "GET " ) + this.url + " " + pstr)
         httpRequest.open((this.post) ? "POST" : "GET", this.url, this.async);
         httpRequest.send(parameters)
     } else {
-        console.log(((this.post) ? "POST " : "GET " ) + this.url + " body")
+        this.log(((this.post) ? "POST " : "GET " ) + this.url + "\n" + body)
         httpRequest.open((this.post) ? "POST" : "GET", this.url, this.async);
         httpRequest.setRequestHeader("ST-JSON-Request", "true")
         httpRequest.send(this.body)
@@ -105,24 +101,17 @@ com.sweattrails.api.JSONRequest.prototype.onSubmitted = function() {
     }
 }
 
-com.sweattrails.api.JSONRequest.prototype.onRedirect = function(code, where) {
-    console.log("Redirect " + code + " to " + where)
-    this.post = true
-    if (this.datasource) {
-    	if (this.datasource.onRedirect) {
-    		console.log("Calling onRedirected on datasource")
-    		this.datasource.onRedirect(code, where)
-    	}
+com.sweattrails.api.JSONRequest.prototype.onError = function(code) {
+    this.log("HTTP Error " + code)
+    this.post = false
+    if (this.datasource && this.datasource.onError) {
+		this.log("Calling onError on datasource")
+    	this.datasource.onError(code)
     }
 }
 
-com.sweattrails.api.JSONRequest.prototype.onError = function(code) {
-    console.log("HTTP Error " + code)
-    this.post = false
-    if (this.datasource && this.datasource.onError) {
-		console.log("Calling onError on datasource")
-    	this.datasource.onError(code)
-    }
+com.sweattrails.api.JSONRequest.prototype.log = function(msg) {
+	this.datasource && $$.log(this.datasource, "XMLHttp - " + msg)
 }
 
 /**
@@ -154,7 +143,7 @@ com.sweattrails.api.internal.DataSource.prototype.processData = function() {
     if ((this.data == null) || (Array.isArray(this.data) && (this.data.length == 0))) {
         this.runCallbacks("noData", [])
     } else {
-        for(var n = this.next(); n != null; n = this.next()) {
+        for (var n = this.next(); n != null; n = this.next()) {
             this.runCallbacks("renderData", [n])
         }
     }
@@ -247,20 +236,16 @@ com.sweattrails.api.internal.DataSource.prototype.onError = function(errorinfo) 
     this.runCallbacks("onDataError", [errorinfo])
 }
 
-com.sweattrails.api.internal.DataSource.prototype.onRedirect = function(code, where) {
-	if (this.followRedirects) {
-		document.location = where
-	} else {
-		this.runCallbacks("onRedirected", [code, where])
-	}
-}
-
 /**
  * JSONDataSource -
  */
 
 com.sweattrails.api.JSONDataSource = function(url) {
+	this.id = url
+	this.type = "JSONDataSource"
+	$$.register(this)
     this.reset(null)
+    this.async = true
     this.request = new com.sweattrails.api.JSONRequest(url)
     this.request.datasource = this
     this.submitAsJSON = true
@@ -274,11 +259,13 @@ com.sweattrails.api.JSONDataSource.prototype.parameter = function(param, value) 
 }
 
 com.sweattrails.api.JSONDataSource.prototype.onJSONData = function(data) {
+	$$.log(this, "onJSONData(data)")
     this.reset(data)
     this.processData()
 }
 
 com.sweattrails.api.JSONDataSource.prototype.execute = function() {
+	$$.log(this, "onJSONData(execute)")
     this.data = null
     this.request.execute()
 }
@@ -292,14 +279,14 @@ com.sweattrails.api.JSONDataSource.prototype.addObject = function(obj, prefix) {
         } else if (typeof(v) == "function") {
             continue
         } else {
-            console.log("--" + prefix + p + "=" + v)
+            $$.log(this, "addObject: " + prefix + p + "=" + v)
             this.parameter(prefix + p, v)
         }
     }
 }
 
 com.sweattrails.api.JSONDataSource.prototype.setParameters = function() {
-	console.log("setParameters - json: " + this.submitAsJSON + " object " + JSON.stringify(this.object))
+	$$.log(this, "setParameters - json: " + this.submitAsJSON + " object " + JSON.stringify(this.object))
     if (this.submitAsJSON) {
         this.request.body = JSON.stringify(this.object)
     } else {
@@ -309,6 +296,7 @@ com.sweattrails.api.JSONDataSource.prototype.setParameters = function() {
 
 
 com.sweattrails.api.JSONDataSource.prototype.submit = function() {
+	$$.log(this, "submit()")
     this.data = null
     this.request.post = true
     this.setParameters()
@@ -326,9 +314,10 @@ com.sweattrails.api.JSONDataSourceBuilder.prototype.build = function(elem) {
     var ds = new com.sweattrails.api.JSONDataSource(elem.getAttribute("url"))
     this.submitAsJSON = true
     if (elem.getAttribute("submit")) {
-    	console.log("submit = " + elem.getAttribute("submit"))
         ds.submitAsJSON = elem.getAttribute("submit") == "json"
-    	console.log("json: " + ds.submitAsJSON)
+    }
+    if (elem.getAttribute("async")) {
+    	ds.async = elem.getAttribute("async") == "true"
     }
     var params = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "parameter")
     for (var ix = 0; ix < params.length; ix++) {
@@ -348,6 +337,9 @@ com.sweattrails.api.JSONDataSourceBuilder.prototype.build = function(elem) {
  */
 
 com.sweattrails.api.CustomDataSource = function(func, submitfnc) {
+	this.id = func
+	this.type = "CustomDataSource"
+	$$.register(this)
     this.data = null
     this.view = []
     this.func = (typeof(func) == 'function') ? func : getfunc(func)
@@ -361,15 +353,17 @@ com.sweattrails.api.CustomDataSource = function(func, submitfnc) {
 com.sweattrails.api.CustomDataSource.prototype = new com.sweattrails.api.internal.DataSource()
 
 com.sweattrails.api.CustomDataSource.prototype.reset = function() {
+	$$.log(this, "reset()")
     this.data = this.func()
     for (var ix = 0; ix < this.data.length; ix++) {
-        console.log(ix + ": " + this.data[ix].key + ", " + this.data[ix].value)
+        $$.log(this, ix + ": " + this.data[ix].key + ", " + this.data[ix].value)
     }
     this.ix = 0
     this.object = null
 }
 
 com.sweattrails.api.CustomDataSource.prototype.submit = function() {
+	$$.log(this, "submit()")
     this.data = null
     if (this.submitfnc) {
     	this.submitfnc(this.object)
@@ -399,13 +393,18 @@ com.sweattrails.api.StaticDataSource = function() {
     this.reset(null)
     this.data = []
     this.view = []
+    this.keyname = "key"
+    this.valname = "value"
     return this
 }
 
 com.sweattrails.api.StaticDataSource.prototype = new com.sweattrails.api.internal.DataSource()
 
 com.sweattrails.api.StaticDataSource.prototype.value = function(key, value) {
-    this.data.push({ key: key, value: value })
+	var obj = {}
+	obj[this.keyname] = key
+	obj[this.valname] = value
+    this.data.push(obj)
 }
 
 /**
@@ -415,9 +414,14 @@ com.sweattrails.api.StaticDataSource.prototype.value = function(key, value) {
 com.sweattrails.api.StaticDataSourceBuilder = function() {
 }
 
-com.sweattrails.api.StaticDataSourceBuilder.prototype.build = function(elem) {
+com.sweattrails.api.StaticDataSourceBuilder.prototype.build = function(elem, values) {
     var ds = new com.sweattrails.api.StaticDataSource()
-    var values = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "value")
+    if (elem.getAttribute("keyname")) {
+    	ds.keyname = elem.getAttribute("keyname")
+    }
+    if (elem.getAttribute("valuename")) {
+    	ds.valname = elem.getAttribute("valuename")
+    }
     for (var ix = 0; ix < values.length; ix++) {
     	var v = values[ix]
 		var val = v.getAttribute("text")
@@ -425,6 +429,30 @@ com.sweattrails.api.StaticDataSourceBuilder.prototype.build = function(elem) {
 		ds.value(key, val)
     }
     return ds
+}
+
+/**
+ * NullDataSource -
+ */
+
+com.sweattrails.api.NullDataSource = function() {
+    this.reset(null)
+    this.data = []
+    this.view = []
+    return this
+}
+
+com.sweattrails.api.NullDataSource.prototype = new com.sweattrails.api.internal.DataSource()
+
+/**
+ * NullDataSourceBuilder -
+ */
+
+com.sweattrails.api.NullDataSourceBuilder = function() {
+}
+
+com.sweattrails.api.NullDataSourceBuilder.prototype.build = function(elem) {
+    return new com.sweattrails.api.NullDataSource()
 }
 
 /**
@@ -460,6 +488,7 @@ com.sweattrails.api.DataSourceBuilder = function() {
     this.jsonbuilder = new com.sweattrails.api.JSONDataSourceBuilder()
     this.staticbuilder = new com.sweattrails.api.StaticDataSourceBuilder()
     this.custombuilder = new com.sweattrails.api.CustomDataSourceBuilder()
+    this.nullbuilder = new com.sweattrails.api.NullDataSourceBuilder()
     return this
 }
 
@@ -474,7 +503,12 @@ com.sweattrails.api.DataSourceBuilder.prototype.build = function(elem) {
     } else if (elem.getAttribute("source")) {
     	ret = this.custombuilder.build(elem)
     } else {
-    	ret = this.staticbuilder.build(elem)
+        var values = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "value")
+        if (values.length > 0) {
+        	ret = this.staticbuilder.build(elem, values)
+        } else {
+        	ret = this.nullbuilder.build(elem)
+        }
     }
     if (ret != null) {
     	if (elem.getAttribute("ondata")) {
@@ -494,11 +528,6 @@ com.sweattrails.api.DataSourceBuilder.prototype.build = function(elem) {
     	}
     	if (elem.getAttribute("onsubmitted")) {
     		ret.onDataSubmitted = getfunc(elem.getAttribute("onsubmitted"))
-    	}
-    	if (elem.getAttribute("onredirect")) {
-    		ret.onRedirected = getfunc(elem.getAttribute("onredirect"))
-    	} else {
-    		ret.followRedirects = elem.getAttribute("followredirects") && (elem.getAttribute("followredirects") == "true")
     	}
     }
     return ret
