@@ -15,6 +15,24 @@ st_show_form = function() {
     }
 }
 
+com.sweattrails.api.internal.buildErrors = function(obj, e) {
+    if (!e) return
+    if (typeof(e) == "string") {
+        var o = {}
+        o.message = e
+        o.field = this
+        e = o
+    }
+    obj.errors = obj.errors || []
+    if (Array.isArray(e)) {
+    	for (var ix in e) {
+    	    ST_int.buildErrors(e[ix])
+    	}
+    } else {
+    	obj.errors.push(e)
+    }
+}
+
 com.sweattrails.api.Form = function(id, container, ds, popup) {
     this.id = id
     this.type = "form"
@@ -189,6 +207,9 @@ com.sweattrails.api.Form.prototype.applyData = function() {
 
 com.sweattrails.api.Form.prototype.submit = function() {
     this.errors = []
+    if (this.validator != null) {
+        ST_int.buildErrors(this, this.validator())
+    }
     var f = null
     for (var fix in this.renderedFields) {
     	f = this.renderedFields[fix]
@@ -202,10 +223,9 @@ com.sweattrails.api.Form.prototype.submit = function() {
         this.progress("Saving ...")
         console.log("Submitting form " + this.id)
         if (this.form) {
-        	console.log("----")
-        	this.form.submit()
+            this.form.submit()
         } else {
-        	this.datasource.submit()
+            this.datasource.submit()
         }
     }
 }
@@ -227,7 +247,6 @@ com.sweattrails.api.Form.prototype.popup = function(mode) {
     if (this.modal) {
     	document.getElementById("overlay").hidden = false
     }
-	console.log("classname: " + this.container.className)
     this.container.hidden = false
     this.ispopup = true
     this.render(mode)
@@ -251,25 +270,25 @@ com.sweattrails.api.Form.prototype.close = function() {
 
 com.sweattrails.api.Form.prototype.onDataSubmitted = function() {
     this.close()
-	this.header.onDataSubmitted()
-	this.footer.onDataSubmitted()
+    this.header.onDataSubmitted()
+    this.footer.onDataSubmitted()
     this.onsubmitted && this.onsubmitted()
 }
 
 com.sweattrails.api.Form.prototype.onDataError = function(errorinfo) {
-	this.header.onDataError(errorinfo)
-	this.footer.onDataError(errorinfo)
-	handled = false
+    this.header.onDataError(errorinfo)
+    this.footer.onDataError(errorinfo)
+    handled = false
     if (this.onerror) {
     	handled = this.onerror(errorinfo)
     }
-	if (!handled) this.error("Error saving: " + errorinfo)
+    if (!handled) this.error("Error saving: " + errorinfo)
 }
 
 com.sweattrails.api.Form.prototype.onDataEnd = function() {
-	this.header.onDataEnd()
-	this.footer.onDataEnd()
-	this.ondataend && this.ondataend()
+    this.header.onDataEnd()
+    this.footer.onDataEnd()
+    this.ondataend && this.ondataend()
 }
 
 /**
@@ -291,25 +310,25 @@ com.sweattrails.api.FormBuilder.prototype.process = function(f) {
 }
 
 com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
-	form.type = 'json'
-	if (elem.getAttribute("type")) {
-		form.type = elem.getAttribute("type")
-		if ("json;form".indexOf(form.type) < 0) {
-			console.log("Invalid form type " + form.type + " for form " + form.id)
-			form.type = "json"
-		}
-		if (form.type == "form") {
-			form.action = elem.getAttribute("action")
-			if (!form.action) {
-				console.log("Missing form action for form " + form.id)
-				form.type = "json"	
-			}
-			form.method = "POST"
-			if (elem.getAttribute("method")) {
-				form.method = elem.getAttribute("method")
-			}
-		}
+    form.type = 'json'
+    if (elem.getAttribute("type")) {
+	form.type = elem.getAttribute("type")
+	if ("json;form".indexOf(form.type) < 0) {
+	    console.log("Invalid form type " + form.type + " for form " + form.id)
+	    form.type = "json"
 	}
+	if (form.type == "form") {
+	    form.action = elem.getAttribute("action")
+	    if (!form.action) {
+		console.log("Missing form action for form " + form.id)
+		form.type = "json"	
+	    }
+	    form.method = "POST"
+	    if (elem.getAttribute("method")) {
+		form.method = elem.getAttribute("method")
+	    }
+	}
+    }
     if (elem.getAttribute("mode")) {
         form.init_mode = elem.getAttribute("mode")
     }
@@ -318,6 +337,9 @@ com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
     }
     if (elem.getAttribute("onsubmitted")) {
         form.onsubmitted = getfunc(elem.getAttribute("onsubmitted"))
+    }
+    if (f.getAttribute("validate")) {
+	this.validator = getfunc(f.getAttribute("validate"))
     }
     if (elem.getAttribute("onerror")) {
         form.onerror = getfunc(elem.getAttribute("onerror"))
@@ -358,28 +380,31 @@ com.sweattrails.api.FormField = function(form, f) {
     this.hidden = false
     if (f) {
         this.type = "formfield"
-		this.id = f.getAttribute("id") || f.getAttribute("property")
-		$$.register(this)
-		this.modes = f.getAttribute("mode")
-		this.readonly = f.getAttribute("readonly") == "true"
-	    this.bridge = new com.sweattrails.api.internal.DataBridge()
-		var p = f.getAttribute("property")
-		if (p) {
-		    this.bridge.get = p
-		} else if (f.getAttribute("get")) {
-		    this.bridge.get = getfunc(f.getAttribute("get"))
-		    this.bridge.set = f.getAttribute("set") && getfunc(s)
-		} else {
-	        this.bridge.get = this.id
-	    }
-	    var onchange = f.getAttribute("onchange")
-	    if (onchange) {
-	        this.onchange = getfunc(onchange)
-	    }
-		this.label = f.getAttribute("label")
-		this.required = f.getAttribute("required") == "true"
-		this.setType(f.getAttribute("type"), f)
-		if (f.getAttribute("value")) {
+	this.id = f.getAttribute("id") || f.getAttribute("property")
+	$$.register(this)
+	this.modes = f.getAttribute("mode")
+	this.readonly = f.getAttribute("readonly") == "true"
+	this.bridge = new com.sweattrails.api.internal.DataBridge()
+	var p = f.getAttribute("property")
+	if (p) {
+	    this.bridge.get = p
+	} else if (f.getAttribute("get")) {
+	    this.bridge.get = getfunc(f.getAttribute("get"))
+	    this.bridge.set = f.getAttribute("set") && getfunc(s)
+	} else {
+	    this.bridge.get = this.id
+	}
+	var onchange = f.getAttribute("onchange")
+	if (onchange) {
+	    this.onchange = getfunc(onchange)
+	}
+	if (f.getAttribute("validate")) {
+	    this.validator = getfunc(f.getAttribute("validate"))
+	}
+	this.label = f.getAttribute("label")
+	this.required = f.getAttribute("required") == "true"
+	this.setType(f.getAttribute("type"), f)
+	if (f.getAttribute("value")) {
             var v = f.getAttribute("value")
             this.defval = getfunc(v) || v
         }
@@ -397,9 +422,9 @@ com.sweattrails.api.FormField.prototype.setType = function(type, elem) {
 }
 
 com.sweattrails.api.FormField.prototype.render = function(mode, object) {
-	if (this.modes && (this.modes.length > 0) && (this.modes.indexOf(mode) < 0)) {
-		return false
-	}
+    if (this.modes && (this.modes.length > 0) && (this.modes.indexOf(mode) < 0)) {
+	return false
+    }
     this.mode = mode
     var val = this.getValue(object)
     var elem = null
@@ -470,31 +495,13 @@ Object.defineProperty(com.sweattrails.api.FormField.prototype, "hidden", {
     }
 })
 
-com.sweattrails.api.FormField.prototype.buildErrors = function(e) {
-	if (!e) return
-    if (typeof(e) == "string") {
-        var o = {}
-        o.message = e
-        o.field = this
-        e = o
-    }
-    this.errors = this.errors || []
-    if (Array.isArray(e)) {
-    	for (var ix in e) {
-    		this.buildErrors(e[ix])
-    	}
-    } else {
-    	this.errors.push(e)
-    }
-}
-
 com.sweattrails.api.FormField.prototype.validate = function() {
     this.errors = null
     if (this.impl.validator != null) {
-    	this.buildErrors(this.impl.validator())
+    	ST_int.buildErrors(this, this.impl.validator())
     }
     if (this.validator != null) {
-        this.buildErrors(this.validator())
+        ST_int.buildErrors(this, this.validator())
     }
     return this.errors
 }
@@ -575,22 +582,22 @@ com.sweattrails.api.PasswordField.prototype.renderEdit = function(value) {
     this.control.onchange = this.field.onValueChange.bind(this.field)
     this.div.appendChild(this.control)
     if (this.confirm) {
-	    this.check = document.createElement("input")
-	    this.check.value =  ""
-	    this.check.name = this.field.id + "-check"
-	    this.check.id = this.field.id + "-check"
-	    this.check.type = "password"
-	    this.div.appendChild(this.check)
+	this.check = document.createElement("input")
+	this.check.value =  ""
+	this.check.name = this.field.id + "-check"
+	this.check.id = this.field.id + "-check"
+	this.check.type = "password"
+	this.div.appendChild(this.check)
     }
     return this.div
 }
 
 com.sweattrails.api.PasswordField.prototype.validate = function() {
-	if (this.confirm && (this.control.value != this.check.value)) {
-		return "Password values do not match"
-	} else {
-		return null
-	}
+    if (this.confirm && (this.control.value != this.check.value)) {
+	return "Password values do not match"
+    } else {
+	return null
+    }
 }
 
 com.sweattrails.api.PasswordField.prototype.getValueFromControl = function() {

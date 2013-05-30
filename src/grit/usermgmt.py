@@ -91,12 +91,22 @@ class Signup(grit.ReqHandler):
         return urls
 
     def get(self):
-        logger.debug("main::SignUp.get")
-        self.request.session.logout(self.request)
+        logger.debug("main::signup.get")
         self.render()
 
     def post(self):
-        self.get()
+        json_request = False
+        userid = self.request.get("userid")
+        password = self.request.get("password")
+        assert self.session is not None, "Session missing from request handler"
+        um = grit.Session.get_usermanager()
+        try:
+            confcode = um.add(userid, password)
+            logger.debug("Signup OK")
+        except 
+            logger.debug("Login FAILED")
+            self.response.status_int = 401
+
 
 class RequestPasswordReset(grit.ReqHandler):
     '''

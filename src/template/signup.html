@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block tabs %}
+
+<st:tab code="signup" label="Sign up">
+  <st:form name="login" type="form" method="post" action="/signup" onerror="login_error" mode="new">
+    <st:field id="userid" type="text" property="userid" label="Email" required="true"/>
+    <st:field id="password" type="password" property="password" label="Password" required="true" confirm="true"/>
+    <st:footer>
+      <st:action mode="new" label="Signup" action="save"/>
+      <st:action mode="new" label="Cancel" action="cancel"/>
+    </st:footer>
+  </st:form>
+</st:tab>
+
+{% endblock tabs %}
+
+{% block topbar %}
+{% endblock topbar %}
+
+

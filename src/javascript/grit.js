@@ -12,6 +12,7 @@ com.sweattrails.api.xmlns = "http://www.sweattrails.com/html"
 
 if (typeof(ST) !== 'object') {
     var ST = com.sweattrails.api
+    var ST_int = com.sweattrails.api.internal
 }
 
 if (typeof(Object.create) !== 'function') {

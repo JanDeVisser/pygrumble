@@ -13,6 +13,20 @@ __date__ = "$3-Mar-2013 10:11:27 PM$"
 
 logger = gripe.get_logger("grit")
 
+class AuthException(Exception):
+    pass
+
+class UserExists(AuthException):
+    def __init__(self, uid):
+        self._uid = uid
+
+    def __str__(self):
+        return "User with ID %s already exists" % self._uid 
+
+class InvalidConfirmationCode(AuthException):
+    def __str__(self):
+        return "Invalid user confirmation code"
+
 class AbstractAuthObject(grit.role.HasRoles):
     def role_objects(self, include_self = True):
         s = set()
@@ -29,8 +43,7 @@ class AbstractUserGroup(AbstractAuthObject):
     _idattr = "gid"
     
     def gid(self):
-        assert 0, "Abstract method AbstractUserGroup.gid() must be implemented in class %s" % self.__class__
-
+        gripe.abstract(self, "gid()")
 
 class UserGroup(AbstractUserGroup):
     _groups = {}
@@ -52,6 +65,7 @@ class AbstractUser(AbstractAuthObject):
     _idattr = "uid"
     
     def uid(self):
+        gripe.abstract(self, "uid()")
         assert 0, "Abstract method AbstractUser.uid() must be implemented in class %s" % self.__class__
 
     def groups(self):
@@ -104,6 +118,11 @@ class AbstractUserManager(object):
     def login(self, userid, password):
         assert 0, "Abstract method AbstractUserManager.login must be implemented for class %s" % self.__class__
 
+    def add(self, userid, password):
+        gripe.abstract(self, "add")
+
+    def confirm(self, userid, code):
+        
     def uid(self, user):
         return user.uid() if user else None
 

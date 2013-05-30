@@ -60,6 +60,9 @@ def resolve(funcname, default = None):
     else:
         return resolve(default, None) if isinstance(default, basestring) else default
 
+def abstract(obj, method):
+    assert 0, "Class '%s' does not implement method '%s'" % (self.__class__.__name__, method)
+
 class ContentType(object):
     Binary, Text = range(2)
     _by_ext = {}

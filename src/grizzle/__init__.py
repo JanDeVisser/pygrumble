@@ -59,7 +59,23 @@ class UserManager(grit.auth.AbstractUserManager):
             user = None
         return user
 
+    def add(self, userid, password):
+        user = self.get(userid)
+        if user:
+            raise grit.auth.UserExists(userid)
+        else:
+            user = User(email = userid, password = password, confirmation_code = self.confirmation_code())
+            user.put()
+            return user.confirmation_code
 
+    def confirm(self, userid, code):
+        user = User.query("email = ", userid, "confirmation_code = ", code, ancestor = None).fetch()
+        if user:
+            user.confirmation_code = None
+            user.put()
+        else:
+            raise grit.auth.InvalidConfirmationCode()
+        
 class ManageUsers(grit.handlers.PageHandler):
     def get_template(self):
         return "user" if self.key() else "users"
