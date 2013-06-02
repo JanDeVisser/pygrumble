@@ -5,6 +5,7 @@ import uuid
 import random
 
 import gripe
+import grit
 import grit.role
 
 
@@ -13,7 +14,7 @@ __date__ = "$3-Mar-2013 10:11:27 PM$"
 
 logger = gripe.get_logger("grit")
 
-class AuthException(Exception):
+class AuthException(grit.Exception):
     pass
 
 class UserExists(AuthException):

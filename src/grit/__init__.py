@@ -29,6 +29,8 @@ import grumble
 
 logger = gripe.get_logger(__name__)
 
+class Exception(gripe.Error):
+    pass
 
 class UserData(grumble.Model):
     _flat = True
@@ -379,7 +381,8 @@ class Auth(object):
     def confirm_role(self):
         logger.debug("Auth.confirm_role(%s)", self.reqctx.roles)
         if not self.session.user().has_role(self.reqctx.roles):
-            logger.warn("Auth.confirm_role: user %s doesn't have any role in %s", Session.get_usermanager().id(self.user), self.reqctx.roles)
+            logger.warn("Auth.confirm_role: user %s doesn't have any role in %s", 
+                        Session.get_usermanager().id(self.user), self.reqctx.roles)
             self.response.status = "401 Unauthorized"
 
     @classmethod
@@ -478,6 +481,7 @@ class ReqHandler(webapp2.RequestHandler):
         logger.info("Creating request handler for %s", request.path)
         self.session = request.session if hasattr(request, "session") else None
         self.user = request.user if hasattr(request, "user") else None
+        self.errors = []
 
     @classmethod
     def _get_env(cls):
@@ -514,6 +518,9 @@ class ReqHandler(webapp2.RequestHandler):
 #        ctx['tab'] = self.request.get('tab', None)
 #        return ctx
 #
+    def add_error(self, error):
+        self.errors.append(error)
+
     def _get_context(self, ctx = None):
         logger.debug("_get_context %s", ctx)
         if ctx is None:
@@ -523,6 +530,7 @@ class ReqHandler(webapp2.RequestHandler):
         ctx['user'] = self.user
         ctx['session'] = self.session
         ctx['params'] = self.request.params
+        ctx['errors'] = self.errors
         urls = ctx.get("urls")
         if urls is None:
             logger.debug("_get_context: urls is None. Building new collection")

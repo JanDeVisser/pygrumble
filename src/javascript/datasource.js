@@ -26,21 +26,26 @@ com.sweattrails.api.getHttpRequest = function(jsonRequest) {
         	this.request.log("Received response. Status " + this.status)
             if ((this.status >= 200 && this.status <= 200) || this.status == 304) {
             	var object = {}
-                if (this.responseText != "") {
-                	try {
-                		object = JSON.parse(this.responseText)
-                	} catch (e) {
-                		// Ignored
-                	}
-            	}
-                var posted = this.request.post
-                this.request.post = false
-                this.request.object = null
-                this.request.params = []
-                this.request.onSuccess(object)
-                if (posted && this.request.onSubmitted) {
-                    this.request.onSubmitted()
-                }
+		var redir = this.getResponseHeader("ST-JSON-Redirect")
+		if (redir && this.request.onRedirect) {
+		    this.request.onRedirect(redir)
+		} else {
+                    if (this.responseText != "") {
+			try {
+                	    object = JSON.parse(this.responseText)
+			} catch (e) {
+                	    // Ignored
+			}
+            	    }
+                    var posted = this.request.post
+                    this.request.post = false
+                    this.request.object = null
+                    this.request.params = []
+                    this.request.onSuccess(object)
+                    if (posted && this.request.onSubmitted) {
+			this.request.onSubmitted()
+                    }
+		}
                 this.request.semaphore = 0
                 this.request.log("response processed")
             } else {
@@ -98,6 +103,12 @@ com.sweattrails.api.JSONRequest.prototype.onSubmitted = function() {
     }
 }
 
+com.sweattrails.api.JSONRequest.prototype.onRedirect = function(redir) {
+    if (this.datasource && this.datasource.onRedirected) {
+    	this.datasource.onRedirected(redir)
+    }
+}
+
 com.sweattrails.api.JSONRequest.prototype.onError = function(code) {
     this.log("HTTP Error " + code)
     this.post = false
@@ -152,14 +163,14 @@ com.sweattrails.api.internal.DataSource.prototype.next = function() {
         return null
     } else {
     	if (Array.isArray(this.data)) {
-    		if (this.ix < this.data.length) {
-    			return this.data[this.ix++]
-    		} else {
-    			return null
-    		}
+    	    if (this.ix < this.data.length) {
+    		return this.data[this.ix++]
+    	    } else {
+    		return null
+    	    }
     	} else {
-    		this.object = (this.object == null) ? this.data : null
-			return this.object
+    	    this.object = (this.object == null) ? this.data : null
+	    return this.object
     	}
     }
 }
@@ -186,9 +197,9 @@ com.sweattrails.api.internal.DataSource.prototype.setObject = function(obj) {
 }
 
 com.sweattrails.api.internal.DataSource.prototype.createObjectFrom = function(context) {
-	if (this.submitparams == null) {
-		this.submitparams = {}
-	}
+    if (this.submitparams == null) {
+	this.submitparams = {}
+    }
     this.object = null
     if (this.factory) {
         this.object = this.factory(context)
@@ -227,6 +238,11 @@ com.sweattrails.api.internal.DataSource.prototype.runCallbacks = function(cb, ar
 
 com.sweattrails.api.internal.DataSource.prototype.onSubmitted = function() {
     this.runCallbacks("onDataSubmitted", [])
+}
+
+com.sweattrails.api.internal.DataSource.prototype.onRedirected = function(redir) {
+    this.runCallbacks("onRedirect", [redir])
+    document.location = redir
 }
 
 com.sweattrails.api.internal.DataSource.prototype.onError = function(errorinfo) {

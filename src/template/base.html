@@ -1,7 +1,23 @@
 <!DOCTYPE xhtml>
+
 {% macro import_script(s) %}
     <script src="{{s}}" type="text/javascript"></script>
 {% endmacro %}
+
+{% macro errorblock() %}
+    <div id="errors" class="errors">
+      {% for e in errors %}
+        {% if loop.first %}
+          <ul class="errorlist">
+	{% endif %}
+        <li class="error">{{e}}</li>
+	{% if loop.last %}
+	  </ul>
+	{% endif %}
+      {% endfor %}
+    </div>
+{% endmacro %}
+
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:st="http://www.sweattrails.com/html">
   <head>
     {% block head %}
@@ -34,7 +50,7 @@
         <div id="topbar" class="topbar">
         	<div class="tools">
             	{% block topbar %}
-		        	{% if user %}
+		        {% if user %}
 	                    {{ user.display_name|d(user.email) }} |
 	                    <a class="whitelink" href="/">Home</a> |
 	                    <a class="whitelink" href="{{urls['user']['logout'].url()|e}}">{{urls['user']['logout'].label()}}</a>

@@ -95,7 +95,6 @@ class Signup(grit.ReqHandler):
         self.render()
 
     def post(self):
-        json_request = False
         userid = self.request.get("userid")
         password = self.request.get("password")
         assert self.session is not None, "Session missing from request handler"
@@ -103,10 +102,12 @@ class Signup(grit.ReqHandler):
         try:
             confcode = um.add(userid, password)
             logger.debug("Signup OK")
-        except 
-            logger.debug("Login FAILED")
-            self.response.status_int = 401
-
+            self.response.status = "302 Moved Temporarily"
+            self.response.headers["Location"] = "/confirm"
+        except grit.Exception as e:
+            logger.debug("Signup FAILED: %s" % e)
+            self.add_error(str(e))
+            self.render()
 
 class RequestPasswordReset(grit.ReqHandler):
     '''
