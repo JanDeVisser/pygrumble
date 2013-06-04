@@ -35,8 +35,8 @@ class Exception(gripe.Error):
 class UserData(grumble.Model):
     _flat = True
     _audit = False
-    cookie = grumble.TextProperty(is_key=True)
-    last_access = grumble.DateTimeProperty(auto_now=True)
+    cookie = grumble.TextProperty(is_key = True)
+    last_access = grumble.DateTimeProperty(auto_now = True)
     userid = grumble.TextProperty()
 
 
@@ -78,7 +78,7 @@ class SessionManager(object):
         self._sessions = {}
         self._queue = Queue.Queue()
         self._lock = threading.RLock()
-        self._thread = threading.Thread(target=SessionManager._monitor)
+        self._thread = threading.Thread(target = SessionManager._monitor)
         self._thread.setDaemon(True)
         atexit.register(SessionManager._exiting)
         self._lastharvest = None
@@ -381,7 +381,7 @@ class Auth(object):
     def confirm_role(self):
         logger.debug("Auth.confirm_role(%s)", self.reqctx.roles)
         if not self.session.user().has_role(self.reqctx.roles):
-            logger.warn("Auth.confirm_role: user %s doesn't have any role in %s", 
+            logger.warn("Auth.confirm_role: user %s doesn't have any role in %s",
                         Session.get_usermanager().id(self.user), self.reqctx.roles)
             self.response.status = "401 Unauthorized"
 
@@ -575,6 +575,14 @@ class ReqHandler(webapp2.RequestHandler):
         else:
             content_type = gripe.ContentType.for_path(self.request.path)
             return content_type.content_type if content_type else "text/plain"
+
+    def json_dump(self, obj):
+        if obj:
+            logging.info("retstr=%s", json.dumps(obj))
+            self.response.content_type = "application/json"
+            self.response.json = obj
+        else:
+            self.status = "204 No Content"
 
     def render(self):
         ctx = self._get_context()

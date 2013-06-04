@@ -252,14 +252,6 @@ class JSONHandler(BridgedHandler):
         logger.info("Invoking %s on %s using arguments *%s, **%s", method, self.__class__.__name__, args, kwargs)
         return getattr(self, method)(*args, **kwargs)
 
-    def dump(self, obj):
-        if obj:
-            logging.info("retstr=%s", json.dumps(obj))
-            self.response.content_type = "application/json"
-            self.response.json = obj
-        else:
-            self.status = "204 No Content"
-
     def post(self, kind = None):
         logging.debug("JSONHandler.post(%s)", kind)
         self._initialize_bridge(None, kind)
@@ -282,7 +274,7 @@ class JSONHandler(BridgedHandler):
                     if self.object():
                         ret.append(self.object().to_dict())
             ret = ret[0] if len(ret) == 1 else ret
-            self.dump(ret)
+            self.json_dump(ret)
             return
         self.error(401)
 
@@ -294,7 +286,7 @@ class JSONHandler(BridgedHandler):
             objs = self.get_objects()
             ret = [o.to_dict() for o in objs] if objs else None
             ret = ret if ret is None or len(ret) > 1 else ret[0]
-            self.dump(ret)
+            self.json_dump(ret)
             return
         self.error(401)
 

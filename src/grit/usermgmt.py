@@ -95,19 +95,24 @@ class Signup(grit.ReqHandler):
         self.render()
 
     def post(self):
-        userid = self.request.get("userid")
-        password = self.request.get("password")
-        assert self.session is not None, "Session missing from request handler"
-        um = grit.Session.get_usermanager()
-        try:
-            confcode = um.add(userid, password)
-            logger.debug("Signup OK")
-            self.response.status = "302 Moved Temporarily"
-            self.response.headers["Location"] = "/confirm"
-        except grit.Exception as e:
-            logger.debug("Signup FAILED: %s" % e)
-            self.add_error(str(e))
-            self.render()
+        if not self.request.headers.get("ST-JSON-Request"):
+            logger.debug("Non-JSON post to /signup")
+            self.response.status_int = 500
+        else:
+            params = json.loads(self.request.body)
+            userid = params.get("userid")
+            password = params.get("password")
+            um = grit.Session.get_usermanager()
+            try:
+                confcode = um.add(userid, password)
+                logger.debug("Signup OK")
+                self.response.headers["ST-JSON-Redirect"] = "/confirm"
+                self.json_dump({ "userid": userid, "password": password })
+            except grit.Exception as e:
+                logger.debug("Signup Error: %s" % e)
+                self.json_dump([e])
+                self.response.status_int = 401
+
 
 class RequestPasswordReset(grit.ReqHandler):
     '''
