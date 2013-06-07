@@ -75,7 +75,10 @@ class UserManager(grit.auth.AbstractUserManager):
             user.put()
         else:
             raise grit.auth.InvalidConfirmationCode()
-        
+
+def currentuser():
+    return UserManager().get(grumble.get_sessionbridge().userid())
+
 class ManageUsers(grit.handlers.PageHandler):
     def get_template(self):
         return "user" if self.key() else "users"
