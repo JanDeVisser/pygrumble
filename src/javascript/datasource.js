@@ -159,20 +159,20 @@ com.sweattrails.api.internal.DataSource.prototype.processData = function() {
 }
 
 com.sweattrails.api.internal.DataSource.prototype.next = function() {
-    if (this.data == null) {
-        return null
-    } else {
-    	if (Array.isArray(this.data)) {
-    	    if (this.ix < this.data.length) {
-    		return this.data[this.ix++]
-    	    } else {
-    		return null
-    	    }
-    	} else {
-    	    this.object = (this.object == null) ? this.data : null
-	    return this.object
-    	}
-    }
+	if (this.data == null) {
+		return null
+	} else {
+		if (Array.isArray(this.data)) {
+			if (this.ix < this.data.length) {
+				return this.data[this.ix++]
+			} else {
+				return null
+			}
+		} else {
+			this.object = (this.object == null) ? this.data : null
+			return this.object
+		}
+	}
 }
 
 com.sweattrails.api.internal.DataSource.prototype.reset = function() {

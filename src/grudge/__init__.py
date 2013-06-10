@@ -57,6 +57,8 @@ class WorkItem(Action, grumble.Model):
 
     def start(self):
         self.put()
+        
+    def add_status(self, name):
 
     @classmethod
     def create_action(cls, owner = None):
