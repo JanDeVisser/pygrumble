@@ -224,6 +224,7 @@ class ModelManager(object):
         self.table = name
         self.tablename = self.tableprefix + '"' + name + '"'
         self.columns = None
+        self._prep_columns = []
         self.kind = None
         self.key_col = None
         self.flat = False
@@ -233,9 +234,9 @@ class ModelManager(object):
         self.table = tablename
         self.tablename = self.tableprefix + '"' + tablename + '"'
 
-    def set_columns(self, columns):
+    def set_columns(self):
         self.key_col = None
-        for c in columns:
+        for c in self._prep_columns:
             if c.is_key and not c.scoped:
                 self.key_col = c
                 c.required = True
@@ -248,7 +249,7 @@ class ModelManager(object):
         if not self.flat:
             self.columns += (ColumnDefinition("_ancestors", "TEXT", True, None, True), \
                 ColumnDefinition("_parent", "TEXT", False, None, True))
-        self.columns += columns
+        self.columns += self._prep_columns
         if self.audit:
             self.columns += (ColumnDefinition("_ownerid", "TEXT", False, None, True), \
                 ColumnDefinition("_acl", "TEXT", False, None, False), \
@@ -257,6 +258,13 @@ class ModelManager(object):
                 ColumnDefinition("_updatedby", "TEXT", False, None, False), \
                 ColumnDefinition("_updated", "TIMESTAMP", False, None, False))
         self.column_names = [c.name for c in self.columns]
+
+    def add_column(self, column):
+        if self.columns:
+            self.columns.append(column)
+            self.column_names.append(column.name)
+        else:
+            self._prep_columns.append(column)
 
     def get_properties(self, key):
         ret = None
@@ -798,6 +806,7 @@ class ModelMetaClass(type):
     def __new__(cls, name, bases, dct):
         kind = type.__new__(cls, name, bases, dct)
         if name != 'Model':
+            kind._sealed = False
             Model._register_class(cls.__module__, name, kind)
             if hasattr(kind, "table_name"):
                 tablename = kind.table_name
@@ -806,41 +815,24 @@ class ModelMetaClass(type):
                 kind.table_name = name
             kind._flat = kind._flat if hasattr(kind, "_flat") else False
             kind._audit = kind._audit if hasattr(kind, "_audit") else True
+            kind._parentclass = (Model.for_name(kind._parentclass) if isinstance(kind._parentclass, basestring) else kind._parentclass) \
+                if hasattr(kind, "_parentclass") else None
             acl = Config.model["model"][name]["acl"] \
                 if "model" in gripe.Config.model and \
                     name in gripe.Config.model["model"] and \
                     "acl" in gripe.Config.model["model"][name] \
                 else kind.acl if hasattr(kind, "acl") else None
             _set_acl(kind, acl)
-            properties = {}
-            columns = []
+            kind._properties = {}
             kind._allproperties = {}
             kind._query_properties = {}
-            for (propname, value) in dct.items():
-                if isinstance(value, (ModelProperty, CompoundProperty)):
-                    value.set_name(propname)
-                    value.set_kind(name)
-                    if not value.transient:
-                        columns += value.get_coldef()
-                    if hasattr(value, "is_label") and value.is_label:
-                        assert not hasattr(kind, "label_prop"), "Can only assign one label property"
-                        kind.label_prop = value
-                    if hasattr(value, "is_key") and value.is_key:
-                        assert not hasattr(kind, "key_prop"), "Can only assign one key property"
-                        assert not value.transient, "Key property cannot be transient"
-                        kind.key_prop = value
-                    properties[propname] = value
-                    kind._allproperties[propname] = value
-                if isinstance(value, CompoundProperty):
-                    for p in value.compound:
-                        setattr(kind, p.name, p)
-                        kind._allproperties[p.name] = value
-            kind._properties = properties
             mm = ModelManager.for_name(name)
+            for (propname, value) in dct.items():
+                ModelMetaClass.add_property(kind, propname, value)
             mm.flat = kind._flat
             mm.audit = kind._audit
             mm.set_tablename(tablename)
-            mm.set_columns(columns)
+            mm.set_columns()
             mm.kind = kind
             mm.reconcile()
             kind.modelmanager = mm
@@ -848,6 +840,31 @@ class ModelMetaClass(type):
         else:
             _set_acl(kind, gripe.Config.model.get("global_acl", kind.acl))
         return kind
+    
+    @staticmethod
+    def add_property(model, propname, propdef):
+        if not isinstance(propdef, (ModelProperty, CompoundProperty)):
+            return
+        assert not model._sealed, "Model %s is sealed. No more properties can be added" % model.__name__
+        propdef.set_name(propname)
+        propdef.set_kind(model.__name__)
+        mm = ModelManager.for_name(model.__name__)
+        if not propdef.transient:
+            mm.add_column(propdef.get_coldef())
+        if hasattr(propdef, "is_label") and propdef.is_label:
+            assert not hasattr(model, "label_prop"), "Can only assign one label property"
+            model.label_prop = propdef
+        if hasattr(propdef, "is_key") and propdef.is_key:
+            assert not hasattr(model, "key_prop"), "Can only assign one key property"
+            assert not propdef.transient, "Key property cannot be transient"
+            model.key_prop = propdef
+        model._properties[propname] = propdef
+        model._allproperties[propname] = propdef
+        if isinstance(propdef, CompoundProperty):
+            for p in propdef.compound:
+                setattr(model, p.name, p)
+                model._allproperties[p.name] = propdef
+        
 
 class Model(object):
     __metaclass__ = ModelMetaClass
@@ -855,6 +872,7 @@ class Model(object):
     acl = { "admin": "RUDQC", "owner": "R" }
 
     def __new__(cls, *args, **kwargs):
+        cls._sealed = True
         ret = super(Model, cls).__new__(cls)
         ret._brandnew = True
         ret._set_ancestors_from_parent(kwargs["parent"] if "parent" in kwargs else None)
@@ -1209,6 +1227,7 @@ class Model(object):
 
     @classmethod
     def get(cls, id, values = None):
+        cls._sealed = True
         k = Key(id)
         if cls != Model:
             ret = Tx.get_from_cache(k)
@@ -1229,6 +1248,7 @@ class Model(object):
 
     @classmethod
     def get_by_key(cls, key, values = None):
+        cls._sealed = True
         assert cls != Model, "Cannot use get_by_key on unconstrained Models"
         k = Key(cls, key)
         ret = Tx.get_from_cache(k)
