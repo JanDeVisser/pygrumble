@@ -1394,21 +1394,74 @@ class Key(object):
         cls = Model.for_name(self.kind)
         return cls.get(self)
 
+class QueryResults(object):
+    def __init__(self, kind):
+        self.kind = kind
+        self.results = None
+        self._mm = None
+        self.cur = None
+        self.columns = None
+        self.iter = None
+        self.index_col = None
+        self._mm = None
+        self._current = None
+
+    def _next_kind(self):
+        self.kind = self._q.kind[self._kind_ix] if self._kind_ix < len(self._q.kind) else None
+        self._model_ix += 1
+        
+    def _next_batch(self):
+        self.results = None
+        if self._mm is None:
+            self._mm = ModelManager.for_name(self.kind)
+            (self.cur, self.columns, self.index_col) = \
+                self._mm.query(self.query._get_ancestor(), self.filters, "key_name" if self.keys_only else "columns")
+        self.results = self._mm._next_batch(self.cur)
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        if not self.results:
+            self._next_batch()
+            self.iter = iter(self.results)
+        self._current = next(self.iter, None)
+        if self._current is None:
+            self._next_batch()
+            if self.results is not None:
+                self.iter = iter(self.results)
+                self._current = next(self.iter, None)
+            else:
+                self._current = None
+        return self._current
+    
+    def get(self, keys_only):
+        return Model.get( \
+                  Key(self.kind, \
+                      self._current[self.index_col]), \
+                  None if keys_only else zip(self.columns, self._current))
+
 class Query(object):
     def __init__(self, kind, keys_only = True, **kwargs):
-        assert isinstance(kind, basestring) or isinstance(kind, ModelMetaClass)
-        self.kind = kind if isinstance(kind, basestring) else kind.kind()
-        self._mm = Model.for_name(self.kind).modelmanager
+        if isinstance(kind, (list, tuple)):
+            self.kind = (k if isinstance(k, basestring) else k.kind() for k in kind)
+        else:
+            assert isinstance(kind, basestring) or isinstance(kind, ModelMetaClass)
+            self.kind = (kind,) if isinstance(kind, basestring) else (kind.kind(),)
+        self._mm = (Model.for_name(k).modelmanager for k in self.kind)
         self.keys_only = keys_only
         self.filters = []
+        self.results = [ QueryResults(k) for k in self.kind ]
+        self.res_ix = -1
 
     def ancestor(self, ancestor):
+        self.results = None
         if Model.for_name(self.kind)._flat:
             logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
             return
         assert (ancestor is None) or isinstance(ancestor, basestring) or \
             isinstance(ancestor, Model) or isinstance(ancestor, Key), \
-            "Must specify an ancestor object in Query.ancestor"
+            "Must specify an ancestor object or None in Query.ancestor"
         if hasattr(self, "results"):
             del self.results
         if (isinstance(ancestor, basestring)):
@@ -1425,73 +1478,58 @@ class Query(object):
             else None
 
     def filter(self, expression, value):
-        if hasattr(self, "results"):
-            del self.results
+        self.results = None
         if isinstance(value, Key):
             value = value.name
         elif isinstance(value, Model):
             value = value.name()
         self.filters.append((expression, value))
 
-    def execute(self):
-        (self.cur, self.columns, self.index_col) = self._mm.query(self._get_ancestor(), self.filters, "key_name" if self.keys_only else "columns")
-        self._next_batch()
-
-    def _next_batch(self):
-        self.results = self._mm._next_batch(self.cur)
-
     def __iter__(self):
-        if hasattr(self, "results"):
-            del self.results
-        if hasattr(self, "iter"):
-            del self.iter
+        self.res_ix = 0
         return self
 
     def next(self):
-        if not hasattr(self, "results"):
-            self.execute()
-            self.iter = iter(self.results)
-        result = next(self.iter, None)
-        if result == None:
-            self._next_batch()
-            if self.results is not None:
-                self.iter = iter(self.results)
-                result = next(self.iter)
+        result = next(self.results[self.res_ix])
+        while result is None:
+            self.res_ix += 1
+            if self.res_ix < len(self.results):
+                result = next(self.results[self.res_ix])
             else:
                 raise StopIteration
-        return Model.get(Key(self.kind, result[self.index_col]), None if self.keys_only else zip(self.columns, result))
+        return self.results[self.res_ix].get(self.keys_only)
 
     def count(self):
-        return self._mm.count(self._get_ancestor(), self.filters)
+        ret = 0
+        for mm in self._mm:
+            ret += mm.count(self._get_ancestor(), self.filters)
 
     def delete(self):
         # FIXME: If on_delete is not defined for the model, don't do this
         for m in self:
             m.on_delete()
-        return self._mm.delete_query(self._get_ancestor(), self.filters)
+        for mm in self._mm:
+            return mm.delete_query(self._get_ancestor(), self.filters)
 
     def run(self):
         return self.__iter__()
 
     def get(self):
-        if not hasattr(self, "results"):
-            self.execute()
-        if self.results:
-            result = self.results[0]
-            return Model.get(Key(self.kind, result[0]))
+        if not self.results:
+            self.results = QueryResults(self)
+        result = next(self.results)
+        if result:
+            return Model.get(Key(self.results.kind, result[0]))
 
     def fetch(self):
-        if not hasattr(self, "results"):
-            self.execute()
-        if self.results:
-            results = [ r for r in self ]
-            ret = results[0] \
-                if len(results) == 1 \
-                else (results \
-                        if len(results) \
-                        else None)
-            logging.debug("Query(%s, %s, %s).fetch(): %s", self.kind, self.filters, self._ancestor if hasattr(self, "_ancestor") else None, ret)
-            return ret
+        results = [ r for r in self ]
+        ret = results[0] \
+            if len(results) == 1 \
+            else (results \
+                    if len(results) \
+                    else None)
+        logging.debug("Query(%s, %s, %s).fetch(): %s", self.kind, self.filters, self._ancestor if hasattr(self, "_ancestor") else None, ret)
+        return ret
 
 class QueryProperty(object):
     def __init__(self, name, foreign_kind, foreign_key, private = True, serialize = False, verbose_name = None):

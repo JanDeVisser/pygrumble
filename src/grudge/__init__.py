@@ -51,10 +51,12 @@ class StatusEvent(Event):
 class OnAdd(StatusEvent):
     def __call__(self, status):
         status.on_added(self._action)
+        return status
 
 class OnRemove(StatusEvent):
     def __call__(self, status):
         status.on_removed(self._action)
+        return status
 
 class ProcessEvent(Event):
     pass
@@ -62,10 +64,12 @@ class ProcessEvent(Event):
 class OnStarted(ProcessEvent):
     def __call__(self, process):
         process.on_started(self._action)
+        return process
 
 class OnStopped(ProcessEvent):
     def __call__(self, process):
         process.on_stopped(self._action)
+        return process
 
 class AddedStatus(grumble.Model):
     name = grumble.TextProperty()
@@ -75,6 +79,9 @@ class Action(object):
 
 class ProcessAction(Action):
     def __init__(self, *args, **kwargs):
+        self.set_process(*args, **kwargs)
+        
+    def set_process(self, *args, **kwargs):
         if len(args) > 0:
             self._target = args[0]
         elif "process" in kwargs:
@@ -110,13 +117,36 @@ class Transition(ProcessAction):
         if target:
             target.start()
 
+class StatusAction(ProcessAction):
+    def __init__(self, *args, **kwargs):
+        self.set_process(*args, **kwargs)        
+        if len(args) > 1:
+            self._status = args[1]
+        elif "status" in kwargs:
+            self._status = kwargs["status"]
+        else:
+            self._status = None
+
+class Add(StatusAction):
+    def __call__(self, **kwargs):
+        process = kwargs.get("process")
+        target = self.get_target(process)
+        if target:
+            target.add_status(self._status)
+
+class Remove(StatusAction):
+    def __call__(self, **kwargs):
+        process = kwargs.get("process")
+        target = self.get_target(process)
+        if target:
+            target.remove_status(self._status)
+
 class Process(object):
     def __init__(self, *args, **kwargs):
         # TODO Grab parent process
         pass
 
     def __call__(self, cls):
-        grumble.ModelMetaClass.add_property(cls, "title", grumble.TextProperty())
         grumble.ModelMetaClass.add_property(cls, "starttime", grumble.DateTimeProperty())
         grumble.ModelMetaClass.add_property(cls, "finishtime", grumble.DateTimeProperty())
         cls._statuses = {}
@@ -126,29 +156,51 @@ class Process(object):
                 cls._statuses[propname] = propdef
         cls._on_started = []
         cls._on_stopped = []
+        cls._subprocesses = []
 
-        def on_started(self, action):
-            self._on_started += action
-        cls.on_started = on_started
+        def on_started(cls, action):
+            cls._on_started += action
+        cls.on_started = classmethod(on_started)
 
-        def on_stopped(self, action):
-            self._on_stopped = []
-        cls.on_stopped = on_stopped
+        def on_stopped(cls, action):
+            cls._on_stopped = []
+        cls.on_stopped = classmethod(on_stopped)
+
+        def add_subprocess(cls, sub):
+            cls._subprocesses += sub
+        cls.add_subprocess = classmethod(add_subprocess)
+        
+        def subprocesses(cls):
+            return cls._subprocesses
+        cls.subprocesses = classmethod(subprocesses)
+        
+        def instantiate(cls, parent = None):
+            with grumble.Tx.begin():
+                p = cls(parent = parent)
+                p.put()
+                for sub in cls.subprocesses():
+                    subcls = grumble.Model.for_name(sub)
+                    subcls.instantiate(p)
+        cls.instantiate = classmethod(instantiate)
 
         def start(self):
             if self.starttime is None:
-                self.starttime = datetime.datetime.now()
-                self.put()
-                for a in self._on_started:
-                    a(process = self)
+                with grumble.Tx.begin():
+                    self.starttime = datetime.datetime.now()
+                    self.put()
+                    for a in self._on_started:
+                        a(process = self)
         cls.start = start
 
         def stop(self):
             if self.starttime is not None and self.finishtime is None:
-                self.finishtime = datetime.datetime.now()
-                self.put()
-                for a in self._on_stopped:
-                    a(process = self)
+                with grumble.Tx.begin():
+                    for sub in grumble.Query(self.subprocesses(), ancestor = self):
+                        sub.stop()
+                    self.finishtime = datetime.datetime.now()
+                    self.put()
+                    for a in self._on_stopped:
+                        a(process = self)
         cls.stop = stop
 
         def add_status(self, status):
@@ -156,14 +208,15 @@ class Process(object):
             assert status in self._statuses, "Cannot add status %s to process %s" % (status, self.__class__.__name__)
             statusdef = self._statuses[status]
             added = None
-            for s in AddedStatus.query(ancestor = self):
-                if s.name == status:
-                    added = s
-            if added is None:
-                added = AddedStatus(name = status, parent = self)
-                added.put()
-                statusdef.added(self)
-            return added
+            with grumble.Tx.begin():
+                for s in AddedStatus.query(ancestor = self):
+                    if s.name == status:
+                        added = s
+                if added is None:
+                    added = AddedStatus(name = status, parent = self)
+                    added.put()
+                    statusdef.added(self)
+                return added
         cls.add_status = add_status
 
         def remove_status(self, status):
@@ -171,13 +224,14 @@ class Process(object):
             assert status in self._statuses, "Cannot remove status %s from process %s" % (status, self.__class__.__name__)
             statusdef = self._statuses[status]
             remove = None
-            for s in AddedStatus.query(ancestor = self):
-                if s.name == status:
-                    remove = s
-            if remove is not None:
-                grumble.delete(remove)
-                statusdef.removed(self)
-            return
+            with grumble.Tx.begin():
+                for s in AddedStatus.query(ancestor = self):
+                    if s.name == status:
+                        remove = s
+                if remove is not None:
+                    grumble.delete(remove)
+                    statusdef.removed(self)
+                return
         cls.remove_status = remove_status
 
         def resolve(self, path):
