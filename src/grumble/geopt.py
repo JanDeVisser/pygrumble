@@ -1,8 +1,8 @@
 # To change this template, choose Tools | Templates
 # and open the template in the editor.
 
-__author__="jan"
-__date__ ="$11-Feb-2013 8:28:51 AM$"
+__author__ = "jan"
+__date__ = "$11-Feb-2013 8:28:51 AM$"
 
 import re
 import psycopg2
@@ -72,11 +72,11 @@ class GeoPt(object):
     _unknown = None
     @classmethod
     def unknown(cls):
-        if not _unknown:
-            _unknown = GeoPt()
-            _unknown.lat = 100
-            _unknown.lon = 200
-        return _unknown
+        if not GeoPt._unknown:
+            GeoPt._unknown = GeoPt()
+            GeoPt._unknown.lat = 100
+            GeoPt._unknown.lon = 200
+        return GeoPt._unknown
 
 class GeoPtProperty(grumble.ModelProperty):
     datatype = GeoPt
@@ -119,7 +119,7 @@ if __name__ == "__main__":
             loc = GeoPtProperty()
 
     with grumble.Tx.begin():
-        jan = Test(loc_label = "Jan", loc = GeoPt(23,-5))
+        jan = Test(loc_label = "Jan", loc = GeoPt(23, -5))
         print "++", jan.loc_label, jan.loc
         jan.put()
         print "+++", jan.id(), jan.get_name(), jan.get_label()
