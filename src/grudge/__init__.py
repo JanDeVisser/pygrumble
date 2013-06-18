@@ -144,6 +144,8 @@ class Remove(StatusAction):
 class Process(object):
     def __init__(self, *args, **kwargs):
         # TODO Grab parent process
+        self.parent = kwargs.get("parent")
+        self.entrypoint = kwargs.get("entrypoint")
         pass
 
     def __call__(self, cls):

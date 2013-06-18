@@ -260,11 +260,16 @@ class ModelManager(object):
         self.column_names = [c.name for c in self.columns]
 
     def add_column(self, column):
-        if self.columns:
-            self.columns.append(column)
-            self.column_names.append(column.name)
+        if isinstance(column, (tuple, list)):
+            for c in column:
+                self.add_column(c)
         else:
-            self._prep_columns.append(column)
+            if self.columns:
+                self.columns.append(column)
+                self.column_names.append(column.name)
+            else:
+                logger.debug("add_column: %s", column.name)
+                self._prep_columns.append(column)
 
     def get_properties(self, key):
         ret = None
@@ -974,7 +979,7 @@ class Model(object):
             self._key_name = "%s/%s" % (self.parent(), key) if scoped else key
             include_key_name = scoped
         elif not self._key_name:
-            self._key_name = uuid.uuid1().hex if not self._key_name else self._key_name
+            self._key_name = uuid.uuid1().hex
         self._id = None
         if hasattr(self, "_brandnew"):
             for prop in self._properties.values():
@@ -1015,6 +1020,7 @@ class Model(object):
             prop.validate(prop.__get__(self, None))
 
     def id(self):
+        print "id(): _id %s _key_name %s" % (self._id, self._key_name)
         if not self._id and self._key_name:
             self._id = self.key().id
         return self._id
@@ -1724,7 +1730,7 @@ if __name__ == "__main__":
         assert jan.testname == "Jan"
         assert jan.value == 42
         jan.put()
-        assert jan.id()
+        assert jan.id() is not None, "jan.id() is still None after put()"
         x = jan.key()
 
     with Tx.begin():
@@ -1757,6 +1763,33 @@ if __name__ == "__main__":
 
         count = Test.count()
         assert count == 2, "Expected Test.count() to return 2, but it returned %s instead" % count
+
+        class Test2(Model):
+            testname = TextProperty(required = True, is_label = True)
+            value = IntegerProperty(default = 12)
+        mariska = Test2(testname = "Mariska", value = 40, parent = y)
+        mariska.put()
+        
+        class Test3(Model):
+            testname = TextProperty(required = True, is_label = True)
+            value = IntegerProperty(default = 12)
+        jeroen = Test3(testname = "Jeroen", value = 44, parent = y)
+        jeroen.put()
+
+        print ">>> Test, Test2, Test3 with ancestor"        
+        q = Query((Test,Test2,Test3), False, ancestor = y)
+        for t in q:
+            print t.testname
+
+        
+        print ">>> Test2, Test3 with ancestor"        
+        q = Query((Test2,Test3), False, ancestor = y)
+        for t in q:
+            print t.testname
+
+        print "<<<"        
+        
+
 
         class RefTest(Model):
             refname = TextProperty(required = True, is_key = True)
