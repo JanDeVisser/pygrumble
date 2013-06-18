@@ -216,6 +216,7 @@ class ModelManager(object):
     def_recon_policy = modelconfig.get("reconcile", "all")
 
     def __init__(self, name):
+        logger.debug("ModelManager.__init__(%s)", name)
         self.my_config = self.models.get(name, {})
         self.name = name
         self.schema = gripe.Config.database.postgresql.schema
@@ -235,13 +236,16 @@ class ModelManager(object):
         self.tablename = self.tableprefix + '"' + tablename + '"'
 
     def set_columns(self):
+        logger.debug("%s.set_columns(%s)", self.name, len(self._prep_columns))
         self.key_col = None
         for c in self._prep_columns:
             if c.is_key and not c.scoped:
+                logger.debug("%s.set_columns: found key_col: %s", self.name, c.name)
                 self.key_col = c
                 c.required = True
         self.columns = []
         if not self.key_col:
+            logger.debug("%s.set_columns: Adding synthetic key_col", self.name)
             kc = ColumnDefinition("_key_name", "TEXT", True, None, False)
             kc.is_key = True
             self.key_col = kc
@@ -463,9 +467,13 @@ class ModelManager(object):
     modelmanagers_byname = {}
     @classmethod
     def for_name(cls, name):
+        logger.debug("%s.for_name(%s)", cls.__name__, name)
+        logger.debug("Current registry: %s", cls.modelmanagers_byname)
         if name in cls.modelmanagers_byname:
+            logger.debug("%s.for_name(%s) found", cls.__name__, name)
             ret = cls.modelmanagers_byname[name]
         else:
+            logger.debug("%s.for_name(%s) *not* found. Creating", cls.__name__, name)
             ret = ModelManager(name)
             cls.modelmanagers_byname[name] = ret
         return ret
@@ -831,7 +839,7 @@ class ModelMetaClass(type):
             kind._properties = {}
             kind._allproperties = {}
             kind._query_properties = {}
-            mm = ModelManager.for_name(name)
+            mm = ModelManager.for_name(kind._kind)
             for (propname, value) in dct.items():
                 ModelMetaClass.add_property(kind, propname, value)
             mm.flat = kind._flat
@@ -845,7 +853,7 @@ class ModelMetaClass(type):
         else:
             _set_acl(kind, gripe.Config.model.get("global_acl", kind.acl))
         return kind
-    
+
     @staticmethod
     def add_property(model, propname, propdef):
         if not isinstance(propdef, (ModelProperty, CompoundProperty)):
@@ -853,7 +861,7 @@ class ModelMetaClass(type):
         assert not model._sealed, "Model %s is sealed. No more properties can be added" % model.__name__
         propdef.set_name(propname)
         propdef.set_kind(model.__name__)
-        mm = ModelManager.for_name(model.__name__)
+        mm = ModelManager.for_name(model._kind)
         if not propdef.transient:
             mm.add_column(propdef.get_coldef())
         if hasattr(propdef, "is_label") and propdef.is_label:
@@ -869,7 +877,7 @@ class ModelMetaClass(type):
             for p in propdef.compound:
                 setattr(model, p.name, p)
                 model._allproperties[p.name] = propdef
-        
+
 
 class Model(object):
     __metaclass__ = ModelMetaClass
@@ -1365,7 +1373,7 @@ class Key(object):
                 self.name = value.name
             else:
                 assert 0, "Cannot initialize Key from %s, type %s" % (value, type(value))
-            if not hasattr(self, "id"):
+            if not (hasattr(self, "id") and self.id) and self.name and self.kind:
                 self.id = base64.urlsafe_b64encode("%s:%s" % (self.kind, self.name))
         elif len(args) == 2:
             kind = args[0]
@@ -1401,7 +1409,8 @@ class Key(object):
         return cls.get(self)
 
 class QueryResults(object):
-    def __init__(self, kind):
+    def __init__(self, query, kind):
+        self.query = query
         self.kind = kind
         self.results = None
         self._mm = None
@@ -1415,13 +1424,13 @@ class QueryResults(object):
     def _next_kind(self):
         self.kind = self._q.kind[self._kind_ix] if self._kind_ix < len(self._q.kind) else None
         self._model_ix += 1
-        
+
     def _next_batch(self):
         self.results = None
         if self._mm is None:
             self._mm = ModelManager.for_name(self.kind)
             (self.cur, self.columns, self.index_col) = \
-                self._mm.query(self.query._get_ancestor(), self.filters, "key_name" if self.keys_only else "columns")
+                self._mm.query(self.query._get_ancestor(), self.query.filters, "key_name" if self.query.keys_only else "columns")
         self.results = self._mm._next_batch(self.cur)
 
     def __iter__(self):
@@ -1440,9 +1449,9 @@ class QueryResults(object):
             else:
                 self._current = None
         return self._current
-    
+
     def get(self, keys_only):
-        return Model.get( \
+        return Model.get(\
                   Key(self.kind, \
                       self._current[self.index_col]), \
                   None if keys_only else zip(self.columns, self._current))
@@ -1457,7 +1466,7 @@ class Query(object):
         self._mm = (Model.for_name(k).modelmanager for k in self.kind)
         self.keys_only = keys_only
         self.filters = []
-        self.results = [ QueryResults(k) for k in self.kind ]
+        self.results = [ QueryResults(self, k) for k in self.kind ]
         self.res_ix = -1
 
     def ancestor(self, ancestor):
@@ -1769,26 +1778,26 @@ if __name__ == "__main__":
             value = IntegerProperty(default = 12)
         mariska = Test2(testname = "Mariska", value = 40, parent = y)
         mariska.put()
-        
+
         class Test3(Model):
             testname = TextProperty(required = True, is_label = True)
             value = IntegerProperty(default = 12)
         jeroen = Test3(testname = "Jeroen", value = 44, parent = y)
         jeroen.put()
 
-        print ">>> Test, Test2, Test3 with ancestor"        
-        q = Query((Test,Test2,Test3), False, ancestor = y)
+        print ">>> Test, Test2, Test3 with ancestor"
+        q = Query((Test, Test2, Test3), False, ancestor = y)
         for t in q:
             print t.testname
 
-        
-        print ">>> Test2, Test3 with ancestor"        
-        q = Query((Test2,Test3), False, ancestor = y)
+
+        print ">>> Test2, Test3 with ancestor"
+        q = Query((Test2, Test3), False, ancestor = y)
         for t in q:
             print t.testname
 
-        print "<<<"        
-        
+        print "<<<"
+
 
 
         class RefTest(Model):
