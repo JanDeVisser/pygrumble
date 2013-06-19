@@ -1028,7 +1028,6 @@ class Model(object):
             prop.validate(prop.__get__(self, None))
 
     def id(self):
-        print "id(): _id %s _key_name %s" % (self._id, self._key_name)
         if not self._id and self._key_name:
             self._id = self.key().id
         return self._id
@@ -1459,19 +1458,20 @@ class QueryResults(object):
 class Query(object):
     def __init__(self, kind, keys_only = True, **kwargs):
         if isinstance(kind, (list, tuple)):
-            self.kind = (k if isinstance(k, basestring) else k.kind() for k in kind)
+            self.kind = [k if isinstance(k, basestring) else k.kind() for k in kind]
         else:
             assert isinstance(kind, basestring) or isinstance(kind, ModelMetaClass)
             self.kind = (kind,) if isinstance(kind, basestring) else (kind.kind(),)
         self._mm = (Model.for_name(k).modelmanager for k in self.kind)
+        ancestor = kwargs.get("ancestor")
+        if ancestor:
+            self.ancestor(ancestor)
         self.keys_only = keys_only
         self.filters = []
         self.results = None
         self.res_ix = -1
-        print "__init__ self.kind %s" % list(self.kind)
 
     def ancestor(self, ancestor):
-        print "ancestor in self.kind %s" % list(self.kind)
         self.res_ix = -1
         self.results = None
         for k in self.kind:
@@ -1488,7 +1488,6 @@ class Query(object):
         elif not ancestor:
             ancestor = "/"
         self._ancestor = ancestor
-        print "ancestor out self.kind %s" % list(self.kind)
 
     def _get_ancestor(self):
         return (self._ancestor().path() if self._ancestor != "/" else self._ancestor) \
@@ -1496,7 +1495,6 @@ class Query(object):
             else None
 
     def filter(self, expression, value):
-        print "filter in self.kind %s" % list(self.kind)
         self.res_ix = -1
         self.results = None
         if isinstance(value, Key):
@@ -1504,18 +1502,13 @@ class Query(object):
         elif isinstance(value, Model):
             value = value.name()
         self.filters.append((expression, value))
-        print "filter out self.kind %s" % list(self.kind)
 
     def __iter__(self):
-        print "__iter__ in self.kind %s" % list(self.kind)
         self.res_ix = 0
         self.results = [ QueryResults(self, k) for k in self.kind ]
-        print "len() %s" % len(self.results)
         return self
 
     def next(self):
-        print "res_ix %s" % self.res_ix
-        print "results[res_ix] %s" % type(self.results[self.res_ix])
         result = next(self.results[self.res_ix])
         while result is None:
             self.res_ix += 1
@@ -1542,11 +1535,8 @@ class Query(object):
         return self.__iter__()
 
     def get(self):
-        if not self.results:
-            self.results = QueryResults(self)
-        result = next(self.results)
-        if result:
-            return Model.get(Key(self.results.kind, result[0]))
+        i = iter(self)
+        return next(i)
 
     def fetch(self):
         results = [ r for r in self ]
