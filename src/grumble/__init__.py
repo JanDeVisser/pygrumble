@@ -1466,19 +1466,21 @@ class Query(object):
         self._mm = (Model.for_name(k).modelmanager for k in self.kind)
         self.keys_only = keys_only
         self.filters = []
-        self.results = [ QueryResults(self, k) for k in self.kind ]
+        self.results = None
         self.res_ix = -1
+        print "__init__ self.kind %s" % list(self.kind)
 
     def ancestor(self, ancestor):
+        print "ancestor in self.kind %s" % list(self.kind)
+        self.res_ix = -1
         self.results = None
-        if Model.for_name(self.kind)._flat:
-            logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
-            return
+        for k in self.kind:
+            if Model.for_name(k)._flat:
+                logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
+                return
         assert (ancestor is None) or isinstance(ancestor, basestring) or \
             isinstance(ancestor, Model) or isinstance(ancestor, Key), \
             "Must specify an ancestor object or None in Query.ancestor"
-        if hasattr(self, "results"):
-            del self.results
         if (isinstance(ancestor, basestring)):
             ancestor = Key(ancestor) if ancestor != "/" else "/"
         elif (isinstance(ancestor, Model)):
@@ -1486,6 +1488,7 @@ class Query(object):
         elif not ancestor:
             ancestor = "/"
         self._ancestor = ancestor
+        print "ancestor out self.kind %s" % list(self.kind)
 
     def _get_ancestor(self):
         return (self._ancestor().path() if self._ancestor != "/" else self._ancestor) \
@@ -1493,18 +1496,26 @@ class Query(object):
             else None
 
     def filter(self, expression, value):
+        print "filter in self.kind %s" % list(self.kind)
+        self.res_ix = -1
         self.results = None
         if isinstance(value, Key):
             value = value.name
         elif isinstance(value, Model):
             value = value.name()
         self.filters.append((expression, value))
+        print "filter out self.kind %s" % list(self.kind)
 
     def __iter__(self):
+        print "__iter__ in self.kind %s" % list(self.kind)
         self.res_ix = 0
+        self.results = [ QueryResults(self, k) for k in self.kind ]
+        print "len() %s" % len(self.results)
         return self
 
     def next(self):
+        print "res_ix %s" % self.res_ix
+        print "results[res_ix] %s" % type(self.results[self.res_ix])
         result = next(self.results[self.res_ix])
         while result is None:
             self.res_ix += 1
@@ -1518,6 +1529,7 @@ class Query(object):
         ret = 0
         for mm in self._mm:
             ret += mm.count(self._get_ancestor(), self.filters)
+        return ret
 
     def delete(self):
         # FIXME: If on_delete is not defined for the model, don't do this
