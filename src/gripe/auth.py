@@ -4,17 +4,15 @@
 import uuid
 import random
 
-import gripe
-import grit
-import grit.role
+import gripe.role
 
 
 __author__ = "jan"
 __date__ = "$3-Mar-2013 10:11:27 PM$"
 
-logger = gripe.get_logger("grit")
+logger = gripe.get_logger("gripe")
 
-class AuthException(grit.Exception):
+class AuthException(gripe.Error):
     pass
 
 class UserExists(AuthException):
@@ -28,11 +26,11 @@ class InvalidConfirmationCode(AuthException):
     def __str__(self):
         return "Invalid user confirmation code"
 
-class AbstractAuthObject(grit.role.HasRoles):
+class AbstractAuthObject(gripe.role.HasRoles):
     def role_objects(self, include_self = True):
         s = set()
         for rname in self.roles(explicit = True):
-            role = grit.Session.get_rolemanager().get_role(rname)
+            role = gripe.role.RoleManager.get_rolemanager().get_role(rname)
             if role:
                 s |= role.role_objects()
             else:
@@ -123,6 +121,7 @@ class AbstractUserManager(object):
         gripe.abstract(self, "add")
 
     def confirm(self, userid, code):
+        pass
         
     def uid(self, user):
         return user.uid() if user else None

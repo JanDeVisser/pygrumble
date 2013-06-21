@@ -22,15 +22,20 @@ import sys
 import gripe
 import gripe.json_util
 import gripe.url
-import grit.role
-import grit.auth
-import grit.log
 import grumble
 
 logger = gripe.get_logger(__name__)
 
-class Exception(gripe.Error):
+class Error(gripe.Error):
     pass
+
+print "gripe.role"
+import gripe.role
+print "gripe.auth"
+import gripe.auth
+print "grit.log"
+import grit.log
+print "DONE importing"
 
 class UserData(grumble.Model):
     _flat = True

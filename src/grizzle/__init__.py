@@ -6,14 +6,13 @@ import webapp2
 import gripe
 import gripe.smtp
 import grumble
-import grit
-import grit.auth
+import gripe.auth
 import grit.handlers
-import grit.role
+import gripe.role
 
 logger = gripe.get_logger("grizzle")
 
-class UserGroup(grumble.Model, grit.auth.AbstractUserGroup):
+class UserGroup(grumble.Model, gripe.auth.AbstractUserGroup):
     _flat = True
     group = grumble.TextProperty(is_key = True, is_label = True)
     has_roles = grumble.ListProperty()
@@ -24,7 +23,7 @@ class UserGroup(grumble.Model, grit.auth.AbstractUserGroup):
     def _explicit_roles(self):
         return set(self.has_roles)
 
-class User(grumble.Model, grit.auth.AbstractUser):
+class User(grumble.Model, gripe.auth.AbstractUser):
     _flat = True
     email = grumble.TextProperty(is_key = True)
     password = grumble.PasswordProperty()
@@ -46,7 +45,7 @@ class GroupsForUser(grumble.Model):
     user = grumble.ReferenceProperty(reference_class = User)
     group = grumble.ReferenceProperty(reference_class = UserGroup)
 
-class UserManager(grit.auth.AbstractUserManager):
+class UserManager(gripe.auth.AbstractUserManager):
     def get(self, userid):
         return User.get_by_key(userid)
 
@@ -62,7 +61,7 @@ class UserManager(grit.auth.AbstractUserManager):
     def add(self, userid, password):
         user = self.get(userid)
         if user:
-            raise grit.auth.UserExists(userid)
+            raise gripe.auth.UserExists(userid)
         else:
             user = User(email = userid, password = password, confirmation_code = self.confirmation_code())
             user.put()
@@ -74,7 +73,7 @@ class UserManager(grit.auth.AbstractUserManager):
             user.confirmation_code = None
             user.put()
         else:
-            raise grit.auth.InvalidConfirmationCode()
+            raise gripe.auth.InvalidConfirmationCode()
 
 def currentuser():
     return UserManager().get(grumble.get_sessionbridge().userid())

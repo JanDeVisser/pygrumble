@@ -4,11 +4,9 @@
 __author__ = "jan"
 __date__ = "$3-Mar-2013 5:24:57 PM$"
 
-import gripe
 import gripe.url
-import grit
 
-logger = gripe.get_logger("grit")
+logger = gripe.get_logger("gripe")
 
 class HasRoles(object):
     def role_objects(self, include_self = True):
@@ -94,8 +92,6 @@ class HasRoles(object):
         logger.info("has_role: %s & %s = %s", set(roles), myroles, set(roles) & myroles)
         return len(set(roles) & myroles) > 0
 
-_role_manager = None
-
 class AbstractRole(HasRoles):
     
     def rolename(self):
@@ -111,8 +107,7 @@ class AbstractRole(HasRoles):
         while roles:
             role = roles.pop()
             for rname in role.roles(explicit = True):
-                # has_role = grit.Session.get_rolemanager().get_role(rname)
-                has_role = _role_manager.get_role(rname)
+                has_role = RoleManager.get_rolemanager().get_role(rname)
                 if has_role and has_role not in ret:
                     ret.add(has_role)
                     roles.append(has_role)
@@ -135,10 +130,11 @@ class Role(AbstractRole):
         return self.__id__()
 
 class RoleManager(object):
+    _rolemanager = None
+    
     def __init__(self):
-        global _role_manager
         self._roles = {}
-        _role_manager = self
+        self.__class__._rolemanager = self
         self.initialize()
 
     def add_role(self, role):
@@ -153,6 +149,14 @@ class RoleManager(object):
                 self.add_role(Role(role))
         else:
             logger.warn("No roles defined in app configuration")
+            
+    @classmethod
+    def get_rolemanager(cls):
+        ret = cls._rolemanager
+        if ret is None:
+            RoleManager()
+            ret = cls._rolemanager
+        return ret
 
 if __name__ == "__main__":
     rolemanager = RoleManager()

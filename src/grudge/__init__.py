@@ -2,11 +2,8 @@ import datetime
 import gripe
 import gripe.smtp
 import grumble
-import grit
-import grit.auth
-import grit.handlers
-import grit.role
-import grizzle
+import gripe.auth
+import gripe.role
 
 logger = gripe.get_logger("grudge")
 
@@ -16,9 +13,9 @@ logger = gripe.get_logger("grudge")
 #    apply status
 #
 
-def Status(object):
+class Status(object):
     def __init__(self):
-        self._name = name
+        self._name = self.__class__.__name__
         self._on_added = []
         self._on_removed = []
 
@@ -28,10 +25,10 @@ def Status(object):
         return self._name
 
     def on_added(self, action):
-        self._on_added += action
+        self._on_added.append(action)
 
     def on_removed(self, action):
-        self._on_removed = []
+        self._on_removed.append(action)
 
     def added(self, process):
         for a in self._on_added:
@@ -149,52 +146,62 @@ class Process(object):
         pass
 
     def __call__(self, cls):
+        print "decorating %s" % cls.__name__
         grumble.ModelMetaClass.add_property(cls, "starttime", grumble.DateTimeProperty())
         grumble.ModelMetaClass.add_property(cls, "finishtime", grumble.DateTimeProperty())
         cls._statuses = {}
-        for (propname, propdef) in cls.__dict__:
+        for (propname, propdef) in cls.__dict__.items():
             if isinstance(propdef, Status):
                 propdef.name(propname)
                 cls._statuses[propname] = propdef
         cls._on_started = []
         cls._on_stopped = []
         cls._subprocesses = []
+        cls._parent_process = grumble.Model.for_name(self.parent) if self.parent else None
+        if cls._parent_process:
+            cls._parent_process._subprocesses.append(cls)
+        cls._entrypoint = self.entrypoint
 
         def on_started(cls, action):
-            cls._on_started += action
+            cls._on_started.append(action)
         cls.on_started = classmethod(on_started)
 
         def on_stopped(cls, action):
-            cls._on_stopped = []
+            cls._on_stopped.append(action)
         cls.on_stopped = classmethod(on_stopped)
 
-        def add_subprocess(cls, sub):
-            cls._subprocesses += sub
-        cls.add_subprocess = classmethod(add_subprocess)
-        
         def subprocesses(cls):
             return cls._subprocesses
         cls.subprocesses = classmethod(subprocesses)
         
         def instantiate(cls, parent = None):
+            print "instantiate %s" % cls.__name__
             with grumble.Tx.begin():
                 p = cls(parent = parent)
                 p.put()
                 for sub in cls.subprocesses():
-                    subcls = grumble.Model.for_name(sub)
+                    subcls = grumble.Model.for_name(sub.__name__)
                     subcls.instantiate(p)
+                return p
         cls.instantiate = classmethod(instantiate)
 
         def start(self):
+            print "start instance of %s" % self.__class__.__name__
             if self.starttime is None:
                 with grumble.Tx.begin():
                     self.starttime = datetime.datetime.now()
                     self.put()
                     for a in self._on_started:
                         a(process = self)
+                    ep = grumble.Model.for_name(self._entrypoint) if self._entrypoint else None
+                    if ep:
+                        ep_instance = grumble.Query(ep, False, ancestor = self).get()
+                        if ep_instance:
+                            ep_instance.start()
         cls.start = start
 
         def stop(self):
+            print "stop instance of %s" % self.__class__.__name__
             if self.starttime is not None and self.finishtime is None:
                 with grumble.Tx.begin():
                     for sub in grumble.Query(self.subprocesses(), ancestor = self):
@@ -237,8 +244,37 @@ class Process(object):
         cls.remove_status = remove_status
 
         def resolve(self, path):
-            # TODO Implement
-            return self
+            assert path, "Called process.resolve with empty path"
+            proc = self
+            p = path.split("/")
+            pix = 0
+            while pix < len(p):
+                elem = p[pix]
+                if elem == "..":
+                    proc = proc.parent()
+                elif elem and elem != ".":
+                    proc = grumble.Query(elem, ancestor = proc).get()
+                assert proc, "Path %s does not resolve for process %s" % (path, self)
+            return proc
         cls.resolve = resolve
 
         return cls
+
+
+if __name__ == "__main__":
+
+    @Process(entrypoint = "Step1")
+    class WF(grumble.Model):
+        pass
+    
+    @OnStarted(Transition("../Step2"))
+    @Process(parent = "WF")
+    class Step1(grumble.Model):
+        pass
+    
+    @Process(parent = "WF", exitpoint = True)
+    class Step2(grumble.Model):
+        pass
+    
+    wf = WF.instantiate()
+    wf.start()

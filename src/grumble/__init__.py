@@ -235,7 +235,7 @@ class ModelManager(object):
         self.table = tablename
         self.tablename = self.tableprefix + '"' + tablename + '"'
 
-    def set_columns(self):
+    def _set_columns(self):
         logger.debug("%s.set_columns(%s)", self.name, len(self._prep_columns))
         self.key_col = None
         for c in self._prep_columns:
@@ -262,18 +262,17 @@ class ModelManager(object):
                 ColumnDefinition("_updatedby", "TEXT", False, None, False), \
                 ColumnDefinition("_updated", "TIMESTAMP", False, None, False))
         self.column_names = [c.name for c in self.columns]
+        logger.debug("_set_columns(%s) -> colnames %s", self.name, self.column_names)
 
     def add_column(self, column):
+        assert self.kind, "ModelManager for %s without kind set??" % self.name
+        assert not self.kind._sealed, "Kind %s is sealed" % self.name
         if isinstance(column, (tuple, list)):
             for c in column:
                 self.add_column(c)
         else:
-            if self.columns:
-                self.columns.append(column)
-                self.column_names.append(column.name)
-            else:
-                logger.debug("add_column: %s", column.name)
-                self._prep_columns.append(column)
+            logger.debug("add_column: %s", column.name)
+            self._prep_columns.append(column)
 
     def get_properties(self, key):
         ret = None
@@ -389,6 +388,7 @@ class ModelManager(object):
         return ret
 
     def reconcile(self):
+        self._set_columns()
         self._recon = self.my_config.get("reconcile", self.def_recon_policy)
         if self._recon != "none":
             with Tx.begin() as tx:
@@ -445,7 +445,7 @@ class ModelManager(object):
                             logger.info("NULL change: %s.%s required %s -> is_nullable %s", self.tablename, colname, column.required, is_nullable)
                             alter = " SET NOT NULL" if column.required else " DROP NOT NULL"
                         if column.defval != defval:
-                            alter += " DEFAULT %s"
+                            alter += " SET DEFAULT %s"
                             vars.append(column.defval)
                         if alter != "":
                             cur.execute('ALTER TABLE %s ALTER COLUMN "%s" %s' % (self.tablename, colname, alter), vars)
@@ -840,15 +840,13 @@ class ModelMetaClass(type):
             kind._allproperties = {}
             kind._query_properties = {}
             mm = ModelManager.for_name(kind._kind)
-            for (propname, value) in dct.items():
-                ModelMetaClass.add_property(kind, propname, value)
             mm.flat = kind._flat
             mm.audit = kind._audit
             mm.set_tablename(tablename)
-            mm.set_columns()
             mm.kind = kind
-            mm.reconcile()
             kind.modelmanager = mm
+            for (propname, value) in dct.items():
+                ModelMetaClass.add_property(kind, propname, value)
             kind.load_template_data()
         else:
             _set_acl(kind, gripe.Config.model.get("global_acl", kind.acl))
@@ -885,7 +883,7 @@ class Model(object):
     acl = { "admin": "RUDQC", "owner": "R" }
 
     def __new__(cls, *args, **kwargs):
-        cls._sealed = True
+        cls.seal()
         ret = super(Model, cls).__new__(cls)
         ret._brandnew = True
         ret._set_ancestors_from_parent(kwargs["parent"] if "parent" in kwargs else None)
@@ -900,6 +898,13 @@ class Model(object):
                 setattr(ret, propname, propvalue)
         logger.debug("%s.__new__: %s", ret.kind(), ret._values)
         return ret
+
+    @classmethod
+    def seal(cls):
+        if not cls._sealed:
+            cls._sealed = True
+            cls.modelmanager.reconcile()
+
 
     def __repr__(self):
         return str(self.key())
@@ -1233,16 +1238,17 @@ class Model(object):
             hierarchy.append(name)
             fullname = ".".join(hierarchy)
         fullname = fullname.lower()
-        assert fullname not in cls.classes, "Model._register_class: Class '%s' is already registered" % fullname
+        print "_register_class(%s) %s" % (fullname, fullname in Model.classes)
+        assert fullname not in Model.classes, "Model._register_class: Class '%s' is already registered" % fullname
         logger.debug("Model._register_class %s => %s", fullname, modelclass)
         Model.classes[fullname] = modelclass
         modelclass._kind = fullname
 
     @classmethod
     def get(cls, id, values = None):
-        cls._sealed = True
         k = Key(id)
         if cls != Model:
+            cls.seal()
             ret = Tx.get_from_cache(k)
             if not ret:
                 ret = super(Model, cls).__new__(cls)
@@ -1261,7 +1267,7 @@ class Model(object):
 
     @classmethod
     def get_by_key(cls, key, values = None):
-        cls._sealed = True
+        cls.seal()
         assert cls != Model, "Cannot use get_by_key on unconstrained Models"
         k = Key(cls, key)
         ret = Tx.get_from_cache(k)
@@ -1274,6 +1280,7 @@ class Model(object):
 
     @classmethod
     def query(cls, *args, **kwargs):
+        cls.seal()
         logger.debug("%s.query: args %s kwargs %s", cls.__name__, args, kwargs)
         assert (args is None) or (len(args) % 2 == 0), "Must specify a value for every filter"
         assert cls != Model, "Cannot query on unconstrained Model class"
@@ -1304,10 +1311,12 @@ class Model(object):
 
     @classmethod
     def all(cls, **kwargs):
+        cls.seal()
         return Query(cls, **kwargs)
 
     @classmethod
     def count(cls, **kwargs):
+        cls.seal()
         return Query(cls).count()
 
     @classmethod
@@ -1411,6 +1420,7 @@ class QueryResults(object):
     def __init__(self, query, kind):
         self.query = query
         self.kind = kind
+        Model.for_name(self.kind).seal()
         self.results = None
         self._mm = None
         self.cur = None
@@ -1450,7 +1460,7 @@ class QueryResults(object):
         return self._current
 
     def get(self, keys_only):
-        return Model.get(\
+        return Model.for_name(self.kind).get(\
                   Key(self.kind, \
                       self._current[self.index_col]), \
                   None if keys_only else zip(self.columns, self._current))
