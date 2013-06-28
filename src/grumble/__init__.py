@@ -846,35 +846,11 @@ class ModelMetaClass(type):
             mm.kind = kind
             kind.modelmanager = mm
             for (propname, value) in dct.items():
-                ModelMetaClass.add_property(kind, propname, value)
+                kind.add_property(propname, value)
             kind.load_template_data()
         else:
             _set_acl(kind, gripe.Config.model.get("global_acl", kind.acl))
         return kind
-
-    @staticmethod
-    def add_property(model, propname, propdef):
-        if not isinstance(propdef, (ModelProperty, CompoundProperty)):
-            return
-        assert not model._sealed, "Model %s is sealed. No more properties can be added" % model.__name__
-        propdef.set_name(propname)
-        propdef.set_kind(model.__name__)
-        mm = ModelManager.for_name(model._kind)
-        if not propdef.transient:
-            mm.add_column(propdef.get_coldef())
-        if hasattr(propdef, "is_label") and propdef.is_label:
-            assert not hasattr(model, "label_prop"), "Can only assign one label property"
-            model.label_prop = propdef
-        if hasattr(propdef, "is_key") and propdef.is_key:
-            assert not hasattr(model, "key_prop"), "Can only assign one key property"
-            assert not propdef.transient, "Key property cannot be transient"
-            model.key_prop = propdef
-        model._properties[propname] = propdef
-        model._allproperties[propname] = propdef
-        if isinstance(propdef, CompoundProperty):
-            for p in propdef.compound:
-                setattr(model, p.name, p)
-                model._allproperties[p.name] = propdef
 
 
 class Model(object):
@@ -926,6 +902,9 @@ class Model(object):
     def __eq__(self, other):
         assert isinstance(other, Model)
         return (self.kind() == other.kind()) and (self.name() == other.name())
+
+    def __call__(self):
+        return self
 
     def _set_ancestors_from_parent(self, parent):
         if not self._flat:
@@ -1200,6 +1179,33 @@ class Model(object):
         return "C" in cls.get_user_classpermissions()
 
     @classmethod
+    def add_property(cls, propname, propdef):
+        if not isinstance(propdef, (ModelProperty, CompoundProperty)):
+            return
+        logger.debug("'%s'.add_property('%s')", cls.__name__, propname)
+        assert not cls._sealed, "Model %s is sealed. No more properties can be added" % cls.__name__
+        if not hasattr(cls, propname):
+            setattr(cls, propname, propdef)
+        propdef.set_name(propname)
+        propdef.set_kind(cls.__name__)
+        mm = ModelManager.for_name(cls._kind)
+        if not propdef.transient:
+            mm.add_column(propdef.get_coldef())
+        if hasattr(propdef, "is_label") and propdef.is_label:
+            assert not hasattr(cls, "label_prop"), "Can only assign one label property"
+            cls.label_prop = propdef
+        if hasattr(propdef, "is_key") and propdef.is_key:
+            assert not hasattr(cls, "key_prop"), "Can only assign one key property"
+            assert not propdef.transient, "Key property cannot be transient"
+            cls.key_prop = propdef
+        cls._properties[propname] = propdef
+        cls._allproperties[propname] = propdef
+        if isinstance(propdef, CompoundProperty):
+            for p in propdef.compound:
+                setattr(cls, p.name, p)
+                cls._allproperties[p.name] = propdef
+
+    @classmethod
     def kind(cls):
         return cls._kind
 
@@ -1209,21 +1215,30 @@ class Model(object):
 
     @classmethod
     def for_name(cls, name):
-        name = name.replace('/', '.').lower()
-        if name.startswith("."):
-            (empty, dot, name) = name.partition(".")
-        if name.startswith("__main__."):
-            (main, dot, name) = name.partition(".")
-        ret = Model.classes[name] if name in Model.classes else None
-        if not ret and "." not in name:
-            for n in Model.classes:
-                e = ".%s" % name
-                if n.endswith(e):
-                    c = Model.classes[n]
-                    assert not ret, "for_name(%s): Already found match %s but there's a second one %s" % \
-                        (name, ret.kind(), c.kind())
-                    ret = c
-        return ret
+        if isinstance(name, ModelMetaClass):
+            return name
+        elif isinstance(name, Model):
+            return name.__class__
+        else:
+            name = name.replace('/', '.').lower()
+            if name.startswith("."):
+                (empty, dot, name) = name.partition(".")
+            if name.startswith("__main__."):
+                (main, dot, name) = name.partition(".")
+            ret = Model.classes[name] if name in Model.classes else None
+            if not ret and "." not in name:
+                for n in Model.classes:
+                    e = ".%s" % name
+                    if n.endswith(e):
+                        c = Model.classes[n]
+                        assert not ret, "for_name(%s): Already found match %s but there's a second one %s" % \
+                            (name, ret.kind(), c.kind())
+                        ret = c
+            if not ret:
+                print "Going to fail in Model.for_name"
+                print "Current registry: %s" % Model.classes
+            assert ret, "No Model class found for name %s" % name
+            return ret
 
     @classmethod
     def _register_class(cls, module, name, modelclass):
@@ -1238,7 +1253,6 @@ class Model(object):
             hierarchy.append(name)
             fullname = ".".join(hierarchy)
         fullname = fullname.lower()
-        print "_register_class(%s) %s" % (fullname, fullname in Model.classes)
         assert fullname not in Model.classes, "Model._register_class: Class '%s' is already registered" % fullname
         logger.debug("Model._register_class %s => %s", fullname, modelclass)
         Model.classes[fullname] = modelclass
@@ -1397,7 +1411,8 @@ class Key(object):
         else:
             self.id = value
             s = base64.urlsafe_b64decode(value)
-        (self.kind, self.name) = s.split(":")
+        (k, self.name) = s.split(":")
+        self.kind = Model.for_name(k).kind()
 
     def __str__(self):
         return self.kind + ":" + self.name
@@ -1420,14 +1435,14 @@ class QueryResults(object):
     def __init__(self, query, kind):
         self.query = query
         self.kind = kind
-        Model.for_name(self.kind).seal()
+        k = Model.for_name(self.kind)
+        k.seal()
+        self._mm = k.modelmanager
         self.results = None
-        self._mm = None
         self.cur = None
         self.columns = None
         self.iter = None
         self.index_col = None
-        self._mm = None
         self._current = None
 
     def _next_kind(self):
@@ -1435,9 +1450,9 @@ class QueryResults(object):
         self._model_ix += 1
 
     def _next_batch(self):
+        assert self._mm, "No modelmanager for kind %s" % self.kind
         self.results = None
-        if self._mm is None:
-            self._mm = ModelManager.for_name(self.kind)
+        if self.cur is None:
             (self.cur, self.columns, self.index_col) = \
                 self._mm.query(self.query._get_ancestor(), self.query.filters, "key_name" if self.query.keys_only else "columns")
         self.results = self._mm._next_batch(self.cur)
@@ -1519,6 +1534,7 @@ class Query(object):
         return self
 
     def next(self):
+        print "next --- res_ix: %s" % self.res_ix
         result = next(self.results[self.res_ix])
         while result is None:
             self.res_ix += 1
