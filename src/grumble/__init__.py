@@ -210,6 +210,113 @@ class ColumnDefinition(object):
         self.indexed = indexed
         self.is_key = False
 
+QueryType = gripe.Enum(['Columns', 'KeyName', 'Delete', 'Count'])
+
+class ModelQuery(object):
+    
+    def __init__(self):
+        self._owner = None
+        self._filters = []
+
+    def set_ancestor(self, ancestor):
+        assert not self.has_parent(), "Cannot query for ancestor and parent at the same time"
+        assert (ancestor is None) or isinstance(ancestor, (basestring, Model, Key)),
+            "Must specify an ancestor object or None in ModelQuery.set_ancestor"
+        if (isinstance(ancestor, basestring)):
+            ancestor = Key(ancestor) if ancestor != "/" else None
+        else (isinstance(ancestor, Model)):
+            ancestor = ancestor.key()
+        if ancestor is None:
+            self.unset_ancestor()
+            self.set_parent(None)
+        else:
+            self._ancestor = ancestor
+
+    def unset_ancestor(self):
+        if hasattr(self, "_ancestor"):
+            del self._ancestor
+
+    def has_ancestor(self):
+        return hasattr(self, "_ancestor")
+
+    def ancestor(self):
+        assert self.has_ancestor(), "Cannot call ancestor() on ModelQuery with no ancestor set"
+        return self._ancestor
+
+    def set_parent(self, parent):
+        assert not self.has_ancestor(), "Cannot query for ancestor and parent at the same time"
+        assert (parent is None) or isinstance(parent, (basestring, Key, Model)),
+             "Must specify an parent object or None in ModelQuery.set_parent"
+        if (isinstance(parent, basestring)):
+            parent = Key(parent) if parent != "/" else None
+        else (isinstance(parent, Model)):
+            parent = parent.key()
+        self._parent = parent
+ 
+    def unset_parent(self):
+        if hasattr(self, "_parent"):
+            del self._parent
+
+    def has_parent(self):
+        return hasattr(self, "_parent")
+
+    def parent(self):
+        assert self.has_parent(), "Cannot call parent() on ModelQuery with no parent set"
+        return self._parent
+
+    def owner(self, o = None):
+        if o is not None:
+            self._owner = o
+        return self._owner
+
+    def add_filter(self, expr, value):
+        self._filters.append((expr, value))
+
+    def filters(self):
+        return self._filters
+
+class ModelQueryResult(object):
+    def __init__(self, columns = None, key_index = -1):
+        self._columns = columns
+        self._key_index = key_index
+        self._cursor = None
+
+    def execute(self, sql, values):
+        tx = Tx.get()
+        assert tx, "ModelManager.query: no transaction active"
+        self._cursor = tx.get_cursor()
+        self._cursor.execute(sql, values)
+        return (cur, cols, key_ix)
+
+    def columns(self):
+        return self._columns
+
+    def key_index(self):
+        return self._key_index
+
+    def rowcount(self):
+        assert self._cursor is not None, "Cannot call ModelQueryResult.rowcount() before query executed"
+        return self._cursor.rowcount
+
+    def cursor(self):
+        return self._cursor
+
+    def next_batch(self):
+        if not self._cursor.closed:
+            ret = self._cursor.fetchmany()
+            if len(ret) < cur.arraysize:
+                logger.debug("ModelQueryResult.next_batch: no more results, closing cursor")
+                self.close()
+        else:
+            ret = None
+        return ret
+
+    def close(self):
+        if not(self._cursor is None or self._cursor.closed):
+            tx = Tx.get()
+            assert tx, "ModelQueryResult.close(): no transaction active"
+            tx.close_cursor(self._cursor)
+
 class ModelManager(object):
     modelconfig = gripe.Config.model
     models = modelconfig.get("model", {})
@@ -323,68 +430,61 @@ class ModelManager(object):
             sql = 'DELETE FROM %s WHERE "%s" = %%s' % (self.tablename, self.key_col.name)
             cur.execute(sql, (key.name,))
 
-    def query(self, ancestor, filters, what = "key_name"):
+    def query(self, type, q):
         key_ix = 0
-        if what == "delete":
+        if type == QueryType.Delete:
             sql = "DELETE FROM %s" % self.tablename
             cols = ()
             key_ix = -1
+        elif type == QueryType.Count:
+            sql = "SELECT COUNT(*) AS COUNT FROM %s" % self.tablename
+            cols = ('COUNT',)
+            key_ix = -1
         else:
-            if what == "columns":
+            if type == QueryType.Columns:
                 cols = [c.name for c in self.columns]
                 collist = '"' + '", "'.join(cols) + '"'
                 key_ix = cols.index(self.key_col.name)
-            elif what == "key_name":
+            elif type == QueryType.KeyName:
                 cols = (self.key_col.name,)
                 collist = '"%s"' % cols[0]
             else:
-                collist = what
-                cols = (what,)
+                assert 0, "Huh? Unrecognized query type %s in query for table '%s'" % (type, self.name) 
             sql = 'SELECT %s FROM %s' % (collist, self.tablename)
         vals = []
         glue = ' WHERE '
-        if ancestor:
-            assert not self.flat, "Cannot perform ancestor queries on flat tables"
+        if q.has_ancestor():
+            assert not self.flat, "Cannot perform ancestor queries on flat table '%s'" % self.name
             glue = ' AND '
-            if ancestor != "/":
-                sql += ' WHERE "_ancestors" LIKE %s'
-                vals.append(ancestor + "%")
-            else:
-                sql += ' WHERE "_ancestors" = %s' % "'/'"
+            sql += ' WHERE "_ancestors" LIKE %s'
+            vals.append(str(q.ancestor()) + "%")
+        if q.has_parent():
+            assert not self.flat, "Cannot perform parent queries on flat table '%s'" % self.name
+            sql += glue + '"_parent" = %s'
+            glue = ' AND '
+            vals.append(str(q.parent()))
+        if q.owner():
+            assert self.audit, "Cannot perform owner queries on unaudited table '%s'" % self.name
+            sql += glue + '"_ownerid" = %s'
+            glue = ' AND '
+            vals.append(q.owner())
+        filters = q.filters()
         if filters:
             filtersql = " AND ".join(['%s %%s' % e for (e, v) in filters])
             sql += glue + filtersql
             vals += [v for (e, v) in filters]
-        tx = Tx.get()
-        assert tx, "ModelManager.query: no transaction active"
-        cur = tx.get_cursor()
-        cur.execute(sql, vals)
-        return (cur, cols, key_ix)
+        return ModelQueryResult(cols, key_ix).execute(sql, vals)
 
-    def _next_batch(self, cur):
-        if not cur.closed:
-            ret = cur.fetchmany()
-            if len(ret) < cur.arraysize:
-                logger.debug("ModelManager.query: no more results, closing cursor")
-                tx = Tx.get()
-                assert tx, "ModelManager.query: no transaction active"
-                tx.close_cursor(cur)
-        else:
-            ret = None
+    def count(self, q):
+        mqr = self.query(QueryType.Count, q)
+        ret = next(mqr.next_batch())[0]
+        mqr.close()
         return ret
 
-    def count(self, ancestor, filters):
-        (cur, ignored1, ignored2) = self.query(ancestor, filters, 'COUNT(*)')
-        ret = cur.fetchone()[0]
-        tx = Tx.get()
-        tx.close_cursor(cur)
-        return ret
-
-    def delete_query(self, ancestor, filters):
-        (cur, ignored1, ignored2) = self.query(ancestor, filters, 'delete')
-        ret = cur.rowcount
-        tx = Tx.get()
-        tx.close_cursor(cur)
+    def delete_query(self, q):
+        mqr = self.query(QueryType.Delete, q)
+        ret = mqr.rowcount()
+        mqr.close()
         return ret
 
     def reconcile(self):
@@ -433,7 +533,9 @@ class ModelManager(object):
                     break
             if column:
                 if data_type.lower() != column.data_type.lower():
-                    logger.info("Data type change: %s.%s %s -> %s", self.tablename, colname, data_type.lower(), column.data_type.lower())
+                    logger.info("Data type change: %s.%s %s -> %s", \
+                                    self.tablename, colname, data_type.lower(), \
+                                    column.data_type.lower())
                     cur.execute('ALTER TABLE ' + self.tablename + ' DROP COLUMN "' + colname + '"')
                     # We're not removing the column from the dict -
                     # we'll re-add the column when we add 'new' columns
@@ -442,13 +544,16 @@ class ModelManager(object):
                         alter = ""
                         vars = []
                         if column.required != (is_nullable == 'NO'):
-                            logger.info("NULL change: %s.%s required %s -> is_nullable %s", self.tablename, colname, column.required, is_nullable)
+                            logger.info("NULL change: %s.%s required %s -> is_nullable %s", \
+                                            self.tablename, colname, \
+                                            column.required, is_nullable)
                             alter = " SET NOT NULL" if column.required else " DROP NOT NULL"
                         if column.defval != defval:
                             alter += " SET DEFAULT %s"
                             vars.append(column.defval)
                         if alter != "":
-                            cur.execute('ALTER TABLE %s ALTER COLUMN "%s" %s' % (self.tablename, colname, alter), vars)
+                            cur.execute('ALTER TABLE %s ALTER COLUMN "%s" %s' % \
+                                            (self.tablename, colname, alter), vars)
                     self.columns.remove(column)
         for c in self.columns:
             vars = []
@@ -586,27 +691,48 @@ def register_propertyconverter(datatype, converter):
 
 class ModelProperty(object):
     def __new__(cls, *args, **kwargs):
-        ret = super(ModelProperty, cls).__new__(cls)
-        ret.name = args[0] if args else None
-        ret.column_name = kwargs.get("column_name", None)
-        ret.verbose_name = kwargs.get("verbose_name", ret.name)
-        ret.required = kwargs.get("required", False)
-        ret.default = kwargs.get("default", None)
-        ret.private = kwargs.get("private", False)
-        ret.transient = kwargs.get("transient", False)
-        ret.is_label = kwargs.get("is_label", False)
-        ret.is_key = kwargs.get("is_key", False)
-        ret.scoped = kwargs.get("scoped", False) if ret.is_key else False
-        ret.indexed = kwargs.get("indexed", False)
-        ret.validator = kwargs.get("validator", None)
-        assert (ret.validator is None) or callable(ret.validator), "Validator %s must be function, not %s" % (str(ret.validator), type(ret.validator))
-        ret.converter = kwargs.get("converter", \
-            cls.converter \
-                if hasattr(cls, "converter") \
-                else _converters.get(cls.datatype, PropertyConverter(cls.datatype))
-        )
-        ret.suffix = kwargs.get("suffix", None)
-        ret.choices = kwargs.get("choices", None)
+        if args and isinstance(args[0], ModelProperty):
+            prop = args[0]
+            ret = super(ModelProperty, prop.__class__).__new__(prop.__class__)
+            ret.name = prop.name
+            ret.column_name = prop.column_name
+            ret.verbose_name = prop.verbose_name
+            ret.required = prop.required
+            ret.default = prop.default
+            ret.private = prop.private
+            ret.transient = prop.transient
+            ret.is_label = prop.is_label
+            ret.is_key = prop.is_key
+            ret.scoped = prop.scoped
+            ret.indexed = prop.indexed
+            ret.validator = prop.validator
+            ret.converter = prop.converter
+            ret.suffix = prop.suffix
+            ret.choices = prop.choices
+            ret.inherited_from = prop
+        else:
+            ret = super(ModelProperty, cls).__new__(cls)
+            ret.name = args[0] if args else None
+            ret.column_name = kwargs.get("column_name", None)
+            ret.verbose_name = kwargs.get("verbose_name", ret.name)
+            ret.required = kwargs.get("required", False)
+            ret.default = kwargs.get("default", None)
+            ret.private = kwargs.get("private", False)
+            ret.transient = kwargs.get("transient", False)
+            ret.is_label = kwargs.get("is_label", False)
+            ret.is_key = kwargs.get("is_key", False)
+            ret.scoped = kwargs.get("scoped", False) if ret.is_key else False
+            ret.indexed = kwargs.get("indexed", False)
+            ret.validator = kwargs.get("validator", None)
+            assert (ret.validator is None) or callable(ret.validator), "Validator %s must be function, not %s" % (str(ret.validator), type(ret.validator))
+            ret.converter = kwargs.get("converter", \
+                cls.converter \
+                    if hasattr(cls, "converter") \
+                    else _converters.get(cls.datatype, PropertyConverter(cls.datatype))
+            )
+            ret.suffix = kwargs.get("suffix", None)
+            ret.choices = kwargs.get("choices", None)
+            ret.inherited_from = None
         return ret
 
     def set_name(self, name):
@@ -820,21 +946,19 @@ class ModelMetaClass(type):
         kind = type.__new__(cls, name, bases, dct)
         if name != 'Model':
             kind._sealed = False
-            Model._register_class(cls.__module__, name, kind)
-            if hasattr(kind, "table_name"):
-                tablename = kind.table_name
+            Model._register_class(kind.__module__, name, kind)
+            if "table_name" in dct:
+                tablename = dct["table_name"]
             else:
                 tablename = name
                 kind.table_name = name
-            kind._flat = kind._flat if hasattr(kind, "_flat") else False
-            kind._audit = kind._audit if hasattr(kind, "_audit") else True
-            kind._parentclass = (Model.for_name(kind._parentclass) if isinstance(kind._parentclass, basestring) else kind._parentclass) \
-                if hasattr(kind, "_parentclass") else None
-            acl = Config.model["model"][name]["acl"] \
+            kind._flat = dct.get("_flat", False)
+            kind._audit = dct.get("_audit", True)
+            acl = gripe.Config.model["model"][name]["acl"] \
                 if "model" in gripe.Config.model and \
                     name in gripe.Config.model["model"] and \
                     "acl" in gripe.Config.model["model"][name] \
-                else kind.acl if hasattr(kind, "acl") else None
+                else dct.get("acl", None)
             _set_acl(kind, acl)
             kind._properties = {}
             kind._allproperties = {}
@@ -845,6 +969,9 @@ class ModelMetaClass(type):
             mm.set_tablename(tablename)
             mm.kind = kind
             kind.modelmanager = mm
+            for base in bases:
+                if isinstance(base, ModelMetaClass) and base != Model:
+                    kind._import_properties(base)
             for (propname, value) in dct.items():
                 kind.add_property(propname, value)
             kind.load_template_data()
@@ -1042,13 +1169,11 @@ class Model(object):
         pl = self.pathlist()
         return pl[0] if pl else self
 
-    def ownerid(self):
+    def ownerid(self, oid = None):
         self._load()
+        if oid is not None:
+            self._ownerid = oid
         return self._ownerid
-
-    def set_ownerid(self, ownerid):
-        self._load()
-        self._ownerid = ownerid
 
     def put(self):
         self._store()
@@ -1192,10 +1317,11 @@ class Model(object):
         if not propdef.transient:
             mm.add_column(propdef.get_coldef())
         if hasattr(propdef, "is_label") and propdef.is_label:
-            assert not hasattr(cls, "label_prop"), "Can only assign one label property"
+            #assert not hasattr(cls, "label_prop") or cls.label_prop.inherited_from, "Can only assign one label property"
+            assert not propdef.transient, "Label property cannot be transient"
             cls.label_prop = propdef
         if hasattr(propdef, "is_key") and propdef.is_key:
-            assert not hasattr(cls, "key_prop"), "Can only assign one key property"
+            #assert not hasattr(cls, "key_prop") or cls.key_prop.inherited_from, "Can only assign one key property"
             assert not propdef.transient, "Key property cannot be transient"
             cls.key_prop = propdef
         cls._properties[propname] = propdef
@@ -1204,6 +1330,11 @@ class Model(object):
             for p in propdef.compound:
                 setattr(cls, p.name, p)
                 cls._allproperties[p.name] = propdef
+
+    @classmethod
+    def _import_properties(cls, from_cls):
+        for (propname, propdef) in from_cls.properties().items():
+            cls.add_property(propname, ModelProperty(propdef))
 
     @classmethod
     def kind(cls):
@@ -1239,6 +1370,14 @@ class Model(object):
                 print "Current registry: %s" % Model.classes
             assert ret, "No Model class found for name %s" % name
             return ret
+        
+    @classmethod
+    def subclasses(cls):
+        ret = []
+        for m in Model.classes.values():
+            if m != cls and issubclass(m, cls):
+                ret.append(m)
+        return ret
 
     @classmethod
     def _register_class(cls, module, name, modelclass):
@@ -1301,6 +1440,10 @@ class Model(object):
         q = Query(cls, kwargs.get("keys_only", True))
         if "ancestor" in kwargs and not cls._flat:
             q.ancestor(kwargs["ancestor"])
+        if "parent" in kwargs and "ancestor" not in kwargs and not cls._flat:
+            q.parent(kwargs["parent"])
+        if "ownerid" in kwargs:
+            q.owner(kwargs["ownerid"])
         ix = 0
         while ix < len(args):
             q.filter(args[ix], args[ix + 1])
@@ -1438,38 +1581,32 @@ class QueryResults(object):
         k = Model.for_name(self.kind)
         k.seal()
         self._mm = k.modelmanager
-        self.results = None
-        self.cur = None
-        self.columns = None
-        self.iter = None
-        self.index_col = None
+        self._results = None
+        self._mqr = None
+        self._iter = None
         self._current = None
 
-    def _next_kind(self):
-        self.kind = self._q.kind[self._kind_ix] if self._kind_ix < len(self._q.kind) else None
-        self._model_ix += 1
-
     def _next_batch(self):
+        print "QueryResult(%s)._next_batch" % self.kind
         assert self._mm, "No modelmanager for kind %s" % self.kind
-        self.results = None
-        if self.cur is None:
-            (self.cur, self.columns, self.index_col) = \
-                self._mm.query(self.query._get_ancestor(), self.query.filters, "key_name" if self.query.keys_only else "columns")
-        self.results = self._mm._next_batch(self.cur)
+        self._results = None
+        if self._mqr is None:
+            _mqr = self._mm.query(self.query.querytype(), self.query._q)
+        self._results = self._mqr.next_batch()
 
     def __iter__(self):
         return self
 
     def next(self):
-        if not self.results:
+        if not self._results:
             self._next_batch()
-            self.iter = iter(self.results)
-        self._current = next(self.iter, None)
+            self.iter = iter(self.-results)
+        self._current = next(self._iter, None)
         if self._current is None:
             self._next_batch()
-            if self.results is not None:
-                self.iter = iter(self.results)
-                self._current = next(self.iter, None)
+            if self._results is not None:
+                self._iter = iter(self._results)
+                self._current = next(self._iter, None)
             else:
                 self._current = None
         return self._current
@@ -1477,47 +1614,43 @@ class QueryResults(object):
     def get(self, keys_only):
         return Model.for_name(self.kind).get(\
                   Key(self.kind, \
-                      self._current[self.index_col]), \
+                      self._current[self._mqr.key_col]), \
                   None if keys_only else zip(self.columns, self._current))
 
 class Query(object):
     def __init__(self, kind, keys_only = True, **kwargs):
+        self._q = ModelQuery(ModelQuery.Type.KeyName if keys_only else ModelQuery.Type.Columns)
         if isinstance(kind, (list, tuple)):
-            self.kind = [k if isinstance(k, basestring) else k.kind() for k in kind]
+            kinds = [k if isinstance(k, ModelMetaClass) else Model.for_name(k) for k in kind]
         else:
             assert isinstance(kind, basestring) or isinstance(kind, ModelMetaClass)
-            self.kind = (kind,) if isinstance(kind, basestring) else (kind.kind(),)
+            kinds = [kind] if isinstance(kind, ModelMetaClass) else [Model.for_name(kind)]
+        self.kind = []
+        for k in kinds:
+            self.kind.append(k.kind())
+            for sub in k.subclasses():
+                self.kind.append(sub.kind())
         self._mm = (Model.for_name(k).modelmanager for k in self.kind)
         ancestor = kwargs.get("ancestor")
         if ancestor:
             self.ancestor(ancestor)
+        parent = kwargs.get("parent"):
+        if par
         self.keys_only = keys_only
         self.filters = []
         self.results = None
         self.res_ix = -1
 
-    def ancestor(self, ancestor):
-        self.res_ix = -1
-        self.results = None
-        for k in self.kind:
-            if Model.for_name(k)._flat:
-                logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
-                return
-        assert (ancestor is None) or isinstance(ancestor, basestring) or \
-            isinstance(ancestor, Model) or isinstance(ancestor, Key), \
-            "Must specify an ancestor object or None in Query.ancestor"
-        if (isinstance(ancestor, basestring)):
-            ancestor = Key(ancestor) if ancestor != "/" else "/"
-        elif (isinstance(ancestor, Model)):
-            ancestor = ancestor.key()
-        elif not ancestor:
-            ancestor = "/"
-        self._ancestor = ancestor
-
-    def _get_ancestor(self):
-        return (self._ancestor().path() if self._ancestor != "/" else self._ancestor) \
-            if hasattr(self, "_ancestor") \
-            else None
+    def ancestor(self, ancestor = None):
+        self._q.ancestor(ancestor)
+        if ancestor is not None:
+            self.res_ix = -1
+            self.results = None
+            for k in self.kind:
+                if Model.for_name(k)._flat:
+                    logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
+                    return
+        return return self._q.ancestor(ancestor)
 
     def filter(self, expression, value):
         self.res_ix = -1
@@ -1534,7 +1667,6 @@ class Query(object):
         return self
 
     def next(self):
-        print "next --- res_ix: %s" % self.res_ix
         result = next(self.results[self.res_ix])
         while result is None:
             self.res_ix += 1
@@ -1724,17 +1856,26 @@ class ReferenceProperty(ModelProperty):
 
     def __init__(self, *args, **kwargs):
         super(ReferenceProperty, self).__init__(*args, **kwargs)
-        self.reference_class = args[0] \
-            if args \
-            else kwargs.get("reference_class")
-        if self.reference_class and isinstance(self.reference_class, basestring):
-            self.reference_class = Model.for_name(self.reference_class)
-        assert not self.reference_class or isinstance(self.reference_class, ModelMetaClass)
-        self.collection_name = kwargs.get("collection_name")
-        self.collection_verbose_name = kwargs.get("collection_verbose_name")
-        self.serialize = kwargs.get("serialize", True)
-        self.collection_serialize = kwargs.get("collection_serialize", False)
-        self.collection_private = kwargs.get("collection_private", True)
+        if args and isinstance(args[0], ReferenceProperty):
+            prop = args[0]
+            self.reference_class = prop.reference_class
+            self.collection_name = prop.collection_name
+            self.collection_verbose_name = prop.collection_verbose_name
+            self.serialize = prop.serialize
+            self.collection_serialize = prop.collection_serialize
+            self.collection_private = prop.collection_private
+        else:
+            self.reference_class = args[0] \
+                if args \
+                else kwargs.get("reference_class")
+            if self.reference_class and isinstance(self.reference_class, basestring):
+                self.reference_class = Model.for_name(self.reference_class)
+            assert not self.reference_class or isinstance(self.reference_class, ModelMetaClass)
+            self.collection_name = kwargs.get("collection_name")
+            self.collection_verbose_name = kwargs.get("collection_verbose_name")
+            self.serialize = kwargs.get("serialize", True)
+            self.collection_serialize = kwargs.get("collection_serialize", False)
+            self.collection_private = kwargs.get("collection_private", True)
         self.converter = ReferenceConverter(self.reference_class, self.serialize)
 
     def set_kind(self, kind):
@@ -1826,7 +1967,17 @@ if __name__ == "__main__":
 
         print "<<<"
 
-
+        print ">>> Subclassing models"
+        class Test3Sub(Test3):
+            lightswitch = BooleanProperty(default = False)
+            
+        t3s = Test3Sub(testname = "T3S", value = "3", lightswitch = True)
+        t3s.put()
+        print t3s.testname, t3s.value, t3s.lightswitch
+        q = Query(Test3, False)
+        for t in q:
+            print t.testname
+        print "<<<"
 
         class RefTest(Model):
             refname = TextProperty(required = True, is_key = True)
