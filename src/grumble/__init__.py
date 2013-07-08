@@ -22,6 +22,7 @@ from gripe import pgsql
 
 logger = gripe.get_logger(__name__)
 
+
 class PropertyRequired(gripe.Error):
     """Raised when no value is specified for a required property"""
     def __init__(self, propname):
@@ -29,6 +30,7 @@ class PropertyRequired(gripe.Error):
 
     def __str__(self):
         return "Property %s requires a value" % (self.propname,)
+
 
 class InvalidChoice(gripe.Error):
     """Raised when a value is specified for a property that is not in the
@@ -38,7 +40,9 @@ class InvalidChoice(gripe.Error):
         self.value = value
 
     def __str__(self):
-        return "Value %s is invalid for property %s" % (self.value, self.propname)
+        return "Value %s is invalid for property %s" % \
+            (self.value, self.propname)
+
 
 class ObjectDoesNotExist(gripe.Error):
     """Raised when an object is requested that does not exist"""
@@ -48,6 +52,7 @@ class ObjectDoesNotExist(gripe.Error):
 
     def __str__(self):
         return "Model %s:%s does not exist" % (self.cls.__name__, self.id)
+
 
 class Tx(object):
     _init = False
@@ -70,29 +75,42 @@ class Tx(object):
     @classmethod
     def _init_schema(cls):
         config = gripe.Config.database
-        assert config.postgresql, "Config: conf/database.json is missing postgresql section"
+        assert config.postgresql, """
+            Config: conf/database.json is missing postgresql section"""
         pgsql_conf = config.postgresql
-        assert pgsql_conf.user, "Config: No user role in postgresql section of conf/database.json"
+        assert pgsql_conf.user, """
+            Config: No user role in postgresql section of
+            conf/database.json"""
         pgsql_user = pgsql_conf.user
-        assert pgsql_conf.admin, "Config: No admin role in postgresql section of conf/database.json"
+        assert pgsql_conf.admin, """
+            Config: No admin role in postgresql section of
+            conf/database.json"""
         pgsql_admin = pgsql_conf.admin
-        assert pgsql_user.user_id and pgsql_user.password, \
-            "Config: user role is missing user_id or password in postgresql section of conf/database.json"
-        assert pgsql_admin.user_id and pgsql_admin.password, \
-            "Config: admin role is missing user_id or password in postgresql section of conf/database.json"
+        assert pgsql_user.user_id and pgsql_user.password, """
+            Config: user role is missing user_id or password in postgresql
+            section of conf/database.json"""
+        assert pgsql_admin.user_id and pgsql_admin.password, """
+            Config: admin role is missing user_id or password in postgresql
+            section of conf/database.json"""
 
         if pgsql_conf.database:
             database = pgsql_conf.database
             if database != 'postgres':
-                # We're assuming the postgres database exists and should never be wiped:
+                # We're assuming the postgres database exists and should
+                # never be wiped:
                 with Tx.begin("admin", "postgres", True) as tx:
                     cur = tx.get_cursor()
                     create_db = False
-                    if isinstance(pgsql_conf.wipe_database, bool) and pgsql_conf.wipe_database:
-                        cur.execute('DROP DATABASE IF EXISTS "%s"' % (database,))
+                    if isinstance(pgsql_conf.wipe_database, bool) \
+                            and pgsql_conf.wipe_database:
+                        cur.execute('DROP DATABASE IF EXISTS "%s"' %
+                            (database,))
                         create_db = True
                     else:
-                        cur.execute("SELECT COUNT(*) FROM pg_catalog.pg_database WHERE datname = %s", (database,))
+                        cur.execute(
+                            """SELECT COUNT(*)
+                               FROM pg_catalog.pg_database
+                               WHERE datname = %s""", (database,))
                         create_db = (cur.fetchone()[0] == 0)
                     if create_db:
                         cur.execute('CREATE DATABASE "%s"' % (database,))
@@ -102,33 +120,48 @@ class Tx(object):
                 cur = tx.get_cursor()
                 create_schema = False
                 schema = pgsql_conf.schema
-                if isinstance(pgsql_conf.wipe_schema, bool) and pgsql_conf.wipe_schema:
-                    cur.execute('DROP SCHEMA IF EXISTS "%s" CASCADE' % (schema,))
+                if isinstance(pgsql_conf.wipe_schema, bool) \
+                        and pgsql_conf.wipe_schema:
+                    cur.execute('''
+                        DROP SCHEMA IF EXISTS "%s" CASCADE''',
+                        (schema, ))
                     create_schema = True
                 else:
-                    cur.execute("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = %s", (schema,))
+                    cur.execute("""
+                        SELECT COUNT(*)
+                        FROM information_schema.schemata
+                        WHERE schema_name = %s""", (schema,))
                     create_schema = (cur.fetchone()[0] == 0)
                 if create_schema:
-                    cur.execute('CREATE SCHEMA "%s" AUTHORIZATION %s' % (schema, pgsql_conf["user"]["user_id"]))
+                    cur.execute(
+                        'CREATE SCHEMA "%s" AUTHORIZATION %s' %
+                        (schema, pgsql_conf["user"]["user_id"]))
 
     def _connect(self):
         config = gripe.Config.database
         pgsql_conf = config.postgresql
-        dsn = "user=%s password=%s" % (getattr(pgsql_conf, self.role).user_id, getattr(pgsql_conf, self.role).password)
+        dsn = "user=%s password=%s" % (
+            getattr(pgsql_conf, self.role).user_id,
+            getattr(pgsql_conf, self.role).password)
         if not self.database:
             self.database = pgsql_conf.database
         if not self.database:
-            self.database = "postgres" if self.role == "admin" else getattr(pgsql_conf, self.role).user_id
+            self.database = "postgres" \
+                if self.role == "admin" \
+                else getattr(pgsql_conf, self.role).user_id
         dsn += " dbname=%s" % self.database
         if pgsql_conf.host:
             dsn += " host=%s" % pgsql_conf.host
-        logger.debug("Connecting with role '%s' autocommit = %s", self.role, self.autocommit)
+        logger.debug("Connecting with role '%s' autocommit = %s",
+            self.role, self.autocommit)
         self.conn = pgsql.Connection.get(dsn)
         self.conn.autocommit = self.autocommit
 
     @classmethod
-    def begin(cls, role = "user", database = None, autocommit = False):
-        return cls._tl.tx if hasattr(cls._tl, "tx") else Tx(role, database, autocommit)
+    def begin(cls, role="user", database=None, autocommit=False):
+        return cls._tl.tx \
+            if hasattr(cls._tl, "tx") \
+            else Tx(role, database, autocommit)
 
     @classmethod
     def get(cls):
@@ -141,12 +174,14 @@ class Tx(object):
     def __exit__(self, exception_type, exception_value, trace):
         self.count -= 1
         if exception_type:
-            logger.error("Exception in Tx block, Exception: %s %s %s", exception_type, exception_value, trace)
+            logger.error("Exception in Tx block, Exception: %s %s %s",
+                exception_type, exception_value, trace)
         if not self.count:
             try:
                 self._end_tx()
             except Exception, exc:
-                logger.error("Exception committing Tx, Exception: %s %s", exc.__class__.__name__, exc)
+                logger.error("Exception committing Tx, Exception: %s %s",
+                    exc.__class__.__name__, exc)
         return False
 
     def get_cursor(self):
@@ -190,9 +225,11 @@ class Tx(object):
             tx.cache = {}
 
 _sessionbridge = None
+
 def set_sessionbridge(bridge):
     global _sessionbridge
     _sessionbridge = bridge
+
 
 def get_sessionbridge():
     global _sessionbridge
@@ -200,6 +237,7 @@ def get_sessionbridge():
         from gripe import sessionbridge
         _sessionbridge = sessionbridge.sessionbridge
     return _sessionbridge
+
 
 class ColumnDefinition(object):
     def __init__(self, name, data_type, required, defval, indexed):
@@ -212,19 +250,22 @@ class ColumnDefinition(object):
 
 QueryType = gripe.Enum(['Columns', 'KeyName', 'Delete', 'Count'])
 
+
 class ModelQuery(object):
-    
     def __init__(self):
         self._owner = None
         self._filters = []
 
     def set_ancestor(self, ancestor):
-        assert not self.has_parent(), "Cannot query for ancestor and parent at the same time"
-        assert (ancestor is None) or isinstance(ancestor, (basestring, Model, Key)),
-            "Must specify an ancestor object or None in ModelQuery.set_ancestor"
-        if (isinstance(ancestor, basestring)):
+        assert not self.has_parent(), \
+            "Cannot query for ancestor and parent at the same time"
+        assert ((ancestor is None) or
+                isinstance(ancestor, (basestring, Model, Key))), \
+                "Must specify an ancestor object or None in ModelQuery.set_\
+                ancestor"
+        if isinstance(ancestor, basestring):
             ancestor = Key(ancestor) if ancestor != "/" else None
-        else (isinstance(ancestor, Model)):
+        elif isinstance(ancestor, Model):
             ancestor = ancestor.key()
         if ancestor is None:
             self.unset_ancestor()
@@ -240,19 +281,22 @@ class ModelQuery(object):
         return hasattr(self, "_ancestor")
 
     def ancestor(self):
-        assert self.has_ancestor(), "Cannot call ancestor() on ModelQuery with no ancestor set"
+        assert self.has_ancestor(), \
+            "Cannot call ancestor() on ModelQuery with no ancestor set"
         return self._ancestor
 
     def set_parent(self, parent):
-        assert not self.has_ancestor(), "Cannot query for ancestor and parent at the same time"
-        assert (parent is None) or isinstance(parent, (basestring, Key, Model)),
+        assert not self.has_ancestor(), \
+            "Cannot query for ancestor and parent at the same time"
+        assert ((parent is None) or
+                isinstance(parent, (basestring, Key, Model))), \
              "Must specify an parent object or None in ModelQuery.set_parent"
         if (isinstance(parent, basestring)):
             parent = Key(parent) if parent != "/" else None
-        else (isinstance(parent, Model)):
+        elif (isinstance(parent, Model)):
             parent = parent.key()
         self._parent = parent
- 
+
     def unset_parent(self):
         if hasattr(self, "_parent"):
             del self._parent
@@ -280,6 +324,7 @@ class ModelQueryResult(object):
         self._columns = columns
         self._key_index = key_index
         self._cursor = None
+        self._results = None
 
     def execute(self, sql, values):
         tx = Tx.get()
@@ -295,21 +340,53 @@ class ModelQueryResult(object):
         return self._key_index
 
     def rowcount(self):
-        assert self._cursor is not None, "Cannot call ModelQueryResult.rowcount() before query executed"
+        assert self._cursor is not None, \
+            "Cannot call ModelQueryResult.rowcount() before query executed"
         return self._cursor.rowcount
 
     def cursor(self):
         return self._cursor
 
-    def next_batch(self):
+    def _next_batch(self):
         if not self._cursor.closed:
-            ret = self._cursor.fetchmany()
-            if len(ret) < cur.arraysize:
-                logger.debug("ModelQueryResult.next_batch: no more results, closing cursor")
+            self._results = self._cursor.fetchmany()
+            if len(self._results) < cur.arraysize:
+                logger.debug("""ModelQueryResult._next_batch: no more results,
+                    closing cursor""")
                 self.close()
+            self._iter = iter(self._results)
+            self._current = None
         else:
-            ret = None
-        return ret
+            self._results = None
+            self._iter = None
+            self._current = None
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        if self._results is None:
+            self._next_batch()
+        if self._iter is not None:
+            try:
+                try:
+                    self._current = next(self._iter)
+                except StopIteration:
+                    self._next_batch()
+                    if self._iter is not None:
+                        # If this raises StopIteration that means
+                        # that the cursor returned zero rows, so
+                        # we're done anyways
+                        self._current = next(self._iter)
+                    else:
+                        raise StopIteration
+                return ret
+            except StopIteration:
+                self._current = None
+                self._iter = None
+                self._results = None
+                raise
+        return self._current
 
     def close(self):
         if not(self._cursor is None or self._cursor.closed):
@@ -449,7 +526,7 @@ class ModelManager(object):
                 cols = (self.key_col.name,)
                 collist = '"%s"' % cols[0]
             else:
-                assert 0, "Huh? Unrecognized query type %s in query for table '%s'" % (type, self.name) 
+                assert 0, "Huh? Unrecognized query type %s in query for table '%s'" % (type, self.name)
             sql = 'SELECT %s FROM %s' % (collist, self.tablename)
         vals = []
         glue = ' WHERE '
@@ -1370,7 +1447,7 @@ class Model(object):
                 print "Current registry: %s" % Model.classes
             assert ret, "No Model class found for name %s" % name
             return ret
-        
+
     @classmethod
     def subclasses(cls):
         ret = []
@@ -1574,6 +1651,7 @@ class Key(object):
         cls = Model.for_name(self.kind)
         return cls.get(self)
 
+
 class QueryResults(object):
     def __init__(self, query, kind):
         self.query = query
@@ -1598,24 +1676,17 @@ class QueryResults(object):
         return self
 
     def next(self):
-        if not self._results:
-            self._next_batch()
-            self.iter = iter(self.-results)
-        self._current = next(self._iter, None)
-        if self._current is None:
-            self._next_batch()
-            if self._results is not None:
-                self._iter = iter(self._results)
-                self._current = next(self._iter, None)
-            else:
-                self._current = None
-        return self._current
+        if self._mqr is None:
+            self._mqr = self._mm.query(self.query.querytype(), self.query._q)
+            self._iter = iter(self._mqr)
+        return next(self._iter)
 
     def get(self, keys_only):
         return Model.for_name(self.kind).get(\
                   Key(self.kind, \
                       self._current[self._mqr.key_col]), \
                   None if keys_only else zip(self.columns, self._current))
+
 
 class Query(object):
     def __init__(self, kind, keys_only = True, **kwargs):
@@ -1634,8 +1705,9 @@ class Query(object):
         ancestor = kwargs.get("ancestor")
         if ancestor:
             self.ancestor(ancestor)
-        parent = kwargs.get("parent"):
-        if par
+        parent = kwargs.get("parent")
+        if parent:
+            self.parent(parent)
         self.keys_only = keys_only
         self.filters = []
         self.results = None
@@ -1673,7 +1745,7 @@ class Query(object):
             if self.res_ix < len(self.results):
                 result = next(self.results[self.res_ix])
             else:
-                raise StopIteration
+0;136;0c                raise StopIteration
         return self.results[self.res_ix].get(self.keys_only)
 
     def count(self):
@@ -1970,7 +2042,7 @@ if __name__ == "__main__":
         print ">>> Subclassing models"
         class Test3Sub(Test3):
             lightswitch = BooleanProperty(default = False)
-            
+
         t3s = Test3Sub(testname = "T3S", value = "3", lightswitch = True)
         t3s.put()
         print t3s.testname, t3s.value, t3s.lightswitch

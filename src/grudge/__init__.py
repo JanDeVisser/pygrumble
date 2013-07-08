@@ -207,7 +207,7 @@ class SendMail(Action):
         self._subject = kwargs.get("subject") or ""
         self._text = kwargs["text"]
         self._status = kwargs.get("status")
-        
+
     def __call__(self, **kwargs):
         process = kwargs.get("process")
         recipients = process().resolve(self._recipients) \
@@ -371,7 +371,7 @@ class Process(object):
                 proc = proc()
                 assert hasattr(proc, attrib), \
                     "Resolving %s: Objects of class %s do not have attribute %s" % \
-                    (path, proc.__class__.__name__, attrib) 
+                    (path, proc.__class__.__name__, attrib)
                 attr = getattr(proc, attrib)
                 return attr() if callable(attr) else attr
             else:
