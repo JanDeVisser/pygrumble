@@ -199,8 +199,8 @@ class Tx(object):
                 for c in self.cursors:
                     c.close()
             finally:
-                    self.conn.commit()
-                    self.conn.close()
+                self.conn.commit()
+                self.conn.close()
         finally:
             self.active = False
             self.cache = {}
