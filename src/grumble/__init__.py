@@ -106,10 +106,7 @@ class Tx(object):
                             (database,))
                         create_db = True
                     else:
-                        cur.execute(
-                            """SELECT COUNT(*)
-                               FROM pg_catalog.pg_database
-                               WHERE datname = %s""", (database,))
+                        cur.execute("SELECT COUNT(*) FROM pg_catalog.pg_database WHERE datname = %s", (database,))
                         create_db = (cur.fetchone()[0] == 0)
                     if create_db:
                         cur.execute('CREATE DATABASE "%s"' % (database,))
@@ -124,10 +121,7 @@ class Tx(object):
                     cur.execute('DROP SCHEMA IF EXISTS "%s" CASCADE' % schema)
                     create_schema = True
                 else:
-                    cur.execute("""
-                        SELECT COUNT(*)
-                        FROM information_schema.schemata
-                        WHERE schema_name = %s""", (schema,))
+                    cur.execute("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = %s", (schema,))
                     create_schema = (cur.fetchone()[0] == 0)
                 if create_schema:
                     cur.execute(
@@ -236,7 +230,7 @@ def get_sessionbridge():
     return _sessionbridge
 
 
-QueryType = gripe.Enum(['Columns', 'KeyName', 'Delete', 'Count'])
+QueryType = gripe.Enum(['Columns', 'KeyName', 'Update', 'Insert', 'Delete', 'Count'])
 
 class ModelQueryResult(object):
     def __init__(self, columns = None, key_index = -1):
@@ -273,7 +267,7 @@ class ModelQueryResult(object):
 
     def single_row_bycolumns(self):
         values = self.single_row()
-        return zip(self._column, values) if values else None
+        return zip(self._columns, values) if values else None
 
     def singleton(self):
         return self.single_row()[0]
@@ -324,6 +318,9 @@ class ModelQueryResult(object):
                 raise
         return self._current
 
+    def all_rows_bycolumns(self):
+        return [zip(self._columns, row) for row in self]
+
     def close(self):
         if not(self._cursor is None or self._cursor.closed):
             tx = Tx.get()
@@ -360,16 +357,18 @@ class ModelQuery(object):
         return self._manager.columns
 
     def key_column(self):
-        return self._manager.keycol
+        return self._manager.key_col
 
     def set_keyname(self, keyname):
         assert not (self.has_parent() or self.has_ancestor()), \
             "Cannot query for ancestor or parent and keyname at the same time"
-        assert ((keyname is None) or
-                isinstance(keyname, (basestring, Key))), \
+        assert ((keyname is None) or isinstance(keyname, (basestring, Key))), \
                 "Must specify an string, Key, or None in ModelQuery.set_keyname"
         if isinstance(keyname, basestring):
-            keyname = Key(keyname)
+            try:
+                keyname = Key(keyname)
+            except:
+                keyname = Key(self._manager.name, keyname)
         if keyname is None:
             self.unset_keyname()
         else:
@@ -459,46 +458,86 @@ class ModelQuery(object):
     def filters(self):
         return self._filters
 
-    def execute(self, type):
-        key_ix = 0
+    def _update_audit_info(self, new_values, insert):
+        # Set update audit info:
+        new_values["_updated"] = datetime.datetime.now()
+        new_values["_updatedby"] = get_sessionbridge().userid()
+        if insert:
+            # Set creation audit info:
+            new_values["_created"] = new_values["_updated"]
+            new_values["_createdby"] = new_values["_updatedby"]
+            # If not specified, set owner to creator:
+            if not new_values.get("_ownerid"):
+                new_values["_ownerid"] = new_values["_createdby"]
+        else: # Update, don't clobber creation audit info:
+            if "_created" in new_values:
+                new_values.pop("_created")
+            if "_createdby" in new_values:
+                new_values.pop("_createdby")
+
+    def execute(self, type, new_values = None):
+        key_ix = -1
+        cols = ()
+        vals = []
         if type == QueryType.Delete:
             sql = "DELETE FROM %s" % self.tablename()
-            cols = ()
-            key_ix = -1
         elif type == QueryType.Count:
             sql = "SELECT COUNT(*) AS COUNT FROM %s" % self.tablename()
             cols = ('COUNT',)
-            key_ix = -1
-        else:
+        elif type in (QueryType.Update, QueryType.Insert):
+            assert new_values, "ModelQuery.execute: QueryType %s requires new values" % QueryType[type]
+            if self.audit():
+                self._update_audit_info(new_values, type == QueryType.Insert)
+            if type == QueryType.Update:
+                sql = 'UPDATE %s SET %s ' % (self.tablename(), ", ".join(['"%s" = %%s' % c for c in new_values]))
+            else: # Insert
+                sql = 'INSERT INTO %s ( "%s" ) VALUES ( %s )' % \
+                        (self.tablename(), '", "'.join(new_values), ', '.join(['%s'] * len(new_values)))
+            vals.extend(new_values.values())
+        elif type in (QueryType.Columns, QueryType.KeyName):
             if type == QueryType.Columns:
                 cols = [c.name for c in self.columns()]
                 collist = '"' + '", "'.join(cols) + '"'
                 key_ix = cols.index(self.key_column().name)
             elif type == QueryType.KeyName:
-                cols = (self.manager.key_col.name,)
+                cols = (self.key_column().name,)
                 collist = '"%s"' % cols[0]
-            else:
-                assert 0, "Huh? Unrecognized query type %s in query for table '%s'" % (type, self.name())
+                key_ix = 0
             sql = 'SELECT %s FROM %s' % (collist, self.tablename())
-        vals = []
-        glue = ' WHERE '
-        if self.has_ancestor():
-            glue = ' AND '
-            sql += ' WHERE "_ancestors" LIKE %s'
-            vals.append(str(self.ancestor()) + "%")
-        if self.has_parent():
-            sql += glue + '"_parent" = %s'
-            glue = ' AND '
-            vals.append(str(self.parent()))
-        if self.owner():
-            sql += glue + '"_ownerid" = %s'
-            glue = ' AND '
-            vals.append(self.owner())
-        if self._filters:
-            filtersql = " AND ".join(['%s %%s' % e for (e, v) in self._filters])
-            sql += glue + filtersql
-            vals += [v for (e, v) in self._filters]
+        else:
+            assert 0, "Huh? Unrecognized query type %s in query for table '%s'" % (type, self.name())
+        if type != QueryType.Insert:
+            glue = ' WHERE '
+            if self.has_keyname():
+                glue = ' AND '
+                sql += ' WHERE "%s" = %%s' % self.key_column().name
+                vals.append(str(self.keyname().name))
+            if self.has_ancestor():
+                glue = ' AND '
+                sql += ' WHERE "_ancestors" LIKE %s'
+                vals.append(str(self.ancestor()) + "%")
+            if self.has_parent():
+                sql += glue + '"_parent" = %s'
+                glue = ' AND '
+                vals.append(str(self.parent()))
+            if self.owner():
+                sql += glue + '"_ownerid" = %s'
+                glue = ' AND '
+                vals.append(self.owner())
+            if self._filters:
+                filtersql = " AND ".join(['%s %%s' % e for (e, v) in self._filters])
+                sql += glue + filtersql
+                vals += [v for (e, v) in self._filters]
         return ModelQueryResult(cols, key_ix).execute(sql, vals)
+
+    def get(self, key):
+        with Tx.begin():
+            return self.set_keyname(key).execute(QueryType.Columns).single_row_bycolumns()
+
+    def set(self, insert, key, values):
+        with Tx.begin():
+            self.set_keyname(key)
+            self.execute(QueryType.Insert if insert else QueryType.Update, values)
 
     def count(self):
         with Tx.begin():
@@ -584,49 +623,6 @@ class ModelManager(object):
         else:
             logger.debug("add_column: %s", column.name)
             self._prep_columns.append(column)
-
-    def get_properties(self, key):
-        ret = None
-        with Tx.begin() as tx:
-            cur = tx.get_cursor()
-            sql = 'SELECT "%s" FROM %s WHERE "%s" = %%s' % \
-                ('", "'.join(self.column_names), self.tablename, self.key_col.name)
-            cur.execute(sql, (key.name,))
-            values = cur.fetchone()
-            if values:
-                ret = zip(self.column_names, values)
-        return ret
-
-    def set_properties(self, insert, key, values):
-        logger.debug("ModelManager.set_properties(%s)", values)
-        if self.audit:
-            values["_updated"] = datetime.datetime.now()
-            values["_updatedby"] = get_sessionbridge().userid()
-            if insert:
-                values["_created"] = values["_updated"]
-                values["_createdby"] = values["_updatedby"]
-                if not values.get("_ownerid"):
-                    values["_ownerid"] = values["_createdby"]
-            else:
-                if "_created" in values:
-                    values.pop("_created")
-                if "_createdby" in values:
-                    values.pop("_createdby")
-        ret = key.id
-        with Tx.begin() as tx:
-            assert key.name
-            cur = tx.get_cursor()
-            cols = set(self.column_names) & set(values.keys())
-            v = [values[c] for c in cols]
-            if insert:
-                sql = 'INSERT INTO %s ( "%s" ) VALUES ( %s )' % \
-                    (self.tablename, '", "'.join(cols), ', '.join(['%s'] * len(cols)))
-            else:
-                sql = 'UPDATE %s SET %s WHERE "%s" = %%s' % \
-                    (self.tablename, ", ".join(['"%s" = %%s' % c for c in cols]), self.key_col.name)
-                v.append(key.name)
-            cur.execute(sql, v)
-        return ret
 
     def make_query(self):
         return ModelQuery(self)
@@ -1230,7 +1226,7 @@ class Model(object):
 
     def _load(self):
         if (not hasattr(self, "_values") or (self._values is None)) and (self._id or self._key_name):
-            self._populate(self.modelmanager.get_properties(self.key()))
+            self._populate(self.modelmanager.make_query().get(self.key()))
 
     def _store(self):
         self._load()
@@ -1264,7 +1260,7 @@ class Model(object):
             values['_ancestors'] = self._ancestors
         values["_acl"] = json.dumps(self._acl)
         values["_ownerid"] = self._ownerid if hasattr(self, "_ownerid") else None
-        self._id = self.modelmanager.set_properties(hasattr(self, "_brandnew"), self.key(), values)
+        self.modelmanager.make_query().set(hasattr(self, "_brandnew"), self.key(), values)
         if hasattr(self, "_brandnew"):
             del self._brandnew
         Tx.put_in_cache(self)
@@ -1757,7 +1753,6 @@ class QueryResults(object):
 
 class Query(object):
     def __init__(self, kind, keys_only = True, **kwargs):
-        self._q = ModelQuery(QueryType.KeyName if keys_only else QueryType.Columns)
         if isinstance(kind, (list, tuple)):
             kinds = [k if isinstance(k, ModelMetaClass) else Model.for_name(k) for k in kind]
         else:
@@ -1769,6 +1764,7 @@ class Query(object):
             for sub in k.subclasses():
                 self.kind.append(sub.kind())
         self._mm = (Model.for_name(k).modelmanager for k in self.kind)
+        self._q = (mm.make_query() for mm in self._mm)
         ancestor = kwargs.get("ancestor")
         if ancestor:
             self.ancestor(ancestor)
@@ -1776,7 +1772,6 @@ class Query(object):
         if parent:
             self.parent(parent)
         self.keys_only = keys_only
-        self.filters = []
         self.results = None
         self.res_ix = -1
 
@@ -1789,6 +1784,8 @@ class Query(object):
                 if Model.for_name(k)._flat:
                     logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
                     return
+            for q in self._q:
+                q.ancestor(ancestor)
         return self._q.ancestor(ancestor)
 
     def filter(self, expression, value):
