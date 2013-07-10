@@ -10,7 +10,6 @@ import json
 import logging
 import os
 import os.path
-import sha
 import sys
 import threading
 import traceback
@@ -122,9 +121,7 @@ class Tx(object):
                 schema = pgsql_conf.schema
                 if isinstance(pgsql_conf.wipe_schema, bool) \
                         and pgsql_conf.wipe_schema:
-                    cur.execute('''
-                        DROP SCHEMA IF EXISTS "%s" CASCADE''',
-                        (schema, ))
+                    cur.execute('DROP SCHEMA IF EXISTS "%s" CASCADE' % schema)
                     create_schema = True
                 else:
                     cur.execute("""
@@ -239,85 +236,7 @@ def get_sessionbridge():
     return _sessionbridge
 
 
-class ColumnDefinition(object):
-    def __init__(self, name, data_type, required, defval, indexed):
-        self.name = name
-        self.data_type = data_type
-        self.required = required
-        self.defval = defval
-        self.indexed = indexed
-        self.is_key = False
-
 QueryType = gripe.Enum(['Columns', 'KeyName', 'Delete', 'Count'])
-
-
-class ModelQuery(object):
-    def __init__(self):
-        self._owner = None
-        self._filters = []
-
-    def set_ancestor(self, ancestor):
-        assert not self.has_parent(), \
-            "Cannot query for ancestor and parent at the same time"
-        assert ((ancestor is None) or
-                isinstance(ancestor, (basestring, Model, Key))), \
-                "Must specify an ancestor object or None in ModelQuery.set_\
-                ancestor"
-        if isinstance(ancestor, basestring):
-            ancestor = Key(ancestor) if ancestor != "/" else None
-        elif isinstance(ancestor, Model):
-            ancestor = ancestor.key()
-        if ancestor is None:
-            self.unset_ancestor()
-            self.set_parent(None)
-        else:
-            self._ancestor = ancestor
-
-    def unset_ancestor(self):
-        if hasattr(self, "_ancestor"):
-            del self._ancestor
-
-    def has_ancestor(self):
-        return hasattr(self, "_ancestor")
-
-    def ancestor(self):
-        assert self.has_ancestor(), \
-            "Cannot call ancestor() on ModelQuery with no ancestor set"
-        return self._ancestor
-
-    def set_parent(self, parent):
-        assert not self.has_ancestor(), \
-            "Cannot query for ancestor and parent at the same time"
-        assert ((parent is None) or
-                isinstance(parent, (basestring, Key, Model))), \
-             "Must specify an parent object or None in ModelQuery.set_parent"
-        if (isinstance(parent, basestring)):
-            parent = Key(parent) if parent != "/" else None
-        elif (isinstance(parent, Model)):
-            parent = parent.key()
-        self._parent = parent
-
-    def unset_parent(self):
-        if hasattr(self, "_parent"):
-            del self._parent
-
-    def has_parent(self):
-        return hasattr(self, "_parent")
-
-    def parent(self):
-        assert self.has_parent(), "Cannot call parent() on ModelQuery with no parent set"
-        return self._parent
-
-    def owner(self, o = None):
-        if o is not None:
-            self._owner = o
-        return self._owner
-
-    def add_filter(self, expr, value):
-        self._filters.append((expr, value))
-
-    def filters(self):
-        return self._filters
 
 class ModelQueryResult(object):
     def __init__(self, columns = None, key_index = -1):
@@ -326,12 +245,12 @@ class ModelQueryResult(object):
         self._cursor = None
         self._results = None
 
-    def execute(self, sql, values):
+    def execute(self, sql, values = None):
         tx = Tx.get()
         assert tx, "ModelManager.query: no transaction active"
         self._cursor = tx.get_cursor()
         self._cursor.execute(sql, values)
-        return (cur, cols, key_ix)
+        return self
 
     def columns(self):
         return self._columns
@@ -344,10 +263,27 @@ class ModelQueryResult(object):
             "Cannot call ModelQueryResult.rowcount() before query executed"
         return self._cursor.rowcount
 
+    def single_row(self):
+        assert self._cursor is not None, \
+            "Cannot call ModelQueryResult.single_row before query executed"
+        try:
+            return self._cursor.fetchone()
+        finally:
+            self.close()
+
+    def single_row_bycolumns(self):
+        values = self.single_row()
+        return zip(self._column, values) if values else None
+
+    def singleton(self):
+        return self.single_row()[0]
+
     def cursor(self):
         return self._cursor
 
     def _next_batch(self):
+        assert self._cursor is not None, \
+            "Cannot call ModelQueryResult._next_batch before query executed"
         if not self._cursor.closed:
             self._results = self._cursor.fetchmany()
             if len(self._results) < cur.arraysize:
@@ -392,7 +328,198 @@ class ModelQueryResult(object):
         if not(self._cursor is None or self._cursor.closed):
             tx = Tx.get()
             assert tx, "ModelQueryResult.close(): no transaction active"
-            tx.close_cursor(self._cursor)
+            try:
+                tx.close_cursor(self._cursor)
+            except:
+                logger.error("Exception closing ModelQueryResult cursor")
+            finally:
+                self._cursor = None
+                self._results = None
+                self._iter = None
+                self._current = None
+
+class ModelQuery(object):
+    def __init__(self, manager):
+        self._owner = None
+        self._filters = []
+        self._manager = manager
+
+    def flat(self):
+        return self._manager.flat
+
+    def audit(self):
+        return self._manager.audit
+
+    def name(self):
+        return self._manager.name
+
+    def tablename(self):
+        return self._manager.tablename
+
+    def columns(self):
+        return self._manager.columns
+
+    def key_column(self):
+        return self._manager.keycol
+
+    def set_keyname(self, keyname):
+        assert not (self.has_parent() or self.has_ancestor()), \
+            "Cannot query for ancestor or parent and keyname at the same time"
+        assert ((keyname is None) or
+                isinstance(keyname, (basestring, Key))), \
+                "Must specify an string, Key, or None in ModelQuery.set_keyname"
+        if isinstance(keyname, basestring):
+            keyname = Key(keyname)
+        if keyname is None:
+            self.unset_keyname()
+        else:
+            self._keyname = keyname
+        return self
+
+    def unset_keyname(self):
+        if hasattr(self, "_keyname"):
+            del self._keyname
+        return self
+
+    def has_keyname(self):
+        return hasattr(self, "_keyname")
+
+    def keyname(self):
+        assert self.has_keyname(), \
+            "Cannot call keyname() on ModelQuery with no keyname set"
+        return self._keyname
+
+    def set_ancestor(self, ancestor):
+        assert not self.flat(), "Cannot perform ancestor queries on flat table '%s'" % self.name()
+        assert not (self.has_parent() or self.has_keyname()), \
+            "Cannot query for ancestor or keyname and parent at the same time"
+        assert ((ancestor is None) or
+                isinstance(ancestor, (basestring, Model, Key))), \
+                "Must specify an ancestor object or None in ModelQuery.set_ancestor"
+        if isinstance(ancestor, basestring):
+            ancestor = Key(ancestor) if ancestor != "/" else None
+        elif isinstance(ancestor, Model):
+            ancestor = ancestor.key()
+        if ancestor is None:
+            self.unset_ancestor()
+            self.set_parent(None)
+        else:
+            self._ancestor = ancestor
+        return self
+
+    def unset_ancestor(self):
+        if hasattr(self, "_ancestor"):
+            del self._ancestor
+        return self
+
+    def has_ancestor(self):
+        return hasattr(self, "_ancestor")
+
+    def ancestor(self):
+        assert self.has_ancestor(), \
+            "Cannot call ancestor() on ModelQuery with no ancestor set"
+        return self._ancestor
+
+    def set_parent(self, parent):
+        assert not self.flat(), "Cannot perform parent queries on flat table '%s'" % self.name()
+        assert not (self.has_ancestor() or self.has_keyname()), \
+            "Cannot query for ancestor or keyname and parent at the same time"
+        assert ((parent is None) or
+                isinstance(parent, (basestring, Key, Model))), \
+             "Must specify an parent object or None in ModelQuery.set_parent"
+        if (isinstance(parent, basestring)):
+            parent = Key(parent) if parent != "/" else None
+        elif (isinstance(parent, Model)):
+            parent = parent.key()
+        self._parent = parent
+        return self
+
+    def unset_parent(self):
+        if hasattr(self, "_parent"):
+            del self._parent
+        return self
+
+    def has_parent(self):
+        return hasattr(self, "_parent")
+
+    def parent(self):
+        assert self.has_parent(), "Cannot call parent() on ModelQuery with no parent set"
+        return self._parent
+
+    def owner(self, o = None):
+        assert self.audit(), "Cannot perform owner queries on unaudited table '%s'" % self.name()
+        if o is not None:
+            self._owner = o
+        return self._owner
+
+    def add_filter(self, expr, value):
+        self._filters.append((expr, value))
+        return self
+
+    def filters(self):
+        return self._filters
+
+    def execute(self, type):
+        key_ix = 0
+        if type == QueryType.Delete:
+            sql = "DELETE FROM %s" % self.tablename()
+            cols = ()
+            key_ix = -1
+        elif type == QueryType.Count:
+            sql = "SELECT COUNT(*) AS COUNT FROM %s" % self.tablename()
+            cols = ('COUNT',)
+            key_ix = -1
+        else:
+            if type == QueryType.Columns:
+                cols = [c.name for c in self.columns()]
+                collist = '"' + '", "'.join(cols) + '"'
+                key_ix = cols.index(self.key_column().name)
+            elif type == QueryType.KeyName:
+                cols = (self.manager.key_col.name,)
+                collist = '"%s"' % cols[0]
+            else:
+                assert 0, "Huh? Unrecognized query type %s in query for table '%s'" % (type, self.name())
+            sql = 'SELECT %s FROM %s' % (collist, self.tablename())
+        vals = []
+        glue = ' WHERE '
+        if self.has_ancestor():
+            glue = ' AND '
+            sql += ' WHERE "_ancestors" LIKE %s'
+            vals.append(str(self.ancestor()) + "%")
+        if self.has_parent():
+            sql += glue + '"_parent" = %s'
+            glue = ' AND '
+            vals.append(str(self.parent()))
+        if self.owner():
+            sql += glue + '"_ownerid" = %s'
+            glue = ' AND '
+            vals.append(self.owner())
+        if self._filters:
+            filtersql = " AND ".join(['%s %%s' % e for (e, v) in self._filters])
+            sql += glue + filtersql
+            vals += [v for (e, v) in self._filters]
+        return ModelQueryResult(cols, key_ix).execute(sql, vals)
+
+    def count(self):
+        with Tx.begin():
+            return self.execute(QueryType.Count).singleton()
+
+    def delete(self):
+        with Tx.begin():
+            return self.execute(QueryType.Delete).rowcount()
+
+    def delete_one(self, key):
+        return self.keyname(key).delete()
+
+
+class ColumnDefinition(object):
+    def __init__(self, name, data_type, required, defval, indexed):
+        self.name = name
+        self.data_type = data_type
+        self.required = required
+        self.defval = defval
+        self.indexed = indexed
+        self.is_key = False
 
 class ModelManager(object):
     modelconfig = gripe.Config.model
@@ -501,68 +628,8 @@ class ModelManager(object):
             cur.execute(sql, v)
         return ret
 
-    def delete_one(self, key):
-        with Tx.begin() as tx:
-            cur = tx.get_cursor()
-            sql = 'DELETE FROM %s WHERE "%s" = %%s' % (self.tablename, self.key_col.name)
-            cur.execute(sql, (key.name,))
-
-    def query(self, type, q):
-        key_ix = 0
-        if type == QueryType.Delete:
-            sql = "DELETE FROM %s" % self.tablename
-            cols = ()
-            key_ix = -1
-        elif type == QueryType.Count:
-            sql = "SELECT COUNT(*) AS COUNT FROM %s" % self.tablename
-            cols = ('COUNT',)
-            key_ix = -1
-        else:
-            if type == QueryType.Columns:
-                cols = [c.name for c in self.columns]
-                collist = '"' + '", "'.join(cols) + '"'
-                key_ix = cols.index(self.key_col.name)
-            elif type == QueryType.KeyName:
-                cols = (self.key_col.name,)
-                collist = '"%s"' % cols[0]
-            else:
-                assert 0, "Huh? Unrecognized query type %s in query for table '%s'" % (type, self.name)
-            sql = 'SELECT %s FROM %s' % (collist, self.tablename)
-        vals = []
-        glue = ' WHERE '
-        if q.has_ancestor():
-            assert not self.flat, "Cannot perform ancestor queries on flat table '%s'" % self.name
-            glue = ' AND '
-            sql += ' WHERE "_ancestors" LIKE %s'
-            vals.append(str(q.ancestor()) + "%")
-        if q.has_parent():
-            assert not self.flat, "Cannot perform parent queries on flat table '%s'" % self.name
-            sql += glue + '"_parent" = %s'
-            glue = ' AND '
-            vals.append(str(q.parent()))
-        if q.owner():
-            assert self.audit, "Cannot perform owner queries on unaudited table '%s'" % self.name
-            sql += glue + '"_ownerid" = %s'
-            glue = ' AND '
-            vals.append(q.owner())
-        filters = q.filters()
-        if filters:
-            filtersql = " AND ".join(['%s %%s' % e for (e, v) in filters])
-            sql += glue + filtersql
-            vals += [v for (e, v) in filters]
-        return ModelQueryResult(cols, key_ix).execute(sql, vals)
-
-    def count(self, q):
-        mqr = self.query(QueryType.Count, q)
-        ret = next(mqr.next_batch())[0]
-        mqr.close()
-        return ret
-
-    def delete_query(self, q):
-        mqr = self.query(QueryType.Delete, q)
-        ret = mqr.rowcount()
-        mqr.close()
-        return ret
+    def make_query(self):
+        return ModelQuery(self)
 
     def reconcile(self):
         self._set_columns()
@@ -1690,7 +1757,7 @@ class QueryResults(object):
 
 class Query(object):
     def __init__(self, kind, keys_only = True, **kwargs):
-        self._q = ModelQuery(ModelQuery.Type.KeyName if keys_only else ModelQuery.Type.Columns)
+        self._q = ModelQuery(QueryType.KeyName if keys_only else QueryType.Columns)
         if isinstance(kind, (list, tuple)):
             kinds = [k if isinstance(k, ModelMetaClass) else Model.for_name(k) for k in kind]
         else:
@@ -1722,7 +1789,7 @@ class Query(object):
                 if Model.for_name(k)._flat:
                     logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
                     return
-        return return self._q.ancestor(ancestor)
+        return self._q.ancestor(ancestor)
 
     def filter(self, expression, value):
         self.res_ix = -1
@@ -1745,7 +1812,7 @@ class Query(object):
             if self.res_ix < len(self.results):
                 result = next(self.results[self.res_ix])
             else:
-0;136;0c                raise StopIteration
+                raise StopIteration
         return self.results[self.res_ix].get(self.keys_only)
 
     def count(self):
