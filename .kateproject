@@ -1,0 +1,4 @@
+{
+    "name": "Grumble",
+    "files": [ { "directory": "src", "filters": ["*.py", "*.html", "*.js", "*.comp", "*.json"], "recursive": 1 } ]
+}

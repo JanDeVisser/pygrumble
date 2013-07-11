@@ -336,30 +336,11 @@ class ModelQueryResult(object):
                 self._current = None
 
 class ModelQuery(object):
-    def __init__(self, manager):
+    def __init__(self):
         self._owner = None
         self._filters = []
-        self._manager = manager
 
-    def flat(self):
-        return self._manager.flat
-
-    def audit(self):
-        return self._manager.audit
-
-    def name(self):
-        return self._manager.name
-
-    def tablename(self):
-        return self._manager.tablename
-
-    def columns(self):
-        return self._manager.columns
-
-    def key_column(self):
-        return self._manager.key_col
-
-    def set_keyname(self, keyname):
+    def set_keyname(self, keyname, kind = None):
         assert not (self.has_parent() or self.has_ancestor()), \
             "Cannot query for ancestor or parent and keyname at the same time"
         assert ((keyname is None) or isinstance(keyname, (basestring, Key))), \
@@ -368,7 +349,7 @@ class ModelQuery(object):
             try:
                 keyname = Key(keyname)
             except:
-                keyname = Key(self._manager.name, keyname)
+                keyname = Key(kind, keyname)
         if keyname is None:
             self.unset_keyname()
         else:
@@ -389,7 +370,6 @@ class ModelQuery(object):
         return self._keyname
 
     def set_ancestor(self, ancestor):
-        assert not self.flat(), "Cannot perform ancestor queries on flat table '%s'" % self.name()
         assert not (self.has_parent() or self.has_keyname()), \
             "Cannot query for ancestor or keyname and parent at the same time"
         assert ((ancestor is None) or
@@ -420,7 +400,6 @@ class ModelQuery(object):
         return self._ancestor
 
     def set_parent(self, parent):
-        assert not self.flat(), "Cannot perform parent queries on flat table '%s'" % self.name()
         assert not (self.has_ancestor() or self.has_keyname()), \
             "Cannot query for ancestor or keyname and parent at the same time"
         assert ((parent is None) or
@@ -446,7 +425,6 @@ class ModelQuery(object):
         return self._parent
 
     def owner(self, o = None):
-        assert self.audit(), "Cannot perform owner queries on unaudited table '%s'" % self.name()
         if o is not None:
             self._owner = o
         return self._owner
@@ -457,6 +435,52 @@ class ModelQuery(object):
 
     def filters(self):
         return self._filters
+
+class ModelQueryRenderer(object):
+    def __init__(self, manager, query = None):
+        self._query = query
+        self._manager = manager
+
+    def query(self, q = None):
+        if q:
+            self._query = q
+        return self._query
+
+    def flat(self):
+        return self._manager.flat
+
+    def audit(self):
+        return self._manager.audit
+
+    def name(self):
+        return self._manager.name
+
+    def tablename(self):
+        return self._manager.tablename
+
+    def columns(self):
+        return self._manager.columns
+
+    def key_column(self):
+        return self._manager.key_col
+    
+    def has_ancestor(self):
+        return self._query.has_ancestor()
+
+    def ancestor(self):
+        return self._query.ancestor()
+
+    def has_parent(self):
+        return self._query.has_parent()
+
+    def parent(self):
+        return self._query.parent()
+
+    def owner(self):
+        return self._query.owner()
+
+    def filters(self):
+        return self._query.filters()
 
     def _update_audit_info(self, new_values, insert):
         # Set update audit info:
@@ -476,6 +500,7 @@ class ModelQuery(object):
                 new_values.pop("_createdby")
 
     def execute(self, type, new_values = None):
+        assert self._query, "Must set a Query prior to executing a ModelQueryRenderer"
         key_ix = -1
         cols = ()
         vals = []
@@ -513,10 +538,12 @@ class ModelQuery(object):
                 sql += ' WHERE "%s" = %%s' % self.key_column().name
                 vals.append(str(self.keyname().name))
             if self.has_ancestor():
+                assert not self.flat(), "Cannot perform ancestor queries on flat table '%s'" % self.name()
                 glue = ' AND '
                 sql += ' WHERE "_ancestors" LIKE %s'
                 vals.append(str(self.ancestor()) + "%")
             if self.has_parent():
+                assert not self.flat(), "Cannot perform parent queries on flat table '%s'" % self.name()
                 sql += glue + '"_parent" = %s'
                 glue = ' AND '
                 vals.append(str(self.parent()))
@@ -532,11 +559,14 @@ class ModelQuery(object):
 
     def get(self, key):
         with Tx.begin():
-            return self.set_keyname(key).execute(QueryType.Columns).single_row_bycolumns()
+            self._query = ModelQuery()
+            self._query.set_keyname(key, self.name())
+            return self.execute(QueryType.Columns).single_row_bycolumns()
 
     def set(self, insert, key, values):
         with Tx.begin():
-            self.set_keyname(key)
+            self._query = ModelQuery()
+            self._query.set_keyname(key, self.name())
             self.execute(QueryType.Insert if insert else QueryType.Update, values)
 
     def count(self):
@@ -548,7 +578,9 @@ class ModelQuery(object):
             return self.execute(QueryType.Delete).rowcount()
 
     def delete_one(self, key):
-        return self.keyname(key).delete()
+        self._query = ModelQuery()
+        self._query.set_keyname(key, self.name())
+        return self.delete()
 
 
 class ColumnDefinition(object):
@@ -624,8 +656,8 @@ class ModelManager(object):
             logger.debug("add_column: %s", column.name)
             self._prep_columns.append(column)
 
-    def make_query(self):
-        return ModelQuery(self)
+    def make_ModelQueryRenderer(self):
+        return ModelQueryRenderer(self)
 
     def reconcile(self):
         self._set_columns()
@@ -1226,7 +1258,7 @@ class Model(object):
 
     def _load(self):
         if (not hasattr(self, "_values") or (self._values is None)) and (self._id or self._key_name):
-            self._populate(self.modelmanager.make_query().get(self.key()))
+            self._populate(ModelQueryRenderer(self.modelmanager).get(self.key()))
 
     def _store(self):
         self._load()
@@ -1260,7 +1292,7 @@ class Model(object):
             values['_ancestors'] = self._ancestors
         values["_acl"] = json.dumps(self._acl)
         values["_ownerid"] = self._ownerid if hasattr(self, "_ownerid") else None
-        self.modelmanager.make_query().set(hasattr(self, "_brandnew"), self.key(), values)
+        ModelQueryRenderer(self.modelmanager).set(hasattr(self, "_brandnew"), self.key(), values)
         if hasattr(self, "_brandnew"):
             del self._brandnew
         Tx.put_in_cache(self)
@@ -1764,7 +1796,7 @@ class Query(object):
             for sub in k.subclasses():
                 self.kind.append(sub.kind())
         self._mm = (Model.for_name(k).modelmanager for k in self.kind)
-        self._q = (mm.make_query() for mm in self._mm)
+        self._q = ModelQuery()
         ancestor = kwargs.get("ancestor")
         if ancestor:
             self.ancestor(ancestor)
