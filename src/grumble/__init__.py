@@ -340,7 +340,11 @@ class ModelQuery(object):
         self._owner = None
         self._filters = []
 
+    def _reset_state(self):
+        pass
+
     def set_keyname(self, keyname, kind = None):
+        self._reset_state()
         assert not (self.has_parent() or self.has_ancestor()), \
             "Cannot query for ancestor or parent and keyname at the same time"
         assert ((keyname is None) or isinstance(keyname, (basestring, Key))), \
@@ -357,6 +361,7 @@ class ModelQuery(object):
         return self
 
     def unset_keyname(self):
+        self._reset_state()
         if hasattr(self, "_keyname"):
             del self._keyname
         return self
@@ -370,6 +375,7 @@ class ModelQuery(object):
         return self._keyname
 
     def set_ancestor(self, ancestor):
+        self._reset_state()
         assert not (self.has_parent() or self.has_keyname()), \
             "Cannot query for ancestor or keyname and parent at the same time"
         assert ((ancestor is None) or
@@ -387,6 +393,7 @@ class ModelQuery(object):
         return self
 
     def unset_ancestor(self):
+        self._reset_state()
         if hasattr(self, "_ancestor"):
             del self._ancestor
         return self
@@ -400,6 +407,7 @@ class ModelQuery(object):
         return self._ancestor
 
     def set_parent(self, parent):
+        self._reset_state()
         assert not (self.has_ancestor() or self.has_keyname()), \
             "Cannot query for ancestor or keyname and parent at the same time"
         assert ((parent is None) or
@@ -413,6 +421,7 @@ class ModelQuery(object):
         return self
 
     def unset_parent(self):
+        self._reset_state()
         if hasattr(self, "_parent"):
             del self._parent
         return self
@@ -426,20 +435,84 @@ class ModelQuery(object):
 
     def owner(self, o = None):
         if o is not None:
+            self._reset_state()
             self._owner = o
         return self._owner
 
     def add_filter(self, expr, value):
+        self._reset_state()
+        if isinstance(value, Key):
+            value = value.name
+        elif isinstance(value, Model):
+            value = value.name()
         self._filters.append((expr, value))
         return self
 
     def filters(self):
         return self._filters
 
+    def execute(self, kind, type):
+        if isinstance(type, bool):
+            type = QueryType.KeyName if type else QueryType.Columns
+        with Tx.begin():
+            r = ModelQueryRenderer(kind, self)
+            return r.execute(type)
+
+    def count(self, kind):
+        """Executes this query and returns the number of matching rows. Note
+        that the actual results of the query are not available; these need to
+        be obtained by executing the query again"""
+        with Tx.begin():
+            r = ModelQueryRenderer(kind, self)
+            return r.execute(QueryType.Count).singleton()
+
+    def delete(self, kind):
+        with Tx.begin():
+            r = ModelQueryRenderer(kind, self)
+            return r.execute(QueryType.Delete).rowcount()
+
+    @classmethod
+    def get(cls, key):
+        with Tx.begin():
+            if isinstance(key, basestring):
+                key = Key(key)
+            else:
+                assert isinstance(key, Key), "ModelQuery.get requires a valid key object"
+            q = ModelQuery().set_keyname(key)
+            r = ModelQueryRenderer(key.kind, q)
+            return r.execute(QueryType.Columns).single_row_bycolumns()
+
+    @classmethod
+    def set(cls, insert, key, values):
+        with Tx.begin():
+            if isinstance(key, basestring):
+                key = Key(key)
+            else:
+                assert isinstance(key, Key), "ModelQuery.get requires a valid key object"
+            q = ModelQuery().set_keyname(key)
+            r = ModelQueryRenderer(key.kind, q)
+            r.execute(QueryType.Insert if insert else QueryType.Update, values)
+
+    @classmethod
+    def delete_one(cls, key):
+        if isinstance(key, (basestring, Model)):
+            key = Key(key)
+        assert isinstance(key, Key), "ModelQuery.get requires a valid key object"
+        return ModelQuery().set_keyname(key).delete(key.kind)
+
 class ModelQueryRenderer(object):
-    def __init__(self, manager, query = None):
+    def __init__(self, kind, query = None):
         self._query = query
-        self._manager = manager
+        if isinstance(kind, basestring):
+            kind = Model.for_name(kind)
+        if isinstance(kind, ModelManager):
+            self._manager = kind
+        elif isinstance(kind, ModelMetaClass):
+            self._manager = kind.modelmanager
+        elif isinstance(kind, Model):
+            self._manager = kind.__class__.modelmanager
+        else:
+            assert 0, "ModelQueryRenderer should specify a valid kind"
 
     def query(self, q = None):
         if q:
@@ -557,31 +630,6 @@ class ModelQueryRenderer(object):
                 vals += [v for (e, v) in self._filters]
         return ModelQueryResult(cols, key_ix).execute(sql, vals)
 
-    def get(self, key):
-        with Tx.begin():
-            self._query = ModelQuery()
-            self._query.set_keyname(key, self.name())
-            return self.execute(QueryType.Columns).single_row_bycolumns()
-
-    def set(self, insert, key, values):
-        with Tx.begin():
-            self._query = ModelQuery()
-            self._query.set_keyname(key, self.name())
-            self.execute(QueryType.Insert if insert else QueryType.Update, values)
-
-    def count(self):
-        with Tx.begin():
-            return self.execute(QueryType.Count).singleton()
-
-    def delete(self):
-        with Tx.begin():
-            return self.execute(QueryType.Delete).rowcount()
-
-    def delete_one(self, key):
-        self._query = ModelQuery()
-        self._query.set_keyname(key, self.name())
-        return self.delete()
-
 
 class ColumnDefinition(object):
     def __init__(self, name, data_type, required, defval, indexed):
@@ -656,9 +704,6 @@ class ModelManager(object):
             logger.debug("add_column: %s", column.name)
             self._prep_columns.append(column)
 
-    def make_ModelQueryRenderer(self):
-        return ModelQueryRenderer(self)
-
     def reconcile(self):
         self._set_columns()
         self._recon = self.my_config.get("reconcile", self.def_recon_policy)
@@ -667,14 +712,14 @@ class ModelManager(object):
                 cur = tx.get_cursor()
                 if self._recon == "drop":
                     cur.execute('DROP TABLE IF EXISTS ' + self.tablename)
-                    self.create_table(cur)
+                    self._create_table(cur)
                 else:  # _recon is 'all' or 'add'
-                    if not self.table_exists(cur):
-                        self.create_table(cur)
+                    if not self._table_exists(cur):
+                        self._create_table(cur)
                     else:
-                        self.update_table(cur)
+                        self._update_table(cur)
 
-    def table_exists(self, cur):
+    def _table_exists(self, cur):
         sql = "SELECT table_name FROM information_schema.tables WHERE table_name = %s"
         v = [ self.table ]
         if self.schema:
@@ -683,11 +728,11 @@ class ModelManager(object):
         cur.execute(sql, v)
         return cur.fetchone() is not None
 
-    def create_table(self, cur):
+    def _create_table(self, cur):
         cur.execute('CREATE TABLE %s ( )' % (self.tablename,))
         self.update_table(cur)
 
-    def update_table(self, cur):
+    def _update_table(self, cur):
         sql = "SELECT column_name, column_default, is_nullable, data_type FROM information_schema.columns WHERE table_name = %s"
         v = [ self.table ]
         if self.schema:
@@ -1258,7 +1303,7 @@ class Model(object):
 
     def _load(self):
         if (not hasattr(self, "_values") or (self._values is None)) and (self._id or self._key_name):
-            self._populate(ModelQueryRenderer(self.modelmanager).get(self.key()))
+            self._populate(ModelQuery.get(self.key()))
 
     def _store(self):
         self._load()
@@ -1292,7 +1337,7 @@ class Model(object):
             values['_ancestors'] = self._ancestors
         values["_acl"] = json.dumps(self._acl)
         values["_ownerid"] = self._ownerid if hasattr(self, "_ownerid") else None
-        ModelQueryRenderer(self.modelmanager).set(hasattr(self, "_brandnew"), self.key(), values)
+        ModelQuery.set(hasattr(self, "_brandnew"), self.key(), values)
         if hasattr(self, "_brandnew"):
             del self._brandnew
         Tx.put_in_cache(self)
@@ -1304,7 +1349,12 @@ class Model(object):
         pass
 
     def on_delete(self):
-        pass
+        on_del = self.has_on_delete()
+        return on_del() if on_del else True
+
+    @classmethod
+    def has_on_delete(cls):
+        return hasattr(cls, "_on_delete") and getattr(cls, "_on_delete")
 
     def validate(self):
         for (name, prop) in self._properties.items():
@@ -1675,9 +1725,8 @@ class Model(object):
 def delete(model):
     if not hasattr(model, "_brandnew") and model.exists():
         if model.on_delete():
-            mm = model.modelmanager
             logger.info("Deleting model %s.%s", model.kind(), model.key())
-            mm.delete_one(model.key())
+            ModelQuery.delete_one(model.key())
         else:
             logger.info("on_delete trigger prevented deletion of model %s.%s", model.kind(), model.key())
     return None
@@ -1783,8 +1832,9 @@ class QueryResults(object):
                   None if keys_only else zip(self.columns, self._current))
 
 
-class Query(object):
+class Query(ModelQuery):
     def __init__(self, kind, keys_only = True, **kwargs):
+        super(ModelQuery, self).__init__()
         if isinstance(kind, (list, tuple)):
             kinds = [k if isinstance(k, ModelMetaClass) else Model.for_name(k) for k in kind]
         else:
@@ -1795,67 +1845,67 @@ class Query(object):
             self.kind.append(k.kind())
             for sub in k.subclasses():
                 self.kind.append(sub.kind())
-        self._mm = (Model.for_name(k).modelmanager for k in self.kind)
-        self._q = ModelQuery()
         ancestor = kwargs.get("ancestor")
         if ancestor:
-            self.ancestor(ancestor)
+            self.set_ancestor(ancestor)
         parent = kwargs.get("parent")
         if parent:
-            self.parent(parent)
+            self.set_parent(parent)
         self.keys_only = keys_only
-        self.results = None
-        self.res_ix = -1
 
-    def ancestor(self, ancestor = None):
-        self._q.ancestor(ancestor)
-        if ancestor is not None:
-            self.res_ix = -1
-            self.results = None
-            for k in self.kind:
-                if Model.for_name(k)._flat:
-                    logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
-                    return
-            for q in self._q:
-                q.ancestor(ancestor)
-        return self._q.ancestor(ancestor)
+    def _reset_state(self):
+        self._cur_kind = None
+        self._results = None
+        self._iter = None
 
-    def filter(self, expression, value):
-        self.res_ix = -1
-        self.results = None
-        if isinstance(value, Key):
-            value = value.name
-        elif isinstance(value, Model):
-            value = value.name()
-        self.filters.append((expression, value))
+    def set_ancestor(self, ancestor):
+        for k in self.kind:
+            if Model.for_name(k)._flat:
+                logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
+                return
+        return super(ModelQuery, self).set_ancestor(ancestor)
+
+    def set_parent(self, parent):
+        for k in self.kind:
+            if Model.for_name(k)._flat:
+                logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
+                return
+        return super(ModelQuery, self).set_parent(parent)
 
     def __iter__(self):
-        self.res_ix = 0
-        self.results = [ QueryResults(self, k) for k in self.kind ]
+        self._iter = iter(self.kind)
+        self._cur_kind = None
+        self._results = None
         return self
 
     def next(self):
-        result = next(self.results[self.res_ix])
-        while result is None:
-            self.res_ix += 1
-            if self.res_ix < len(self.results):
-                result = next(self.results[self.res_ix])
-            else:
-                raise StopIteration
-        return self.results[self.res_ix].get(self.keys_only)
+        ret = None
+        if self._results:
+            ret = next(self.results, None)
+        while ret is None:
+            self._cur_kind = next(self._iter)
+            self._results = iter(self._q.execute(self._cur_kind, self.keys_only))
+            ret = next(self.results, None)
+        return Model.for_name(self._cur_kind).get(
+                Key(self._cur_kind, ret[self._results.key_index()]),
+                None if keys_only else zip(self._result.columns(), ret))
 
     def count(self):
         ret = 0
-        for mm in self._mm:
-            ret += mm.count(self._get_ancestor(), self.filters)
+        for k in self.kind:
+            ret += self._q.count(k)
         return ret
 
     def delete(self):
-        # FIXME: If on_delete is not defined for the model, don't do this
-        for m in self:
-            m.on_delete()
-        for mm in self._mm:
-            return mm.delete_query(self._get_ancestor(), self.filters)
+        res = 0
+        for k in self.kind:
+            if Model.for_name(k).has_on_delete():
+                for m in self._q.execute(k, self.keys_only):
+                    if m.on_delete():
+                        res += self._q.delete_one(m)
+            else:
+                res += self._q.delete(k)
+        return res
 
     def run(self):
         return self.__iter__()
@@ -1885,7 +1935,7 @@ class QueryProperty(object):
 
     def _get_query(self, instance):
         q = Query(self.fk_kind)
-        q.filter('"%s" = ' % self.fk, instance)
+        q.add_filter('"%s" = ' % self.fk, instance)
         return q
 
     def __get__(self, instance, owner):
