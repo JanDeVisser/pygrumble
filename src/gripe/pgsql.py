@@ -8,6 +8,10 @@ import gripe
 logger = gripe.get_logger(__name__)
 
 class Cursor(psycopg2.extensions.cursor):
+    def set_columns(self, columns, key_index):
+        self._columns = columns
+        self._key_index = key_index
+
     def execute(self, sql, args=None):
         logger.debug(self.mogrify(sql, args))
         try:
@@ -15,6 +19,39 @@ class Cursor(psycopg2.extensions.cursor):
         except Exception, exc:
             print exc.__class__.__name__, exc
             raise
+
+    def columns(self):
+        return self._columns
+
+    def key_index(self):
+        return self._key_index
+
+    def single_row(self):
+        try:
+            return self._cursor.fetchone()
+        finally:
+            self.close()
+
+    def single_row_bycolumns(self):
+        values = self.single_row()
+        return zip(self._columns, values) if values else None
+
+    def singleton(self):
+        return self.single_row()[0]
+
+    def _close(self):
+        return super(psycopg2.extensions.cursor, self).close()
+
+    def close(self):
+        if not self.closed:
+            tx = Tx.get()
+            if tx is not None:
+                try:
+                    tx.close_cursor(self._cursor)
+                except:
+                    logger.error("Exception closing cursor")
+            else:
+                self._close()
 
 class Connection(psycopg2.extensions.connection):
     def cursor(self):

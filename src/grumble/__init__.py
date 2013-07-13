@@ -182,7 +182,7 @@ class Tx(object):
 
     def close_cursor(self, cur):
         self.cursors.remove(cur)
-        cur.close()
+        cur._close()
 
     def _end_tx(self):
         try:
@@ -229,111 +229,7 @@ def get_sessionbridge():
         _sessionbridge = sessionbridge.sessionbridge
     return _sessionbridge
 
-
 QueryType = gripe.Enum(['Columns', 'KeyName', 'Update', 'Insert', 'Delete', 'Count'])
-
-class ModelQueryResult(object):
-    def __init__(self, columns = None, key_index = -1):
-        self._columns = columns
-        self._key_index = key_index
-        self._cursor = None
-        self._results = None
-
-    def execute(self, sql, values = None):
-        tx = Tx.get()
-        assert tx, "ModelManager.query: no transaction active"
-        self._cursor = tx.get_cursor()
-        self._cursor.execute(sql, values)
-        return self
-
-    def columns(self):
-        return self._columns
-
-    def key_index(self):
-        return self._key_index
-
-    def rowcount(self):
-        assert self._cursor is not None, \
-            "Cannot call ModelQueryResult.rowcount() before query executed"
-        return self._cursor.rowcount
-
-    def single_row(self):
-        assert self._cursor is not None, \
-            "Cannot call ModelQueryResult.single_row before query executed"
-        try:
-            return self._cursor.fetchone()
-        finally:
-            self.close()
-
-    def single_row_bycolumns(self):
-        values = self.single_row()
-        return zip(self._columns, values) if values else None
-
-    def singleton(self):
-        return self.single_row()[0]
-
-    def cursor(self):
-        return self._cursor
-
-    def _next_batch(self):
-        assert self._cursor is not None, \
-            "Cannot call ModelQueryResult._next_batch before query executed"
-        if not self._cursor.closed:
-            self._results = self._cursor.fetchmany()
-            if len(self._results) < cur.arraysize:
-                logger.debug("""ModelQueryResult._next_batch: no more results,
-                    closing cursor""")
-                self.close()
-            self._iter = iter(self._results)
-            self._current = None
-        else:
-            self._results = None
-            self._iter = None
-            self._current = None
-
-    def __iter__(self):
-        return self
-
-    def next(self):
-        if self._results is None:
-            self._next_batch()
-        if self._iter is not None:
-            try:
-                try:
-                    self._current = next(self._iter)
-                except StopIteration:
-                    self._next_batch()
-                    if self._iter is not None:
-                        # If this raises StopIteration that means
-                        # that the cursor returned zero rows, so
-                        # we're done anyways
-                        self._current = next(self._iter)
-                    else:
-                        raise StopIteration
-                return ret
-            except StopIteration:
-                self._current = None
-                self._iter = None
-                self._results = None
-                raise
-        return self._current
-
-    def all_rows_bycolumns(self):
-        return [zip(self._columns, row) for row in self]
-
-    def close(self):
-        if not(self._cursor is None or self._cursor.closed):
-            tx = Tx.get()
-            assert tx, "ModelQueryResult.close(): no transaction active"
-            try:
-                tx.close_cursor(self._cursor)
-            except:
-                logger.error("Exception closing ModelQueryResult cursor")
-            finally:
-                self._cursor = None
-                self._results = None
-                self._iter = None
-                self._current = None
 
 class ModelQuery(object):
     def __init__(self):
