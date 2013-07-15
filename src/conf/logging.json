@@ -3,5 +3,6 @@
     "author": "jan",
     "version": "1.0",
     "level": "debug", "destination": "file", "flat": true,
-    "gripe.pgsql": { "flat": false }
+    "gripe.pgsql": { "flat": false },
+    "grudge": { "destination": "stderr" }
 }

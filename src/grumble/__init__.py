@@ -53,168 +53,6 @@ class ObjectDoesNotExist(gripe.Error):
         return "Model %s:%s does not exist" % (self.cls.__name__, self.id)
 
 
-class Tx(object):
-    _init = False
-    _tl = threading.local()
-
-    def __init__(self, role, database, autocommit):
-        if not Tx._init:
-            Tx._init = True
-            Tx._init_schema()
-        self.role = role
-        self.database = database
-        self.autocommit = autocommit
-        self.cursors = []
-        self.cache = {}
-        self.active = True
-        self.count = 0
-        self._connect()
-        Tx._tl.tx = self
-
-    @classmethod
-    def _init_schema(cls):
-        config = gripe.Config.database
-        assert config.postgresql, """
-            Config: conf/database.json is missing postgresql section"""
-        pgsql_conf = config.postgresql
-        assert pgsql_conf.user, """
-            Config: No user role in postgresql section of
-            conf/database.json"""
-        pgsql_user = pgsql_conf.user
-        assert pgsql_conf.admin, """
-            Config: No admin role in postgresql section of
-            conf/database.json"""
-        pgsql_admin = pgsql_conf.admin
-        assert pgsql_user.user_id and pgsql_user.password, """
-            Config: user role is missing user_id or password in postgresql
-            section of conf/database.json"""
-        assert pgsql_admin.user_id and pgsql_admin.password, """
-            Config: admin role is missing user_id or password in postgresql
-            section of conf/database.json"""
-
-        if pgsql_conf.database:
-            database = pgsql_conf.database
-            if database != 'postgres':
-                # We're assuming the postgres database exists and should
-                # never be wiped:
-                with Tx.begin("admin", "postgres", True) as tx:
-                    cur = tx.get_cursor()
-                    create_db = False
-                    if isinstance(pgsql_conf.wipe_database, bool) \
-                            and pgsql_conf.wipe_database:
-                        cur.execute('DROP DATABASE IF EXISTS "%s"' %
-                            (database,))
-                        create_db = True
-                    else:
-                        cur.execute("SELECT COUNT(*) FROM pg_catalog.pg_database WHERE datname = %s", (database,))
-                        create_db = (cur.fetchone()[0] == 0)
-                    if create_db:
-                        cur.execute('CREATE DATABASE "%s"' % (database,))
-
-        if pgsql_conf.schema:
-            with Tx.begin("admin") as tx:
-                cur = tx.get_cursor()
-                create_schema = False
-                schema = pgsql_conf.schema
-                if isinstance(pgsql_conf.wipe_schema, bool) \
-                        and pgsql_conf.wipe_schema:
-                    cur.execute('DROP SCHEMA IF EXISTS "%s" CASCADE' % schema)
-                    create_schema = True
-                else:
-                    cur.execute("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = %s", (schema,))
-                    create_schema = (cur.fetchone()[0] == 0)
-                if create_schema:
-                    cur.execute(
-                        'CREATE SCHEMA "%s" AUTHORIZATION %s' %
-                        (schema, pgsql_conf["user"]["user_id"]))
-
-    def _connect(self):
-        config = gripe.Config.database
-        pgsql_conf = config.postgresql
-        dsn = "user=%s password=%s" % (
-            getattr(pgsql_conf, self.role).user_id,
-            getattr(pgsql_conf, self.role).password)
-        if not self.database:
-            self.database = pgsql_conf.database
-        if not self.database:
-            self.database = "postgres" \
-                if self.role == "admin" \
-                else getattr(pgsql_conf, self.role).user_id
-        dsn += " dbname=%s" % self.database
-        if pgsql_conf.host:
-            dsn += " host=%s" % pgsql_conf.host
-        logger.debug("Connecting with role '%s' autocommit = %s",
-            self.role, self.autocommit)
-        self.conn = pgsql.Connection.get(dsn)
-        self.conn.autocommit = self.autocommit
-
-    @classmethod
-    def begin(cls, role="user", database=None, autocommit=False):
-        return cls._tl.tx \
-            if hasattr(cls._tl, "tx") \
-            else Tx(role, database, autocommit)
-
-    @classmethod
-    def get(cls):
-        return cls._tl.tx if hasattr(cls._tl, "tx") else None
-
-    def __enter__(self):
-        self.count += 1
-        return self
-
-    def __exit__(self, exception_type, exception_value, trace):
-        self.count -= 1
-        if exception_type:
-            logger.error("Exception in Tx block, Exception: %s %s %s",
-                exception_type, exception_value, trace)
-        if not self.count:
-            try:
-                self._end_tx()
-            except Exception, exc:
-                logger.error("Exception committing Tx, Exception: %s %s",
-                    exc.__class__.__name__, exc)
-        return False
-
-    def get_cursor(self):
-        ret = self.conn.cursor()
-        self.cursors.append(ret)
-        return ret
-
-    def close_cursor(self, cur):
-        self.cursors.remove(cur)
-        cur._close()
-
-    def _end_tx(self):
-        try:
-            try:
-                for c in self.cursors:
-                    c.close()
-            finally:
-                self.conn.commit()
-                self.conn.close()
-        finally:
-            self.active = False
-            self.cache = {}
-            del self._tl.tx
-
-    @classmethod
-    def get_from_cache(cls, key):
-        tx = cls.get()
-        return (tx.cache[key] if key in tx.cache else None) if tx else None
-
-    @classmethod
-    def put_in_cache(cls, model):
-        tx = cls.get()
-        if tx:
-            tx.cache[model.key()] = model
-
-    @classmethod
-    def flush_cache(cls):
-        tx = cls.get()
-        if tx:
-            del tx.cache
-            tx.cache = {}
-
 _sessionbridge = None
 
 def set_sessionbridge(bridge):
@@ -350,26 +188,26 @@ class ModelQuery(object):
     def execute(self, kind, type):
         if isinstance(type, bool):
             type = QueryType.KeyName if type else QueryType.Columns
-        with Tx.begin():
+        with gripe.pgsql.Tx.begin():
             r = ModelQueryRenderer(kind, self)
             return r.execute(type)
 
-    def count(self, kind):
+    def _count(self, kind):
         """Executes this query and returns the number of matching rows. Note
         that the actual results of the query are not available; these need to
         be obtained by executing the query again"""
-        with Tx.begin():
+        with gripe.pgsql.Tx.begin():
             r = ModelQueryRenderer(kind, self)
             return r.execute(QueryType.Count).singleton()
 
-    def delete(self, kind):
-        with Tx.begin():
+    def _delete(self, kind):
+        with gripe.pgsql.Tx.begin():
             r = ModelQueryRenderer(kind, self)
-            return r.execute(QueryType.Delete).rowcount()
+            return r.execute(QueryType.Delete).rowcount
 
     @classmethod
     def get(cls, key):
-        with Tx.begin():
+        with gripe.pgsql.Tx.begin():
             if isinstance(key, basestring):
                 key = Key(key)
             else:
@@ -380,7 +218,7 @@ class ModelQuery(object):
 
     @classmethod
     def set(cls, insert, key, values):
-        with Tx.begin():
+        with gripe.pgsql.Tx.begin():
             if isinstance(key, basestring):
                 key = Key(key)
             else:
@@ -394,7 +232,7 @@ class ModelQuery(object):
         if isinstance(key, (basestring, Model)):
             key = Key(key)
         assert isinstance(key, Key), "ModelQuery.get requires a valid key object"
-        return ModelQuery().set_keyname(key).delete(key.kind)
+        return ModelQuery().set_keyname(key)._delete(key.kind)
 
 class ModelQueryRenderer(object):
     def __init__(self, kind, query = None):
@@ -433,6 +271,12 @@ class ModelQueryRenderer(object):
     def key_column(self):
         return self._manager.key_col
     
+    def has_keyname(self):
+        return self._query.has_keyname()
+
+    def keyname(self):
+        return self._query.keyname()
+
     def has_ancestor(self):
         return self._query.has_ancestor()
 
@@ -470,61 +314,64 @@ class ModelQueryRenderer(object):
 
     def execute(self, type, new_values = None):
         assert self._query, "Must set a Query prior to executing a ModelQueryRenderer"
-        key_ix = -1
-        cols = ()
-        vals = []
-        if type == QueryType.Delete:
-            sql = "DELETE FROM %s" % self.tablename()
-        elif type == QueryType.Count:
-            sql = "SELECT COUNT(*) AS COUNT FROM %s" % self.tablename()
-            cols = ('COUNT',)
-        elif type in (QueryType.Update, QueryType.Insert):
-            assert new_values, "ModelQuery.execute: QueryType %s requires new values" % QueryType[type]
-            if self.audit():
-                self._update_audit_info(new_values, type == QueryType.Insert)
-            if type == QueryType.Update:
-                sql = 'UPDATE %s SET %s ' % (self.tablename(), ", ".join(['"%s" = %%s' % c for c in new_values]))
-            else: # Insert
-                sql = 'INSERT INTO %s ( "%s" ) VALUES ( %s )' % \
-                        (self.tablename(), '", "'.join(new_values), ', '.join(['%s'] * len(new_values)))
-            vals.extend(new_values.values())
-        elif type in (QueryType.Columns, QueryType.KeyName):
-            if type == QueryType.Columns:
-                cols = [c.name for c in self.columns()]
-                collist = '"' + '", "'.join(cols) + '"'
-                key_ix = cols.index(self.key_column().name)
-            elif type == QueryType.KeyName:
-                cols = (self.key_column().name,)
-                collist = '"%s"' % cols[0]
-                key_ix = 0
-            sql = 'SELECT %s FROM %s' % (collist, self.tablename())
-        else:
-            assert 0, "Huh? Unrecognized query type %s in query for table '%s'" % (type, self.name())
-        if type != QueryType.Insert:
-            glue = ' WHERE '
-            if self.has_keyname():
-                glue = ' AND '
-                sql += ' WHERE "%s" = %%s' % self.key_column().name
-                vals.append(str(self.keyname().name))
-            if self.has_ancestor():
-                assert not self.flat(), "Cannot perform ancestor queries on flat table '%s'" % self.name()
-                glue = ' AND '
-                sql += ' WHERE "_ancestors" LIKE %s'
-                vals.append(str(self.ancestor()) + "%")
-            if self.has_parent():
-                assert not self.flat(), "Cannot perform parent queries on flat table '%s'" % self.name()
-                sql += glue + '"_parent" = %s'
-                glue = ' AND '
-                vals.append(str(self.parent()))
-            if self.owner():
-                sql += glue + '"_ownerid" = %s'
-                glue = ' AND '
-                vals.append(self.owner())
-            if self._filters:
-                filtersql = " AND ".join(['%s %%s' % e for (e, v) in self._filters])
-                sql += glue + filtersql
-                vals += [v for (e, v) in self._filters]
-        return ModelQueryResult(cols, key_ix).execute(sql, vals)
+        with gripe.pgsql.Tx.begin() as tx:
+            key_ix = -1
+            cols = ()
+            vals = []
+            if type == QueryType.Delete:
+                sql = "DELETE FROM %s" % self.tablename()
+            elif type == QueryType.Count:
+                sql = "SELECT COUNT(*) AS COUNT FROM %s" % self.tablename()
+                cols = ('COUNT',)
+            elif type in (QueryType.Update, QueryType.Insert):
+                assert new_values, "ModelQuery.execute: QueryType %s requires new values" % QueryType[type]
+                if self.audit():
+                    self._update_audit_info(new_values, type == QueryType.Insert)
+                if type == QueryType.Update:
+                    sql = 'UPDATE %s SET %s ' % (self.tablename(), ", ".join(['"%s" = %%s' % c for c in new_values]))
+                else: # Insert
+                    sql = 'INSERT INTO %s ( "%s" ) VALUES ( %s )' % \
+                            (self.tablename(), '", "'.join(new_values), ', '.join(['%s'] * len(new_values)))
+                vals.extend(new_values.values())
+            elif type in (QueryType.Columns, QueryType.KeyName):
+                if type == QueryType.Columns:
+                    cols = [c.name for c in self.columns()]
+                    collist = '"' + '", "'.join(cols) + '"'
+                    key_ix = cols.index(self.key_column().name)
+                elif type == QueryType.KeyName:
+                    cols = (self.key_column().name,)
+                    collist = '"%s"' % cols[0]
+                    key_ix = 0
+                sql = 'SELECT %s FROM %s' % (collist, self.tablename())
+            else:
+                assert 0, "Huh? Unrecognized query type %s in query for table '%s'" % (type, self.name())
+            if type != QueryType.Insert:
+                glue = ' WHERE '
+                if self.has_keyname():
+                    glue = ' AND '
+                    sql += ' WHERE "%s" = %%s' % self.key_column().name
+                    vals.append(str(self.keyname().name))
+                if self.has_ancestor():
+                    assert not self.flat(), "Cannot perform ancestor queries on flat table '%s'" % self.name()
+                    glue = ' AND '
+                    sql += ' WHERE "_ancestors" LIKE %s'
+                    vals.append(str(self.ancestor()) + "%")
+                if self.has_parent():
+                    assert not self.flat(), "Cannot perform parent queries on flat table '%s'" % self.name()
+                    sql += glue + '"_parent" = %s'
+                    glue = ' AND '
+                    vals.append(str(self.parent()))
+                if self.owner():
+                    sql += glue + '"_ownerid" = %s'
+                    glue = ' AND '
+                    vals.append(self.owner())
+                if self.filters():
+                    filtersql = " AND ".join(['%s %%s' % e for (e, v) in self.filters()])
+                    sql += glue + filtersql
+                    vals += [v for (e, v) in self.filters()]
+            cur = tx.get_cursor()
+            cur.execute(sql, vals, columns = cols, key_index = key_ix)
+            return cur
 
 
 class ColumnDefinition(object):
@@ -604,7 +451,7 @@ class ModelManager(object):
         self._set_columns()
         self._recon = self.my_config.get("reconcile", self.def_recon_policy)
         if self._recon != "none":
-            with Tx.begin() as tx:
+            with gripe.pgsql.Tx.begin() as tx:
                 cur = tx.get_cursor()
                 if self._recon == "drop":
                     cur.execute('DROP TABLE IF EXISTS ' + self.tablename)
@@ -626,7 +473,7 @@ class ModelManager(object):
 
     def _create_table(self, cur):
         cur.execute('CREATE TABLE %s ( )' % (self.tablename,))
-        self.update_table(cur)
+        self._update_table(cur)
 
     def _update_table(self, cur):
         sql = "SELECT column_name, column_default, is_nullable, data_type FROM information_schema.columns WHERE table_name = %s"
@@ -1236,7 +1083,7 @@ class Model(object):
         ModelQuery.set(hasattr(self, "_brandnew"), self.key(), values)
         if hasattr(self, "_brandnew"):
             del self._brandnew
-        Tx.put_in_cache(self)
+        gripe.pgsql.Tx.put_in_cache(self)
 
     def initialize(self):
         pass
@@ -1520,7 +1367,7 @@ class Model(object):
         k = Key(id)
         if cls != Model:
             cls.seal()
-            ret = Tx.get_from_cache(k)
+            ret = gripe.pgsql.Tx.get_from_cache(k)
             if not ret:
                 ret = super(Model, cls).__new__(cls)
                 assert (cls.kind().endswith(k.kind)) or not k.kind, "%s.get(%s.%s) -> wrong key kind" % (cls.kind(), k.kind, k.name)
@@ -1541,7 +1388,7 @@ class Model(object):
         cls.seal()
         assert cls != Model, "Cannot use get_by_key on unconstrained Models"
         k = Key(cls, key)
-        ret = Tx.get_from_cache(k)
+        ret = gripe.pgsql.Tx.get_from_cache(k)
         if not ret:
             ret = super(Model, cls).__new__(cls)
             assert (cls.kind().endswith(k.kind)) or not k.kind, "%s.get(%s.%s) -> wrong key kind" % (cls.kind(), k.kind, k.name)
@@ -1557,9 +1404,9 @@ class Model(object):
         assert cls != Model, "Cannot query on unconstrained Model class"
         q = Query(cls, kwargs.get("keys_only", True))
         if "ancestor" in kwargs and not cls._flat:
-            q.ancestor(kwargs["ancestor"])
+            q.set_ancestor(kwargs["ancestor"])
         if "parent" in kwargs and "ancestor" not in kwargs and not cls._flat:
-            q.parent(kwargs["parent"])
+            q.set_parent(kwargs["parent"])
         if "ownerid" in kwargs:
             q.owner(kwargs["ownerid"])
         ix = 0
@@ -1611,7 +1458,7 @@ class Model(object):
                     model = cdata["model"]
                     clazz = Model.for_name(model)
                     if clazz:
-                        with Tx.begin():
+                        with gripe.pgsql.Tx.begin():
                             if clazz.all(keys_only = True).count() == 0:
                                 logger.info("load_template_data(%s): Loading template model data for model %s", cname, model)
                                 for d in cdata["data"]:
@@ -1692,45 +1539,9 @@ class Key(object):
         return cls.get(self)
 
 
-class QueryResults(object):
-    def __init__(self, query, kind):
-        self.query = query
-        self.kind = kind
-        k = Model.for_name(self.kind)
-        k.seal()
-        self._mm = k.modelmanager
-        self._results = None
-        self._mqr = None
-        self._iter = None
-        self._current = None
-
-    def _next_batch(self):
-        print "QueryResult(%s)._next_batch" % self.kind
-        assert self._mm, "No modelmanager for kind %s" % self.kind
-        self._results = None
-        if self._mqr is None:
-            _mqr = self._mm.query(self.query.querytype(), self.query._q)
-        self._results = self._mqr.next_batch()
-
-    def __iter__(self):
-        return self
-
-    def next(self):
-        if self._mqr is None:
-            self._mqr = self._mm.query(self.query.querytype(), self.query._q)
-            self._iter = iter(self._mqr)
-        return next(self._iter)
-
-    def get(self, keys_only):
-        return Model.for_name(self.kind).get(\
-                  Key(self.kind, \
-                      self._current[self._mqr.key_col]), \
-                  None if keys_only else zip(self.columns, self._current))
-
-
 class Query(ModelQuery):
     def __init__(self, kind, keys_only = True, **kwargs):
-        super(ModelQuery, self).__init__()
+        super(Query, self).__init__()
         if isinstance(kind, (list, tuple)):
             kinds = [k if isinstance(k, ModelMetaClass) else Model.for_name(k) for k in kind]
         else:
@@ -1759,14 +1570,14 @@ class Query(ModelQuery):
             if Model.for_name(k)._flat:
                 logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
                 return
-        return super(ModelQuery, self).set_ancestor(ancestor)
+        return super(Query, self).set_ancestor(ancestor)
 
     def set_parent(self, parent):
         for k in self.kind:
             if Model.for_name(k)._flat:
                 logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
                 return
-        return super(ModelQuery, self).set_parent(parent)
+        return super(Query, self).set_parent(parent)
 
     def __iter__(self):
         self._iter = iter(self.kind)
@@ -1777,30 +1588,30 @@ class Query(ModelQuery):
     def next(self):
         ret = None
         if self._results:
-            ret = next(self.results, None)
+            ret = next(self._results, None)
         while ret is None:
-            self._cur_kind = next(self._iter)
-            self._results = iter(self._q.execute(self._cur_kind, self.keys_only))
-            ret = next(self.results, None)
-        return Model.for_name(self._cur_kind).get(
+            self._cur_kind = Model.for_name(next(self._iter))
+            self._results = iter(self.execute(self._cur_kind, self.keys_only))
+            ret = next(self._results, None)
+        return self._cur_kind.get(
                 Key(self._cur_kind, ret[self._results.key_index()]),
-                None if keys_only else zip(self._result.columns(), ret))
+                None if self.keys_only else zip(self._results.columns(), ret))
 
     def count(self):
         ret = 0
         for k in self.kind:
-            ret += self._q.count(k)
+            ret += self._count(k)
         return ret
 
     def delete(self):
         res = 0
         for k in self.kind:
             if Model.for_name(k).has_on_delete():
-                for m in self._q.execute(k, self.keys_only):
+                for m in self.execute(k, self.keys_only):
                     if m.on_delete():
-                        res += self._q.delete_one(m)
+                        res += self.delete_one(m)
             else:
-                res += self._q.delete(k)
+                res += self._delete(k)
         return res
 
     def run(self):
@@ -1808,7 +1619,10 @@ class Query(ModelQuery):
 
     def get(self):
         i = iter(self)
-        return next(i)
+        try:
+            return next(i)
+        except StopIteration:
+            return None
 
     def fetch(self):
         results = [ r for r in self ]
@@ -2012,7 +1826,7 @@ class SelfReferenceProperty(ReferenceProperty):
 
 if __name__ == "__main__":
 
-    with Tx.begin():
+    with gripe.pgsql.Tx.begin():
         class Test(Model):
             testname = TextProperty(required = True, is_label = True)
             value = IntegerProperty(default = 12)
@@ -2025,7 +1839,7 @@ if __name__ == "__main__":
         assert jan.id() is not None, "jan.id() is still None after put()"
         x = jan.key()
 
-    with Tx.begin():
+    with gripe.pgsql.Tx.begin():
         y = Test.get(x)
         assert y.id() == x.id
         assert y.testname == "Jan"
@@ -2034,17 +1848,17 @@ if __name__ == "__main__":
         y.put()
         assert y.value == 43
 
-    with Tx.begin():
+    with gripe.pgsql.Tx.begin():
         tim = Test(testname = "Tim", value = 9, parent = y)
         tim.put()
         assert tim.parent().id == y.id()
 
-        Tx.flush_cache()
+        gripe.pgsql.Tx.flush_cache()
         q = Query(Test)
         for t in q:
             print t.testname
 
-        Tx.flush_cache()
+        gripe.pgsql.Tx.flush_cache()
         q = Query(Test, False)
         for t in q:
             print t.testname
@@ -2103,28 +1917,28 @@ if __name__ == "__main__":
         r.put()
 
         q = Query(Test)
-        q.ancestor("/")
+        q.set_ancestor("/")
         for t in q:
             print t
 
         q = Query(Test)
-        q.ancestor(y)
+        q.set_ancestor(y)
         for t in q:
             print t
 
         q = Query(Test)
-        q.filter("value = ", 9)
+        q.add_filter("value = ", 9)
         q.get()
 
         q = Query(Test)
-        q.ancestor(y)
-        q.filter("testname = ", 'Tim')
-        q.filter("value < ", 10)
+        q.set_ancestor(y)
+        q.add_filter("testname = ", 'Tim')
+        q.add_filter("value < ", 10)
         for t in q:
             print t
 
         q = Query(RefTest)
-        q.filter("ref = ", y)
+        q.add_filter("ref = ", y)
         for t in q:
             print t
 

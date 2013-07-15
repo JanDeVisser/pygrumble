@@ -1,5 +1,6 @@
 import datetime
 import gripe
+import gripe.pgsql
 import gripe.smtp
 import grumble
 
@@ -13,7 +14,6 @@ logger = gripe.get_logger("grudge")
 #    apply status
 #
 
-
 class Worker(object):
     def __init__(self, q, ix):
         self._ix = ix
@@ -25,37 +25,47 @@ class Worker(object):
             assert action, "Message Queue takes sequence as action"
             a = action[0]
             if a:
-                print "Worker %s: handling(%s)" % (self._ix, a.__class__.__name__)
                 args = action[1] if len(action) > 1 else []
                 args = args or []
                 kwargs = action[2] if len(action) > 2 else {}
                 kwargs = kwargs or {}
-                with grumble.Tx.begin():
+                logger.debug("Worker %s: handling(%s, %s, %s)", self._ix,
+                    a.__class__.__name__, args, kwargs)
+                with gripe.pgsql.Tx.begin():
                     ret = a(*args, **kwargs)
-                    if isinstance(ret, Status) and "process" in kwargs:
-                        p = kwargs["process"]().add_status(ret)
+                    if isinstance(ret, (basestring, Status)) and "process" in kwargs:
+                        process = kwargs["process"]()
+                        s = process.get_status(ret) \
+                                if isinstance(ret, basestring) \
+                                else ret
+                        if isinstance(s, Status):
+                            process.add_status(s)
             self._queue.task_done()
 
 
-class MessageQueue(Queue.Queue):
+class MessageQueue(object):
     def __init__(self, name, workers):
+        self._q = Queue.Queue()
         self._name = name
         for i in range(workers):
-            t = threading.Thread(target = Worker(self, i))
+            t = threading.Thread(target = Worker(self._q, i))
             t.daemon = True
             t.setName("Message Q %s Worker thread %s" % (name, i))
             t.start()
 
     def put_action(self, action, *args, **kwargs):
-        print "_queue.put(%s)" % action.__class__.__name__
-        self._queue.put((action, args, kwargs))
+        logger.debug("MQ .put(%s)", action.__class__.__name__)
+        self._q.put((action, args, kwargs))
+
+    def join(self):
+        self._q.join()
 
 _queue = MessageQueue("Grudge WF", 5)
 
-
 class Status(object):
-    def __init__(self):
-        self._name = self.__class__.__name__
+    def __init__(self, name = None, label = None):
+        self._name = name or self.__class__.__name__
+        self._label = label
         self._on_added = []
         self._on_removed = []
 
@@ -63,6 +73,11 @@ class Status(object):
         if value:
             self._name = value
         return self._name
+
+    def label(self, value = None):
+        if value:
+            self._label = value
+        return self._label
 
     def on_added(self, action):
         self._on_added.append(action)
@@ -83,17 +98,21 @@ class Event(object):
         self._action = action
 
 class StatusEvent(Event):
-    pass
+    def __init__(self, status, action):
+        super(StatusEvent, self).__init__(action)
+        self._status = status
 
 class OnAdd(StatusEvent):
-    def __call__(self, status):
-        status.on_added(self._action)
-        return status
+    def __call__(self, process):
+        s = process().get_status(self._status)
+        s.on_added(self._action)
+        return process
 
 class OnRemove(StatusEvent):
-    def __call__(self, status):
-        status.on_removed(self._action)
-        return status
+    def __call__(self, process):
+        s = process().get_status(self._status)
+        s.on_removed(self._action)
+        return process
 
 class ProcessEvent(Event):
     pass
@@ -109,7 +128,7 @@ class OnStopped(ProcessEvent):
         return process
 
 class AddedStatus(grumble.Model):
-    name = grumble.TextProperty()
+    status = grumble.TextProperty()
 
 #
 # -------------------------------------------------------------------------
@@ -162,8 +181,8 @@ class Stop(ProcessAction):
 
 class Transition(ProcessAction):
     def __call__(self, **kwargs):
-        print "Transition"
         process = kwargs.get("process")
+        logger.debug("Transition %s to %s", process, self._target)
         target = self.get_target(process)
         process().stop()
         if target:
@@ -198,6 +217,24 @@ class Remove(StatusAction):
 #   G e n e r a l  A c t i o n s
 # -------------------------------------------------------------------------
 #
+
+class Invoke(Action):
+    def __init__(self, *args, **kwargs):
+        self._args = []
+        if args:
+            self._method = args[0]
+            if len(args) > 1:
+                self._args.extend[args[1:]]
+        if "method" in kwargs:
+            self._method = kwargs["method"]
+        if "args" in kwargs:
+            self._args.extend(kwargs["args"])
+        self._kwargs = kwargs["kwargs"] if "kwargs" in kwargs else {}
+        assert self._method, "Method must be specified for Invoke action"
+
+    def __call__(self, **kwargs):
+        process = kwargs.get("process")
+        return process().resolve(self._method, self._args, self._kwargs)
 
 class SendMail(Action):
     def __init__(self, **kwargs):
@@ -240,7 +277,7 @@ class Process(object):
         self.exitpoint = kwargs.get("exitpoint")
 
     def __call__(self, cls):
-        print "decorating %s" % cls.__name__
+        logger.debug("Decorating %s as a process", cls.__name__)
         cls.add_property("starttime", grumble.DateTimeProperty())
         cls.add_property("finishtime", grumble.DateTimeProperty())
         cls._statuses = {}
@@ -257,6 +294,14 @@ class Process(object):
         cls._entrypoint = self.entrypoint
         cls._exitpoint = self.exitpoint
 
+        def get_status(cls, s):
+            return cls._statuses.get(s.name() if isinstance(s, Status) else s)
+        cls.get_status = classmethod(get_status)
+
+        def statusses(cls):
+            return cls._statuses
+        cls.statusses = classmethod(statusses)
+
         def on_started(cls, action):
             cls._on_started.append(action)
         cls.on_started = classmethod(on_started)
@@ -271,7 +316,7 @@ class Process(object):
 
         def instantiate(cls, parent = None):
             logger.debug("instantiate %s", cls.__name__)
-            with grumble.Tx.begin():
+            with gripe.pgsql.Tx.begin():
                 p = cls(parent = parent)
                 p.put()
                 for sub in cls.subprocesses():
@@ -283,23 +328,27 @@ class Process(object):
         def start(self):
             if self.starttime is None:
                 logger.debug("start instance of %s", self.__class__.__name__)
-                with grumble.Tx.begin():
+                with gripe.pgsql.Tx.begin():
                     self.starttime = datetime.datetime.now()
                     self.put()
                     for a in self._on_started:
                         _queue.put_action(a, process = self)
-                with grumble.Tx.begin():
+                with gripe.pgsql.Tx.begin():
                     ep = grumble.Model.for_name(self._entrypoint) if self._entrypoint else None
+                    logger.debug("Entrypoint of %s: %s", self.__class__.__name__, ep.__name__ if ep is not None else "None")
                     if ep:
-                        ep_instance = grumble.Query(ep, False, ancestor = self).get()
+                        ep_instance = grumble.Query(ep, False, parent = self).get()
                         if ep_instance:
+                            logger.debug("Starting entrypoint instance")
                             ep_instance.start()
+                        else:
+                            logger.debug("No entrypoint instance found")
         cls.start = start
 
         def stop(self):
             if self.starttime is not None and self.finishtime is None:
                 logger.debug("stop instance of %s", self.__class__.__name__)
-                with grumble.Tx.begin():
+                with gripe.pgsql.Tx.begin():
                     if self.subprocesses():
                         for sub in grumble.Query(self.subprocesses(), ancestor = self):
                             sub.stop()
@@ -315,14 +364,15 @@ class Process(object):
         def add_status(self, status):
             status = status.name() if isinstance(status, Status) else status
             assert status in self._statuses, "Cannot add status %s to process %s" % (status, self.__class__.__name__)
+            logger.debug("Adding status %s to process %s", status, self.__class__.__name__)
             statusdef = self._statuses[status]
             added = None
-            with grumble.Tx.begin():
+            with gripe.pgsql.Tx.begin():
                 for s in AddedStatus.query(ancestor = self):
                     if s.name == status:
                         added = s
                 if added is None:
-                    added = AddedStatus(name = status, parent = self)
+                    added = AddedStatus(status = status, parent = self)
                     added.put()
                     statusdef.added(self)
                 return added
@@ -331,11 +381,12 @@ class Process(object):
         def remove_status(self, status):
             status = status.name() if isinstance(status, Status) else status
             assert status in self._statuses, "Cannot remove status %s from process %s" % (status, self.__class__.__name__)
+            logger.debug("Removing status %s from process %s", status, self.__class__.__name__)
             statusdef = self._statuses[status]
             remove = None
-            with grumble.Tx.begin():
-                for s in AddedStatus.query(ancestor = self):
-                    if s.name == status:
+            with gripe.pgsql.Tx.begin():
+                for s in AddedStatus.query(parent = self):
+                    if s.status == status:
                         remove = s
                 if remove is not None:
                     grumble.delete(remove)
@@ -343,12 +394,13 @@ class Process(object):
                 return
         cls.remove_status = remove_status
 
-        def resolve(self, path):
+        def resolve(self, path, args = None, kwargs = None):
             assert path, "Called process.resolve with empty path"
             logger.debug("resolving %s for %s", path, self)
             deref = path.startswith("@")
             if deref:
                 path = path[1:]
+                logger.debug("Dereffing %s", path)
             proc = self
             p = path.split("/")
             pix = 0
@@ -358,13 +410,12 @@ class Process(object):
                 pix += 1
                 if elem == "..":
                     proc = proc().parent()
-                    # print "resolved '..' -> %s" % proc
+                    logger.debug("resolved '..' -> %s", proc)
                 elif elem and elem != ".":
-                    proc = grumble.Query(elem, ancestor = proc).get()
-                    # print "resolved '%s' -> %s" % (elem, proc)
+                    proc = grumble.Query(elem, parent = proc).get()
+                    logger.debug("resolved '%s' -> %s", elem, proc)
                 else:
-                    # print "resolve: no-op '%s'" % elem
-                    pass
+                    logger.debug("resolve: no-op '%s'", elem)
                 assert proc, "Path %s does not resolve for process %s" % (path, self)
             if deref:
                 attrib = p[maxpix]
@@ -373,7 +424,13 @@ class Process(object):
                     "Resolving %s: Objects of class %s do not have attribute %s" % \
                     (path, proc.__class__.__name__, attrib)
                 attr = getattr(proc, attrib)
-                return attr() if callable(attr) else attr
+                if callable(attr):
+                    if args is not None:
+                        return attr(*args) if kwargs is None else attr(*args, **kwargs)
+                    else:
+                        return attr() if kwargs is None else attr(**kwargs)
+                else:
+                    return attr
             else:
                 return proc
         cls.resolve = resolve
@@ -392,10 +449,28 @@ if __name__ == "__main__":
     class Step1(grumble.Model):
         pass
 
-    @OnStarted(Stop())
-    @Process(parent = "WF", exitpoint = True)
+    @OnStarted(Invoke("@./set_recipients"))
+    @OnAdd("sendmail", SendMail(recipients = "@./recipients",
+        subject = "Grudge Test", text = "This is a test", status = "stopme"))
+    @OnAdd("stopme", Stop())
+    @OnStopped(Transition("../Step3"))
+    @Process(parent = "WF")
     class Step2(grumble.Model):
-        pass
+        sendmail = Status()
+        stopme = Status()
+        recipients = grumble.TextProperty()
+
+        def set_recipients(self):
+            self.recipients = "jan@de-visser.net"
+            self.put()
+            return self.sendmail
+
+    @OnStarted(Add(status = "startme"))
+    @OnAdd("startme", Remove(status = "startme"))
+    @OnRemove("startme", Stop())
+    @Process(parent = "WF", exitpoint = True)
+    class Step3(grumble.Model):
+        startme = Status()
 
     wf = WF.instantiate()
     wf.start()
