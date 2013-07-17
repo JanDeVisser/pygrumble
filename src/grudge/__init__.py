@@ -9,11 +9,6 @@ import Queue
 
 logger = gripe.get_logger("grudge")
 
-# TODO:
-#  If action returns status, and this is the first action in the list to do so,
-#    apply status
-#
-
 class Worker(object):
     def __init__(self, q, ix):
         self._ix = ix
@@ -110,7 +105,7 @@ class OnAdd(StatusEvent):
 
 class OnRemove(StatusEvent):
     def __call__(self, process):
-        s = process().get_status(self._status)
+        s = process.get_status(self._status)
         s.on_removed(self._action)
         return process
 
@@ -119,12 +114,12 @@ class ProcessEvent(Event):
 
 class OnStarted(ProcessEvent):
     def __call__(self, process):
-        process().on_started(self._action)
+        process.on_started(self._action)
         return process
 
 class OnStopped(ProcessEvent):
     def __call__(self, process):
-        process().on_stopped(self._action)
+        process.on_stopped(self._action)
         return process
 
 class AddedStatus(grumble.Model):
@@ -257,9 +252,12 @@ class SendMail(Action):
             if process and self._text.startswith("@") \
             else self._text
         if text.startswith("&"):
-            msg = gripe.smtp.TemplateMailMessage(text[1:])
+            template = text[1:]
+            logger.debug("Sending template message %s to %s", template, recipients)
+            msg = gripe.smtp.TemplateMailMessage(template)
             msg.send(recipients, subject, { "process": process()})
         else:
+            logger.debug("Sending raw email text to %s", recipients)
             gripe.smtp.sendMail(recipients, subject, text)
         return self._status
 
