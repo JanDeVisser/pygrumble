@@ -2,10 +2,9 @@
     "_description": "SMTP mail configuration",
     "author": "jan",
     "version": "1.0",
-    
-	"username": "jan@de-visser.net",
-	"fromname": "Jan de Visser",
-	"password": "17knots",
-	"smtphost": "smtp.gmail.com",
-	"smtpport": 587
+    "username": "jan@de-visser.net",
+    "fromname": "Jan de Visser",
+    "password": "17knots",
+    "smtphost": "smtp.gmail.com",
+    "smtpport": 587
 }

@@ -74,6 +74,12 @@ class Status(object):
             self._label = value
         return self._label
 
+    def __str__(self):
+        return self.label() or self.name()
+
+    def __repr__(self):
+        return self.__str__()
+
     def on_added(self, action):
         self._on_added.append(action)
 
@@ -459,7 +465,7 @@ if __name__ == "__main__":
         recipients = grumble.TextProperty()
 
         def set_recipients(self):
-            self.recipients = "jan@de-visser.net"
+            self.recipients = "runnr@de-visser.net"
             self.put()
             return self.sendmail
 
