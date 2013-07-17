@@ -9,11 +9,6 @@ import Queue
 
 logger = gripe.get_logger("grudge")
 
-# TODO:
-#  If action returns status, and this is the first action in the list to do so,
-#    apply status
-#
-
 class Worker(object):
     def __init__(self, q, ix):
         self._ix = ix
@@ -93,6 +88,43 @@ class Status(object):
         for a in self._on_removed:
             _queue.put_action(a, process = grumble.Key(process), status = self)
 
+class Event(object):
+    def __init__(self, action):
+        self._action = action
+
+class StatusEvent(Event):
+    def __init__(self, status, action):
+        super(StatusEvent, self).__init__(action)
+        self._status = status
+
+class OnAdd(StatusEvent):
+    def __call__(self, process):
+        s = process().get_status(self._status)
+        s.on_added(self._action)
+        return process
+
+class OnRemove(StatusEvent):
+    def __call__(self, process):
+        s = process.get_status(self._status)
+        s.on_removed(self._action)
+        return process
+
+class ProcessEvent(Event):
+    pass
+
+class OnStarted(ProcessEvent):
+    def __call__(self, process):
+        process.on_started(self._action)
+        return process
+
+class OnStopped(ProcessEvent):
+    def __call__(self, process):
+        process.on_stopped(self._action)
+        return process
+
+class AddedStatus(grumble.Model):
+    status = grumble.TextProperty()
+
 #
 # -------------------------------------------------------------------------
 #   A C T I O N S
@@ -126,7 +158,7 @@ class ProcessAction(Action):
         if not self._target:
             return ctx()
         else:
-            return ctx().resolve_process(self._target)
+            return ctx().resolve(self._target)
 
 class Start(ProcessAction):
     def __call__(self, **kwargs):
@@ -153,10 +185,9 @@ class Transition(ProcessAction):
 
 class StatusAction(ProcessAction):
     def __init__(self, *args, **kwargs):
-        logger.debug("Add(%s, %s)", args, kwargs)
-        self.set_process(*(args[1:] if len(args) > 1 else ()), **kwargs)
-        if len(args) > 0:
-            self._status = args[0]
+        self.set_process(*args, **kwargs)
+        if len(args) > 1:
+            self._status = args[1]
         elif "status" in kwargs:
             self._status = kwargs["status"]
         else:
@@ -195,12 +226,10 @@ class Invoke(Action):
             self._args.extend(kwargs["args"])
         self._kwargs = kwargs["kwargs"] if "kwargs" in kwargs else {}
         assert self._method, "Method must be specified for Invoke action"
-        if not self._method.endswith("()"):
-            self._method += "()"
 
     def __call__(self, **kwargs):
         process = kwargs.get("process")
-        return process().resolve_attribute(self._method, self._args, self._kwargs)
+        return process().resolve(self._method, self._args, self._kwargs)
 
 class SendMail(Action):
     def __init__(self, **kwargs):
@@ -213,87 +242,30 @@ class SendMail(Action):
 
     def __call__(self, **kwargs):
         process = kwargs.get("process")
-        recipients = process().resolve_attribute(self._recipients[1:]) \
+        recipients = process().resolve(self._recipients) \
             if process and self._recipients.startswith("@") \
             else self._recipients
-        subject =  process().resolve_attribute(self._subject[1:]) \
+        subject =  process().resolve(self._subject) \
             if process and self._subject.startswith("@") \
             else self._subject
-        text =  process().resolve_attribute(self._text[1:]) \
+        text =  process().resolve(self._text) \
             if process and self._text.startswith("@") \
             else self._text
         if text.startswith("&"):
-            msg = gripe.smtp.TemplateMailMessage(text[1:])
+            template = text[1:]
+            logger.debug("Sending template message %s to %s", template, recipients)
+            msg = gripe.smtp.TemplateMailMessage(template)
             msg.send(recipients, subject, { "process": process()})
         else:
+            logger.debug("Sending raw email text to %s", recipients)
             gripe.smtp.sendMail(recipients, subject, text)
         return self._status
-
-#
-# -------------------------------------------------------------------------
-#   E V E N T S
-# -------------------------------------------------------------------------
-#
-
-class Event(object):
-    def __init__(self, *args, **kwargs):
-        assert len(args), "Event must specify an action"
-        if len(args) == 1 and isinstance(args[0], Action):
-            action = args[0]
-        else:
-            action = Invoke(*args, **kwargs)
-        self._action = action
-
-#
-# -------------------------------------------------------------------------
-#   S T A T U S  E V E N T S
-# -------------------------------------------------------------------------
-#
-
-class StatusEvent(Event):
-    def __init__(self, status, *args, **kwargs):
-        super(StatusEvent, self).__init__(*args, **kwargs)
-        self._status = status
-
-class OnAdd(StatusEvent):
-    def __call__(self, process):
-        s = process().get_status(self._status)
-        s.on_added(self._action)
-        return process
-
-class OnRemove(StatusEvent):
-    def __call__(self, process):
-        s = process().get_status(self._status)
-        s.on_removed(self._action)
-        return process
-
-#
-# -------------------------------------------------------------------------
-#   P R O C E S S  E V E N T S
-# -------------------------------------------------------------------------
-#
-
-class ProcessEvent(Event):
-    pass
-
-class OnStarted(ProcessEvent):
-    def __call__(self, process):
-        process().on_started(self._action)
-        return process
-
-class OnStopped(ProcessEvent):
-    def __call__(self, process):
-        process().on_stopped(self._action)
-        return process
 
 #
 # -------------------------------------------------------------------------
 #   P R O C E S S  D E C O R A T O R
 # -------------------------------------------------------------------------
 #
-
-class AddedStatus(grumble.Model):
-    status = grumble.TextProperty()
 
 class Process(object):
     def __init__(self, *args, **kwargs):
@@ -420,13 +392,17 @@ class Process(object):
                 return
         cls.remove_status = remove_status
 
-        def resolve_process(self, path):
-            assert path, "Called process.resolve_process with empty path"
+        def resolve(self, path, args = None, kwargs = None):
+            assert path, "Called process.resolve with empty path"
             logger.debug("resolving %s for %s", path, self)
+            deref = path.startswith("@")
+            if deref:
+                path = path[1:]
+                logger.debug("Dereffing %s", path)
             proc = self
             p = path.split("/")
             pix = 0
-            maxpix = len(p)
+            maxpix = len(p) if not deref else len(p) - 1
             while pix < maxpix:
                 elem = p[pix]
                 pix += 1
@@ -439,34 +415,24 @@ class Process(object):
                 else:
                     logger.debug("resolve: no-op '%s'", elem)
                 assert proc, "Path %s does not resolve for process %s" % (path, self)
-            return proc()
-        cls.resolve_process = resolve_process
-
-        def resolve_attribute(self, path, args = None, kwargs = None):
-            assert path, "Called process.resolve_attribute with empty path"
-            logger.debug("resolving attribute %s for %s", path, self)
-            proc = self
-            (procpath, delim, attribname) = path.rpartition(":")
-            call = False
-            if attribname.endswith("()"):
-                call = True
-                attribname = attribname[:-2]
-            if procpath:
-                proc = self.resolve_process(procpath)()
-            assert hasattr(proc, attribname), \
-                "Resolving %s: Objects of class %s do not have attribute %s" % \
-                (path, proc.__class__.__name__, attribname)
-            attr = getattr(proc, attribname)
-            if call:
-                assert callable(attr), "Attribute %s of class %s is not callable" % \
-                    (attribname, proc.__class__.__name__)
-                if args is not None:
-                    return attr(*args) if kwargs is None else attr(*args, **kwargs)
+            if deref:
+                attrib = p[maxpix]
+                proc = proc()
+                assert hasattr(proc, attrib), \
+                    "Resolving %s: Objects of class %s do not have attribute %s" % \
+                    (path, proc.__class__.__name__, attrib)
+                attr = getattr(proc, attrib)
+                if callable(attr):
+                    if args is not None:
+                        return attr(*args) if kwargs is None else attr(*args, **kwargs)
+                    else:
+                        return attr() if kwargs is None else attr(**kwargs)
                 else:
-                    return attr() if kwargs is None else attr(**kwargs)
+                    return attr
             else:
-                return attr
-        cls.resolve_attribute = resolve_attribute
+                return proc
+        cls.resolve = resolve
+
         return cls
 
 
@@ -481,8 +447,8 @@ if __name__ == "__main__":
     class Step1(grumble.Model):
         pass
 
-    @OnStarted(Invoke("./set_recipients"))
-    @OnAdd("sendmail", SendMail(recipients = "@recipients",
+    @OnStarted(Invoke("@./set_recipients"))
+    @OnAdd("sendmail", SendMail(recipients = "@./recipients",
         subject = "Grudge Test", text = "This is a test", status = "stopme"))
     @OnAdd("stopme", Stop())
     @OnStopped(Transition("../Step3"))
@@ -493,12 +459,12 @@ if __name__ == "__main__":
         recipients = grumble.TextProperty()
 
         def set_recipients(self):
-            self.recipients = "runnr@de-visser.net"
+            self.recipients = "jan@de-visser.net"
             self.put()
             return self.sendmail
 
-    @OnStarted(Add("startme"))
-    @OnAdd("startme", Remove("startme"))
+    @OnStarted(Add(status = "startme"))
+    @OnAdd("startme", Remove(status = "startme"))
     @OnRemove("startme", Stop())
     @Process(parent = "WF", exitpoint = True)
     class Step3(grumble.Model):
