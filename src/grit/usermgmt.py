@@ -7,6 +7,8 @@ Created on 2013-03-12
 import json
 
 import gripe
+import grumble
+import grudge
 import grit
 
 logger = gripe.get_logger("grit")
@@ -102,16 +104,44 @@ class Signup(grit.ReqHandler):
             params = json.loads(self.request.body)
             userid = params.get("userid")
             password = params.get("password")
-            um = grit.Session.get_usermanager()
-            try:
-                confcode = um.add(userid, password)
-                logger.debug("Signup OK")
-                self.response.headers["ST-JSON-Redirect"] = "/confirm"
-                self.json_dump({ "userid": userid, "password": password })
-            except grit.Exception as e:
-                logger.debug("Signup Error: %s" % e)
-                self.json_dump([e])
-                self.response.status_int = 401
+            wf = gripe.resolve(Config.app.workflows.signup)
+            if wf:
+                proc = wf.instantiate()
+                proc.userid = userid
+                proc.password = password
+                proc.put()
+                proc.start()
+                self.render()
+            else:
+                logger.error("No user signup workflow defined")
+                self.response_status_int = 500
+
+@grudge.Process(entrypoint = "CreateUser")
+class UserSignup(grumble.Model):
+    userid = grumble.TextProperty()
+    password = grumble.PasswordProperty()
+    confirmation_code = grumble.TextProperty()
+
+@OnStarted("create_user")
+@OnAdd("done", Transition("../SendMail"))
+@grudge.Process(parent = UserSignup)
+class CreateUser(grumble.Model):
+    done = Status()
+    def create_user(self):
+        proc = self.parent()()
+        userid = proc.userid
+        password = proc.password
+        um = grit.Session.get_usermanager()
+        try:
+            confcode = um.add(userid, password)
+            proc.confirmation_code = confcode
+            proc.put()
+            logger.debug("Create User OK")
+            return self.done
+        except grit.Exception as e:
+            logger.debug("Create user Error: %s" % e)
+            raise
+
 
 
 class RequestPasswordReset(grit.ReqHandler):

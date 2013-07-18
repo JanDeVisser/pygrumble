@@ -279,11 +279,13 @@ class Process(object):
         self.parent = kwargs.get("parent")
         self.entrypoint = kwargs.get("entrypoint")
         self.exitpoint = kwargs.get("exitpoint")
+        self.start_semaphore = kwargs.get("semaphore", 1)
 
     def __call__(self, cls):
         logger.debug("Decorating %s as a process", cls.__name__)
         cls.add_property("starttime", grumble.DateTimeProperty())
         cls.add_property("finishtime", grumble.DateTimeProperty())
+        cls.add_property("semaphore", grumble.IntProperty(default = 0))
         cls._statuses = {}
         for (propname, propdef) in cls.__dict__.items():
             if isinstance(propdef, Status):
@@ -297,6 +299,7 @@ class Process(object):
             cls._parent_process._subprocesses.append(cls)
         cls._entrypoint = self.entrypoint
         cls._exitpoint = self.exitpoint
+        cls._start_semaphore = self.start_semaphore
 
         def get_status(cls, s):
             return cls._statuses.get(s.name() if isinstance(s, Status) else s)
@@ -331,12 +334,18 @@ class Process(object):
 
         def start(self):
             if self.starttime is None:
-                logger.debug("start instance of %s", self.__class__.__name__)
                 with gripe.pgsql.Tx.begin():
-                    self.starttime = datetime.datetime.now()
-                    self.put()
-                    for a in self._on_started:
-                        _queue.put_action(a, process = self)
+                    self.semaphore = self.semaphore + 1
+                    if self.semaphore < self._start_semaphore:
+                        logger.debug("start semaphore value is %s threshold of %s not yet reached", self.semaphore, self._start_semaphore)
+                        self.put()
+                        return
+                    else:
+                        logger.debug("starting instance of %s", self.__class__.__name__)
+                        self.starttime = datetime.datetime.now()
+                        self.put()
+                        for a in self._on_started:
+                            _queue.put_action(a, process = self)
                 with gripe.pgsql.Tx.begin():
                     ep = grumble.Model.for_name(self._entrypoint) if self._entrypoint else None
                     logger.debug("Entrypoint of %s: %s", self.__class__.__name__, ep.__name__ if ep is not None else "None")

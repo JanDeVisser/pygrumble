@@ -44,6 +44,9 @@
         	"has_roles": [ "moderator" ] 
     	}
     ],
+    "workflows": {
+        "signup": "UserSignup"
+    },
     "mounts": [
         { "path": "/", "app": "index.app", "roles": [] },
         { "path": "/image/.+|/css/.+|/javascript/.+", "roles": [] },
