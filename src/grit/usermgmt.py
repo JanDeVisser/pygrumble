@@ -127,6 +127,7 @@ class UserSignup(grumble.Model):
 @grudge.Process(parent = UserSignup)
 class CreateUser(grumble.Model):
     done = Status()
+
     def create_user(self):
         proc = self.parent()()
         userid = proc.userid
@@ -143,6 +144,13 @@ class CreateUser(grumble.Model):
             raise
 
 
+@OnStarted(grudge.SendMail(recipients = "@..:userid",
+    subject = "Confirm your registration with %s" % gripe.Config.app.about.application_name,
+    text = "&signup_confirmation", status = "mailsent"))
+@OnAdd("confirmed", Stop())
+@grudge.Process(parent = UserSignup, exitpoint = True)
+class SendMail(grumble.Model):
+    mailsent = Status()
 
 class RequestPasswordReset(grit.ReqHandler):
     '''
