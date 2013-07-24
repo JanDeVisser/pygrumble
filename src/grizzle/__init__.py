@@ -23,13 +23,41 @@ class UserGroup(grumble.Model, gripe.auth.AbstractUserGroup):
     def _explicit_roles(self):
         return set(self.has_roles)
 
+UserStatus = gripe.Enum(['Unconfirmed', 'Active', 'Trusted', 'Moderator', 'Admin', 'Banned', 'Inactive', 'Deleted'])
+GodList = ('jan@de-visser.net',)
+
 class User(grumble.Model, gripe.auth.AbstractUser):
     _flat = True
     email = grumble.TextProperty(is_key = True)
     password = grumble.PasswordProperty()
-    confirmation_code = grumble.TextProperty()
+    status = grumble.TextProperty(choices = UserStatus, default = 'Unconfirmed')
     display_name = grumble.TextProperty(is_label = True)
     has_roles = grumble.ListProperty()
+
+    def is_active(self):
+        """
+          An active user is a user currently in good standing.
+        """
+        return self.status == 'Active' or self.is_trusted()
+
+    def is_trusted(self):
+        """
+          An trusted user is an active user trusted by the community.
+        """
+        return self.status == 'Trusted' or self.is_moderator()
+
+    def is_moderator(self):
+        """
+          An moderator is a trusted user empowered to moderate user generated
+          content.
+        """
+        return self.status == 'Moderator' or self.is_admin()
+
+    def is_admin(self):
+        return self.status == 'Admin' or self.is_god()
+
+    def is_god(self):
+        return self.uid() in GodList
 
     def uid(self):
         return self.email
@@ -54,26 +82,26 @@ class UserManager(gripe.auth.AbstractUserManager):
         user = User.query("email = ", userid, "password = ", pwdhash, ancestor = None).fetch()
         if user:
             assert isinstance(user, User), "Huh? More than one user with the same email and password?? %s" % type(user)
-        if user and user.confirmation_code:
+        if user and not user.is_active():
             user = None
         return user
 
     def add(self, userid, password):
         user = self.get(userid)
-        if user:
+        if user and user.exists():
             raise gripe.auth.UserExists(userid)
         else:
-            user = User(email = userid, password = password, confirmation_code = self.confirmation_code())
+            user = User(email = userid, password = password)
             user.put()
-            return user.confirmation_code
+            return user.id()
 
-    def confirm(self, userid, code):
-        user = User.query("email = ", userid, "confirmation_code = ", code, ancestor = None).fetch()
+    def confirm(self, key, status = 'Active'):
+        user = User.get(key)
         if user:
-            user.confirmation_code = None
+            user.status = status
             user.put()
         else:
-            raise gripe.auth.InvalidConfirmationCode()
+            raise gripe.auth.UserDoesntExists(userid)
 
 def currentuser():
     return UserManager().get(grumble.get_sessionbridge().userid())

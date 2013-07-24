@@ -22,6 +22,13 @@ class UserExists(AuthException):
     def __str__(self):
         return "User with ID %s already exists" % self._uid 
 
+class UserDoesntExists(AuthException):
+    def __init__(self, uid):
+        self._uid = uid
+
+    def __str__(self):
+        return "User with ID %s doesn't exists" % self._uid
+
 class InvalidConfirmationCode(AuthException):
     def __str__(self):
         return "Invalid user confirmation code"

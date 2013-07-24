@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import os.path
+import sha
 import sys
 import threading
 import traceback
@@ -312,6 +313,11 @@ class ModelQueryRenderer(object):
             if "_createdby" in new_values:
                 new_values.pop("_createdby")
 
+    def _scrub_audit_info(self, new_values):
+        for c in ("_updated", "_updatedby", "_created", "_createdby", "_ownerid", "_acl"):
+            if c in new_values:
+                del new_values[c]
+
     def execute(self, type, new_values = None):
         assert self._query, "Must set a Query prior to executing a ModelQueryRenderer"
         with gripe.pgsql.Tx.begin() as tx:
@@ -327,6 +333,8 @@ class ModelQueryRenderer(object):
                 assert new_values, "ModelQuery.execute: QueryType %s requires new values" % QueryType[type]
                 if self.audit():
                     self._update_audit_info(new_values, type == QueryType.Insert)
+                else:
+                    self._scrub_audit_info(new_values)
                 if type == QueryType.Update:
                     sql = 'UPDATE %s SET %s ' % (self.tablename(), ", ".join(['"%s" = %%s' % c for c in new_values]))
                 else: # Insert
@@ -1358,6 +1366,7 @@ class Model(object):
             fullname = ".".join(hierarchy)
         fullname = fullname.lower()
         assert fullname not in Model.classes, "Model._register_class: Class '%s' is already registered" % fullname
+        print "Model._register_class %s => %s" % (fullname, modelclass)
         logger.debug("Model._register_class %s => %s", fullname, modelclass)
         Model.classes[fullname] = modelclass
         modelclass._kind = fullname
@@ -1384,7 +1393,7 @@ class Model(object):
         return ret
 
     @classmethod
-    def get_by_key(cls, key, values = None):
+    def get_by_key(cls, key):
         cls.seal()
         assert cls != Model, "Cannot use get_by_key on unconstrained Models"
         k = Key(cls, key)
@@ -1683,7 +1692,9 @@ class PasswordProperty(StringProperty):
 
     @classmethod
     def hash(cls, password):
-        return password if password and password.startswith("sha://") else "sha://%s" % sha.sha(password if password else "").hexdigest()
+        return password \
+            if password and password.startswith("sha://") \
+            else "sha://%s" % sha.sha(password if password else "").hexdigest()
 
 class JSONProperty(ModelProperty):
     datatype = dict

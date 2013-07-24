@@ -116,17 +116,19 @@ class Signup(grit.ReqHandler):
                 logger.error("No user signup workflow defined")
                 self.response_status_int = 500
 
-@grudge.Process(entrypoint = "CreateUser")
+@grudge.Process()
+@grudge.OnStarted("create_user")
+@grudge.OnAdd("user_created", grudge.SendMail(recipients = "@..:userid",
+    subject = "Confirm your registration with %s" % gripe.Config.app.about.application_name,
+    text = "&signup_confirmation", status = "mail_sent"))
+@grudge.OnAdd("confirmed", grudge.Stop())
 class UserSignup(grumble.Model):
     userid = grumble.TextProperty()
     password = grumble.PasswordProperty()
-    confirmation_code = grumble.TextProperty()
 
-@OnStarted("create_user")
-@OnAdd("done", Transition("../SendMail"))
-@grudge.Process(parent = UserSignup)
-class CreateUser(grumble.Model):
-    done = Status()
+    user_created = grudge.Status()
+    mail_sent = grudge.Status()
+    confirmed = grudge.Status()
 
     def create_user(self):
         proc = self.parent()()
@@ -134,23 +136,40 @@ class CreateUser(grumble.Model):
         password = proc.password
         um = grit.Session.get_usermanager()
         try:
-            confcode = um.add(userid, password)
-            proc.confirmation_code = confcode
-            proc.put()
+            um.add(userid, password)
             logger.debug("Create User OK")
-            return self.done
+            return self.user_created
         except grit.Exception as e:
             logger.debug("Create user Error: %s" % e)
             raise
 
+class ConfirmSignup(grit.ReqHandler):
+    def get_template(self):
+        if self._process is not None:
+            return "confirmation_success"
+        else:
+            return "confirm"
 
-@OnStarted(grudge.SendMail(recipients = "@..:userid",
-    subject = "Confirm your registration with %s" % gripe.Config.app.about.application_name,
-    text = "&signup_confirmation", status = "mailsent"))
-@OnAdd("confirmed", Stop())
-@grudge.Process(parent = UserSignup, exitpoint = True)
-class SendMail(grumble.Model):
-    mailsent = Status()
+    def get_context(self, ctx):
+        ctx["process"] = self._process
+        return ctx
+
+    def get_urls(self, urls):
+        urls.append("login", "Login", None, 10)
+        urls.append("reset-password", "Reset Password", None, 20)
+        urls.append("signup", "Sign up", None, 30)
+        return urls
+
+    def get(self, code = None):
+        logger.debug("confirm.get")
+        self._process = UserSignup.get_by_key(code) if code else None
+        if self._process and _self.process.exists():
+            self._process.add_status("confirmed")
+        self.render()
+
+    def post(self, key = None):
+        return self.get(key)
+
 
 class RequestPasswordReset(grit.ReqHandler):
     '''

@@ -338,8 +338,8 @@ com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
     if (elem.getAttribute("onsubmitted")) {
         form.onsubmitted = getfunc(elem.getAttribute("onsubmitted"))
     }
-    if (f.getAttribute("validate")) {
-	this.validator = getfunc(f.getAttribute("validate"))
+    if (elem.getAttribute("validate")) {
+	this.validator = getfunc(elem.getAttribute("validate"))
     }
     if (elem.getAttribute("onerror")) {
         form.onerror = getfunc(elem.getAttribute("onerror"))

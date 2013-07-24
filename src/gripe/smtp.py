@@ -114,6 +114,7 @@ class TemplateMailMessage(object):
         ctx["subject"] = subject
         ctx["recipients"] = recipients
         ctx["recipient_str"] = recipient_str
+        ctx['app'] = gripe.Config.app.get("about", {})
         body = self.render(ctx)
         return sendMail(recipients, subject, body, *attachmentFilePaths)
 

@@ -21,6 +21,7 @@ import sys
 
 import gripe
 import gripe.json_util
+import gripe.pgsql
 import gripe.url
 import grumble
 
@@ -29,13 +30,9 @@ logger = gripe.get_logger(__name__)
 class Error(gripe.Error):
     pass
 
-print "gripe.role"
 import gripe.role
-print "gripe.auth"
 import gripe.auth
-print "grit.log"
 import grit.log
-print "DONE importing"
 
 class UserData(grumble.Model):
     _flat = True
@@ -108,7 +105,7 @@ class SessionManager(object):
                 cutoff = datetime.datetime.now() - datetime.timedelta(100)
                 q = grumble.Query(UserData)
                 q.filter("last_access <= ", cutoff)
-                with grumble.Tx.begin():
+                with gripe.pgsql.Tx.begin():
                     result = q.delete()
                     logger.info("Weeded %s cookies", result)
                     self._lastharvest = datetime.datetime.now()
@@ -345,7 +342,7 @@ class TxWrapper(object):
 
     @classmethod
     def begin(cls, reqctx):
-        return TxWrapper(grumble.Tx.begin(), reqctx.request)
+        return TxWrapper(gripe.pgsql.Tx.begin(), reqctx.request)
 
     def __enter__(self):
         return self._tx.__enter__()
@@ -688,18 +685,7 @@ class WSGIApplication(webapp2.WSGIApplication):
         self.apps = {}
         super(WSGIApplication, self).__init__(*args, **kwargs)
         grumble.set_sessionbridge(SessionBridge())
-        self.router.add(webapp2.Route("/signup", handler = handle_request, name = "signup",
-                                      defaults = { "root": self, "handler": "grit.usermgmt.Signup", "roles": [] }))
-        self.router.add(webapp2.Route("/login", handler = handle_request, name = "login",
-                                      defaults = { "root": self, "handler": "grit.usermgmt.Login", "roles": [] }))
-        self.router.add(webapp2.Route("/logout", handler = handle_request, name = "logout",
-                                      defaults = { "root": self, "handler": "grit.usermgmt.Logout", "roles": [] }))
-        self.router.add(webapp2.Route("/changepwd", handler = handle_request, name = "change-password",
-                                      defaults = { "root": self, "handler": "grit.usermgmt.ChangePassword", "roles": [] }))
-        self.router.add(webapp2.Route("/resetpwd", handler = handle_request, name = "reset-password",
-                                      defaults = { "root": self, "handler": "grit.usermgmt.ResetPassword", "roles": [] }))
-        self.router.add(webapp2.Route("/confirmreset", handler = handle_request, name = "confirm-reset",
-                                      defaults = { "root": self, "handler": "grit.usermgmt.ConfirmReset", "roles": [] }))
+        self._define_app()
         self.pipeline = []
 
         config = gripe.Config.app
@@ -745,6 +731,22 @@ class WSGIApplication(webapp2.WSGIApplication):
                 logger.info("WSGIApplication(): Adding static handler for path %s", raw_path)
             self.router.add(webapp2.Route(path, handler = handler, defaults = defaults))
         self.error_handlers[404] = handle_404
+
+    def _define_app(self):
+        self.router.add(webapp2.Route("/signup", handler = handle_request, name = "signup",
+                                      defaults = { "root": self, "handler": "grit.usermgmt.Signup", "roles": [] }))
+        self.router.add(webapp2.Route(r'/confirm/<code>', handler = handle_request, name = "confirm",
+                                      defaults = { "root": self, "handler": "grit.usermgmt.ConfirmSignup", "roles": [] }))
+        self.router.add(webapp2.Route("/login", handler = handle_request, name = "login",
+                                      defaults = { "root": self, "handler": "grit.usermgmt.Login", "roles": [] }))
+        self.router.add(webapp2.Route("/logout", handler = handle_request, name = "logout",
+                                      defaults = { "root": self, "handler": "grit.usermgmt.Logout", "roles": [] }))
+        self.router.add(webapp2.Route("/changepwd", handler = handle_request, name = "change-password",
+                                      defaults = { "root": self, "handler": "grit.usermgmt.ChangePassword", "roles": [] }))
+        self.router.add(webapp2.Route("/resetpwd", handler = handle_request, name = "reset-password",
+                                      defaults = { "root": self, "handler": "grit.usermgmt.ResetPassword", "roles": [] }))
+        self.router.add(webapp2.Route("/confirmreset", handler = handle_request, name = "confirm-reset",
+                                      defaults = { "root": self, "handler": "grit.usermgmt.ConfirmReset", "roles": [] }))
 
 app = WSGIApplication(debug = True)
 
