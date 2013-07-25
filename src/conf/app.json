@@ -45,7 +45,7 @@
     	}
     ],
     "workflows": {
-        "signup": "UserSignup"
+        "signup": "grit.usermgmt.UserSignup"
     },
     "mounts": [
         { "path": "/", "app": "index.app", "roles": [] },

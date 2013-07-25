@@ -80,7 +80,7 @@ class Status(object):
         return self._label
 
     def __str__(self):
-        return self.label() or self.name()
+        return "S(%s)" % self.label() or self.name()
 
     def __repr__(self):
         return self.__str__()
@@ -261,14 +261,19 @@ class StatusEvent(Event):
         super(StatusEvent, self).__init__(*args, **kwargs)
         self._status = status
 
+    def __str__(self):
+        return "StatusEvent %s for status %s" % (self.__class__.__name__, self._status)
+
 class OnAdd(StatusEvent):
     def __call__(self, process):
+        logger.debug("Calling decorator %s", self)
         s = process().get_status(self._status)
         s.on_added(self._action)
         return process
 
 class OnRemove(StatusEvent):
     def __call__(self, process):
+        logger.debug("Calling decorator %s", self)
         s = process().get_status(self._status)
         s.on_removed(self._action)
         return process
@@ -313,7 +318,7 @@ class Process(object):
         logger.debug("Decorating %s as a process", cls.__name__)
         cls.add_property("starttime", grumble.DateTimeProperty())
         cls.add_property("finishtime", grumble.DateTimeProperty())
-        cls.add_property("semaphore", grumble.IntProperty(default = 0))
+        cls.add_property("semaphore", grumble.IntegerProperty(default = 0))
         cls._statuses = {}
         for (propname, propdef) in cls.__dict__.items():
             if isinstance(propdef, Status):

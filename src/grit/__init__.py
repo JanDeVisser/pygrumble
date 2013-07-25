@@ -91,6 +91,10 @@ class SessionManager(object):
         SessionManager._singleton._monitor_()
 
     def _monitor_(self):
+        try:
+            return self._queue.get(timeout = 5.0)
+        except:
+            pass
         while True:
             with self._lock:
                 for (id, session) in self._sessions.items():
@@ -104,12 +108,11 @@ class SessionManager(object):
                 mm = UserData.modelmanager
                 cutoff = datetime.datetime.now() - datetime.timedelta(100)
                 q = grumble.Query(UserData)
-                q.filter("last_access <= ", cutoff)
+                q.add_filter("last_access <= ", cutoff)
                 with gripe.pgsql.Tx.begin():
                     result = q.delete()
                     logger.info("Weeded %s cookies", result)
                     self._lastharvest = datetime.datetime.now()
-
             try:
                 return self._queue.get(timeout = 1.0)
             except:

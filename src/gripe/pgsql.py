@@ -51,7 +51,7 @@ class Cursor(psycopg2.extensions.cursor):
             tx = Tx.get()
             if tx is not None:
                 try:
-                    tx.close_cursor(self._cursor)
+                    tx.close_cursor(self)
                 except:
                     logger.error("Exception closing cursor")
             else:

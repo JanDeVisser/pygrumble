@@ -104,24 +104,26 @@ class Signup(grit.ReqHandler):
             params = json.loads(self.request.body)
             userid = params.get("userid")
             password = params.get("password")
-            wf = gripe.resolve(Config.app.workflows.signup)
+            wf = gripe.resolve(gripe.Config.app.workflows.signup)
             if wf:
                 proc = wf.instantiate()
                 proc.userid = userid
                 proc.password = password
                 proc.put()
                 proc.start()
-                self.render()
+                self.response.content_type = "application/json"
+                self.response.json = { "code": proc.id() }                
             else:
                 logger.error("No user signup workflow defined")
                 self.response_status_int = 500
 
-@grudge.Process()
 @grudge.OnStarted("create_user")
 @grudge.OnAdd("user_created", grudge.SendMail(recipients = "@..:userid",
     subject = "Confirm your registration with %s" % gripe.Config.app.about.application_name,
     text = "&signup_confirmation", status = "mail_sent"))
-@grudge.OnAdd("confirmed", grudge.Stop())
+@grudge.OnAdd("confirmed", "activate_user")
+@grudge.OnAdd("user_activated", grudge.Stop())
+@grudge.Process()
 class UserSignup(grumble.Model):
     userid = grumble.TextProperty()
     password = grumble.PasswordProperty()
@@ -129,18 +131,26 @@ class UserSignup(grumble.Model):
     user_created = grudge.Status()
     mail_sent = grudge.Status()
     confirmed = grudge.Status()
+    user_activated = grudge.Status()
 
     def create_user(self):
-        proc = self.parent()()
-        userid = proc.userid
-        password = proc.password
         um = grit.Session.get_usermanager()
         try:
-            um.add(userid, password)
+            um.add(self.userid, self.password)
             logger.debug("Create User OK")
             return self.user_created
         except grit.Exception as e:
             logger.debug("Create user Error: %s" % e)
+            raise
+
+    def activate_user(self):
+        um = grit.Session.get_usermanager()
+        try:
+            um.confirm(self.userid)
+            logger.debug("Activate User OK")
+            return self.user_activated
+        except grit.Exception as e:
+            logger.debug("Activate user Error: %s" % e)
             raise
 
 class ConfirmSignup(grit.ReqHandler):
@@ -218,3 +228,40 @@ class ConfirmPasswordReset(grit.ReqHandler):
 
     def post(self):
         self.get()
+
+
+
+if __name__ == '__main__':
+    import webapp2
+    import re
+    import gripe
+    import grumble
+    import grumble.image
+
+    app = grit.app
+
+    print "Get landing page"
+    request = webapp2.Request.blank('/')
+    response = request.get_response(app)
+    # print response
+    assert response.status_int == 200, "Expected 200 OK, got %s" % response.status
+
+    print "Doing signup request"
+    request = webapp2.Request.blank("/signup", POST = '{ "userid": "runnr@de-visser.net", "password": "x" }')
+    request.headers['ST-JSON-Request'] = "True"
+    request.method = "POST"
+    request.content_type = "application/x-www-form-urlencoded"
+    request.charset = "utf8"
+    response = request.get_response(app)
+    assert response.status_int == 200, "Expected 200 OK, got %s" % response.status
+    d = response.json
+    code = d["code"]
+    print "Submitted signup request and got confirmation code %s" % code
+
+    print "Confirming signup request"
+    request = webapp2.Request.blank("/confirm/%s" % code)
+    request.method = "GET"
+    request.charset = "utf8"
+    response = request.get_response(app)
+    assert response.status_int == 200, "Expected 200 OK, got %s" % response.status
+    print "Confirmed signup request"
