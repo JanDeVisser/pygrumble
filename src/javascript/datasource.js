@@ -82,7 +82,7 @@ com.sweattrails.api.JSONRequest.prototype.execute = function() {
         httpRequest.open((this.post) ? "POST" : "GET", this.url, this.async);
         httpRequest.send(parameters)
     } else {
-        this.log(((this.post) ? "POST " : "GET " ) + this.url + " as JSON data with body\n" + body)
+        this.log(((this.post) ? "POST " : "GET " ) + this.url + " as JSON data with body\n" + this.body)
         httpRequest.open((this.post) ? "POST" : "GET", this.url, this.async);
         httpRequest.setRequestHeader("ST-JSON-Request", "true")
         httpRequest.send(this.body)

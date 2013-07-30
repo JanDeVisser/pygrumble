@@ -20,6 +20,7 @@ class Cursor(psycopg2.extensions.cursor):
         logger.debug(self.mogrify(sql, args))
         try:
             super(Cursor, self).execute(sql, args)
+            logger.debug("Rowcount: %d", self.rowcount)
         except Exception, exc:
             print exc.__class__.__name__, exc
             raise
@@ -43,9 +44,11 @@ class Cursor(psycopg2.extensions.cursor):
     def singleton(self):
         return self.single_row()[0]
 
+    #_close = close
+    
     def _close(self):
-        return super(psycopg2.extensions.cursor, self).close()
-
+        pass
+    
     def close(self):
         if not self.closed:
             tx = Tx.get()
@@ -53,7 +56,7 @@ class Cursor(psycopg2.extensions.cursor):
                 try:
                     tx.close_cursor(self)
                 except:
-                    logger.error("Exception closing cursor")
+                    logger.exception("Exception closing cursor")
             else:
                 self._close()
 

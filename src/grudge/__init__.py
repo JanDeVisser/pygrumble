@@ -30,7 +30,7 @@ class Worker(object):
                 kwargs = action[2] if len(action) > 2 else {}
                 kwargs = kwargs or {}
                 logger.debug("Worker %s: handling(%s, %s, %s)", self._ix,
-                    a.__class__.__name__, args, kwargs)
+                    a, args, kwargs)
                 with gripe.pgsql.Tx.begin():
                     ret = a(*args, **kwargs)
                     if isinstance(ret, (basestring, Status)) and "process" in kwargs:
@@ -106,7 +106,8 @@ class Status(object):
 #
 
 class Action(object):
-    pass
+    def __str__(self):
+        return self.__class__.__name__
 
 #
 # -------------------------------------------------------------------------
@@ -149,6 +150,9 @@ class Stop(ProcessAction):
             target().stop()
 
 class Transition(ProcessAction):
+    def __str__(self):
+        return "(--> %s)" % self._target
+    
     def __call__(self, **kwargs):
         process = kwargs.get("process")
         logger.debug("Transition %s to %s", process, self._target)
@@ -169,6 +173,9 @@ class StatusAction(ProcessAction):
             self._status = None
 
 class Add(StatusAction):
+    def __str__(self):
+        return "(+ %s)" % self._status
+
     def __call__(self, **kwargs):
         process = kwargs.get("process")
         target = self.get_target(process)
@@ -176,6 +183,9 @@ class Add(StatusAction):
             target().add_status(self._status)
 
 class Remove(StatusAction):
+    def __str__(self):
+        return "(- %s)" % self._status
+
     def __call__(self, **kwargs):
         process = kwargs.get("process")
         target = self.get_target(process)
@@ -204,8 +214,12 @@ class Invoke(Action):
         if not self._method.endswith("()"):
             self._method += "()"
 
+    def __str__(self):
+        return "(::%s)" % self._method
+
     def __call__(self, **kwargs):
         process = kwargs.get("process")
+        logger.debug("Invoking %s", self._method)
         return process().resolve_attribute(self._method, self._args, self._kwargs)
 
 class SendMail(Action):
@@ -216,6 +230,9 @@ class SendMail(Action):
         self._subject = kwargs.get("subject") or ""
         self._text = kwargs["text"]
         self._status = kwargs.get("status")
+
+    def __str__(self):
+        return "mailto:%s" % self._recipients
 
     def __call__(self, **kwargs):
         process = kwargs.get("process")
@@ -228,6 +245,7 @@ class SendMail(Action):
         text =  process().resolve_attribute(self._text[1:]) \
             if process and self._text.startswith("@") \
             else self._text
+        logger.debug("Sending email\nTo: %s\nSubject: %s", recipients, subject)
         if text.startswith("&"):
             msg = gripe.smtp.TemplateMailMessage(text[1:])
             msg.send(recipients, subject, { "process": process()})
@@ -305,6 +323,7 @@ class OnStopped(ProcessEvent):
 
 class AddedStatus(grumble.Model):
     status = grumble.TextProperty()
+AddedStatus.seal()
 
 class Process(object):
     def __init__(self, *args, **kwargs):
@@ -407,6 +426,19 @@ class Process(object):
                         p().stop()
         cls.stop = stop
 
+        def has_status(self, status):
+            status = status.name() if isinstance(status, Status) else status
+            assert status in self._statuses, "Cannot add status %s to process %s" % (status, self.__class__.__name__)
+            logger.debug("Checking status %s on process %s", status, self.__class__.__name__)
+            added = None
+            with gripe.pgsql.Tx.begin():
+                for s in AddedStatus.query(parent = self):
+                    logger.debug(" -- Status %s found", s.status)
+                    if s.status == status:
+                        added = s
+                return added is not None
+        cls.has_status = has_status
+
         def add_status(self, status):
             status = status.name() if isinstance(status, Status) else status
             assert status in self._statuses, "Cannot add status %s to process %s" % (status, self.__class__.__name__)
@@ -414,8 +446,8 @@ class Process(object):
             statusdef = self._statuses[status]
             added = None
             with gripe.pgsql.Tx.begin():
-                for s in AddedStatus.query(ancestor = self):
-                    if s.name == status:
+                for s in AddedStatus.query(parent = self):
+                    if s.status == status:
                         added = s
                 if added is None:
                     added = AddedStatus(status = status, parent = self)

@@ -5,13 +5,14 @@ Created on 2013-03-12
 '''
 
 import json
+import webapp2
 
 import gripe
 import grumble
 import grudge
 import grit
 
-logger = gripe.get_logger("grit")
+logger = gripe.get_logger(__name__)
 
 class Login(grit.ReqHandler):
     def get_context(self, ctx):
@@ -98,10 +99,13 @@ class Signup(grit.ReqHandler):
 
     def post(self):
         if not self.request.headers.get("ST-JSON-Request"):
-            logger.debug("Non-JSON post to /signup")
+            logger.debug("Non-JSON post to /um/signup")
             self.response.status_int = 500
         else:
+            logger.debug("--> /um/signup: JSON body %s", self.request.body)
             params = json.loads(self.request.body)
+            logger.debug("--> /um/signup: params %s", params)
+            
             userid = params.get("userid")
             password = params.get("password")
             wf = gripe.resolve(gripe.Config.app.workflows.signup)
@@ -111,14 +115,13 @@ class Signup(grit.ReqHandler):
                 proc.password = password
                 proc.put()
                 proc.start()
-                self.response.content_type = "application/json"
-                self.response.json = { "code": proc.id() }                
+                self.json_dump( { "code": proc.id() } )
             else:
                 logger.error("No user signup workflow defined")
                 self.response_status_int = 500
 
 @grudge.OnStarted("create_user")
-@grudge.OnAdd("user_created", grudge.SendMail(recipients = "@..:userid",
+@grudge.OnAdd("user_created", grudge.SendMail(recipients = "@.:userid",
     subject = "Confirm your registration with %s" % gripe.Config.app.about.application_name,
     text = "&signup_confirmation", status = "mail_sent"))
 @grudge.OnAdd("confirmed", "activate_user")
@@ -139,7 +142,7 @@ class UserSignup(grumble.Model):
             um.add(self.userid, self.password)
             logger.debug("Create User OK")
             return self.user_created
-        except grit.Exception as e:
+        except gripe.Error as e:
             logger.debug("Create user Error: %s" % e)
             raise
 
@@ -149,15 +152,21 @@ class UserSignup(grumble.Model):
             um.confirm(self.userid)
             logger.debug("Activate User OK")
             return self.user_activated
-        except grit.Exception as e:
+        except gripe.Error as e:
             logger.debug("Activate user Error: %s" % e)
             raise
 
 class ConfirmSignup(grit.ReqHandler):
     def get_template(self):
-        if self._process is not None:
+        if self._process is not None and self._process.exists() and self._process.has_status("confirmed"):
             return "confirmation_success"
         else:
+            if self._process is None:
+                logger.debug("get_template: _process is None")
+            elif not self._process.exists():
+                logger.debug("get_template: _process does not exist")
+            elif not self._process.has_status("confirmed"):
+                logger.debug("get_template: _process does not have status")
             return "confirm"
 
     def get_context(self, ctx):
@@ -171,10 +180,14 @@ class ConfirmSignup(grit.ReqHandler):
         return urls
 
     def get(self, code = None):
-        logger.debug("confirm.get")
-        self._process = UserSignup.get_by_key(code) if code else None
-        if self._process and _self.process.exists():
+        logger.debug("confirm.get(%s)", code)
+        logger.debug("req: %s", self.request)
+        self._process = grumble.Model.get(code) if code else None
+        if self._process and self._process.exists():
+            logger.debug("Process exists. Setting confirmed status")
             self._process.add_status("confirmed")
+        else:
+            logger.debug("No process")
         self.render()
 
     def post(self, key = None):
@@ -230,38 +243,17 @@ class ConfirmPasswordReset(grit.ReqHandler):
         self.get()
 
 
+app = webapp2.WSGIApplication([
+        webapp2.Route(r'/um/signup', handler = Signup, name = 'signup'),
+        webapp2.Route(r'/um/confirm/<code>', handler = ConfirmSignup, name = 'confirm'),
+        webapp2.Route(r'/login', handler = Login, name = 'login'),
+        webapp2.Route(r'/logout', handler = Logout, name = 'logout'),
+    ], debug = True)
 
-if __name__ == '__main__':
-    import webapp2
-    import re
-    import gripe
-    import grumble
-    import grumble.image
+#        self.router.add(webapp2.Route("/changepwd", handler = handle_request, name = "change-password",
+#                                      defaults = { "root": self, "handler": "grit.usermgmt.ChangePassword", "roles": [] }))
+#        self.router.add(webapp2.Route("/resetpwd", handler = handle_request, name = "reset-password",
+#                                      defaults = { "root": self, "handler": "grit.usermgmt.ResetPassword", "roles": [] }))
+##        self.router.add(webapp2.Route("/confirmreset", handler = handle_request, name = "confirm-reset",
+#                                      defaults = { "root": self, "handler": "grit.usermgmt.ConfirmReset", "roles": [] }))
 
-    app = grit.app
-
-    print "Get landing page"
-    request = webapp2.Request.blank('/')
-    response = request.get_response(app)
-    # print response
-    assert response.status_int == 200, "Expected 200 OK, got %s" % response.status
-
-    print "Doing signup request"
-    request = webapp2.Request.blank("/signup", POST = '{ "userid": "runnr@de-visser.net", "password": "x" }')
-    request.headers['ST-JSON-Request'] = "True"
-    request.method = "POST"
-    request.content_type = "application/x-www-form-urlencoded"
-    request.charset = "utf8"
-    response = request.get_response(app)
-    assert response.status_int == 200, "Expected 200 OK, got %s" % response.status
-    d = response.json
-    code = d["code"]
-    print "Submitted signup request and got confirmation code %s" % code
-
-    print "Confirming signup request"
-    request = webapp2.Request.blank("/confirm/%s" % code)
-    request.method = "GET"
-    request.charset = "utf8"
-    response = request.get_response(app)
-    assert response.status_int == 200, "Expected 200 OK, got %s" % response.status
-    print "Confirmed signup request"

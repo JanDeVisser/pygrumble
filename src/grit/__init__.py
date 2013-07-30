@@ -688,7 +688,6 @@ class WSGIApplication(webapp2.WSGIApplication):
         self.apps = {}
         super(WSGIApplication, self).__init__(*args, **kwargs)
         grumble.set_sessionbridge(SessionBridge())
-        self._define_app()
         self.pipeline = []
 
         config = gripe.Config.app
@@ -735,21 +734,6 @@ class WSGIApplication(webapp2.WSGIApplication):
             self.router.add(webapp2.Route(path, handler = handler, defaults = defaults))
         self.error_handlers[404] = handle_404
 
-    def _define_app(self):
-        self.router.add(webapp2.Route("/signup", handler = handle_request, name = "signup",
-                                      defaults = { "root": self, "handler": "grit.usermgmt.Signup", "roles": [] }))
-        self.router.add(webapp2.Route(r'/confirm/<code>', handler = handle_request, name = "confirm",
-                                      defaults = { "root": self, "handler": "grit.usermgmt.ConfirmSignup", "roles": [] }))
-        self.router.add(webapp2.Route("/login", handler = handle_request, name = "login",
-                                      defaults = { "root": self, "handler": "grit.usermgmt.Login", "roles": [] }))
-        self.router.add(webapp2.Route("/logout", handler = handle_request, name = "logout",
-                                      defaults = { "root": self, "handler": "grit.usermgmt.Logout", "roles": [] }))
-        self.router.add(webapp2.Route("/changepwd", handler = handle_request, name = "change-password",
-                                      defaults = { "root": self, "handler": "grit.usermgmt.ChangePassword", "roles": [] }))
-        self.router.add(webapp2.Route("/resetpwd", handler = handle_request, name = "reset-password",
-                                      defaults = { "root": self, "handler": "grit.usermgmt.ResetPassword", "roles": [] }))
-        self.router.add(webapp2.Route("/confirmreset", handler = handle_request, name = "confirm-reset",
-                                      defaults = { "root": self, "handler": "grit.usermgmt.ConfirmReset", "roles": [] }))
 
 app = WSGIApplication(debug = True)
 

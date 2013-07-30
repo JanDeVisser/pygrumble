@@ -243,8 +243,10 @@ class ModelQueryRenderer(object):
         if isinstance(kind, ModelManager):
             self._manager = kind
         elif isinstance(kind, ModelMetaClass):
+            kind.seal()
             self._manager = kind.modelmanager
         elif isinstance(kind, Model):
+            kind.seal()
             self._manager = kind.__class__.modelmanager
         else:
             assert 0, "ModelQueryRenderer should specify a valid kind"
@@ -1420,7 +1422,7 @@ class Model(object):
             q.owner(kwargs["ownerid"])
         ix = 0
         while ix < len(args):
-            q.filter(args[ix], args[ix + 1])
+            q.add_filter(args[ix], args[ix + 1])
             ix += 2
         return q
 
@@ -1518,6 +1520,7 @@ class Key(object):
             assert isinstance(kind, basestring) or isinstance(kind, ModelMetaClass), "Second argument of Key(kind, name) must be string or model class, not %s" % type(args[0])
             assert isinstance(args[1], basestring), "Second argument of Key(%s, name) must be string, not %s" % (kind, type(args[1]))
             self._assign("%s:%s" % (kind.kind() if not isinstance(kind, basestring) else kind, args[1]))
+        #logger.debug("Key(%s) -> kind:%s name:%s id:%s", args, self.kind, self.name, self.id)
 
     def _assign(self, value):
         value = str(value)

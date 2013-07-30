@@ -3,7 +3,7 @@ Hello,
 You or somebody else just signed you up for {{app.application_name}}. Please
 visit the URL below to confirm your registration.
 
-    http://localhost/confirm/{{process.id()}}
+    http://localhost/um/confirm/{{process.id()}}
 
 If you did not sign yourself up, please disregard this message.
 

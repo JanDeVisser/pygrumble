@@ -49,6 +49,7 @@
     },
     "mounts": [
         { "path": "/", "app": "index.app", "roles": [] },
+        { "path": "/login|/logout|/um/.+", "app": "grit.usermgmt.app", "roles": [] },
         { "path": "/image/.+|/css/.+|/javascript/.+", "roles": [] },
         { "path": "/json/.+|/img/.+", "app": "grit.handlers.app", "roles": [ "admin" ]}
     ],

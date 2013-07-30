@@ -23,7 +23,7 @@ class UserGroup(grumble.Model, gripe.auth.AbstractUserGroup):
     def _explicit_roles(self):
         return set(self.has_roles)
 
-UserStatus = gripe.Enum(['Unconfirmed', 'Active', 'Trusted', 'Moderator', 'Admin', 'Banned', 'Inactive', 'Deleted'])
+UserStatus = gripe.Enum(['Unconfirmed', 'Active', 'Admin', 'Banned', 'Inactive', 'Deleted'])
 GodList = ('jan@de-visser.net',)
 
 class User(grumble.Model, gripe.auth.AbstractUser):
@@ -38,23 +38,10 @@ class User(grumble.Model, gripe.auth.AbstractUser):
         """
           An active user is a user currently in good standing.
         """
-        return self.status == 'Active' or self.is_trusted()
-
-    def is_trusted(self):
-        """
-          An trusted user is an active user trusted by the community.
-        """
-        return self.status == 'Trusted' or self.is_moderator()
-
-    def is_moderator(self):
-        """
-          An moderator is a trusted user empowered to moderate user generated
-          content.
-        """
-        return self.status == 'Moderator' or self.is_admin()
+        return self.status == 'Active'
 
     def is_admin(self):
-        return self.status == 'Admin' or self.is_god()
+        return ("admin" in self.has_roles and self.is_active()) or (self.status == 'Admin') or self.is_god()
 
     def is_god(self):
         return self.uid() in GodList
@@ -95,9 +82,9 @@ class UserManager(gripe.auth.AbstractUserManager):
             user.put()
             return user.id()
 
-    def confirm(self, key, status = 'Active'):
-        user = User.get(key)
-        if user:
+    def confirm(self, userid, status = 'Active'):
+        user = self.get(userid)
+        if user and user.exists():
             user.status = status
             user.put()
         else:
