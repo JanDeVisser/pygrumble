@@ -547,7 +547,7 @@ class ReqHandler(webapp2.RequestHandler):
         if self.user is not None and hasattr(self.user, "urls"):
             urls.copy(self.user.urls())
         if hasattr(self, "urls"):
-            urls.copy(self.user.urls())
+            urls.copy(self.urls())
         ctx["urls"] = urls
         if hasattr(self, "get_context") and callable(self.get_context):
             ctx = self.get_context(ctx)
