@@ -10,18 +10,21 @@
                     "email": "jan@de-visser.net",
                     "password": "wbw417",
                     "display_name": "Jan de Visser",
+                    "status": "Active",
                     "has_roles": [ "admin" ]
                 },
                 {
                     "email": "mod@de-visser.net",
                     "password": "password",
                     "display_name": "A. Moderator",
+                    "status": "Active",
                     "has_roles": [ "moderator" ]
                 },
                 {
                     "email": "user@de-visser.net",
                     "password": "password",
                     "display_name": "Some User",
+                    "status": "Active",
                     "has_roles": [ "user" ]
                 }
             ]

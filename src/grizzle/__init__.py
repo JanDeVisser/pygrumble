@@ -79,6 +79,7 @@ class UserManager(gripe.auth.AbstractUserManager):
             raise gripe.auth.UserExists(userid)
         else:
             user = User(email = userid, password = password)
+            user.has_roles = ['user']
             user.put()
             return user.id()
 
