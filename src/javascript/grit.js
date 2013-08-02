@@ -350,9 +350,13 @@ com.sweattrails.api.internal.DataBridge.prototype.getValue = function(object, co
 }
 
 
-function getfunc(fname) {
-    return ((typeof(this[fname]) == "function") && this[fname]) ||
-           ((typeof(com.sweattrails.api[fname]) == "function") && com.sweattrails.api[fname])
+function getfunc(func) {
+    if (typeof(func) == "function") {
+        return func
+    } else {
+        return ((typeof(this[func]) == "function") && this[func]) ||
+               ((typeof(com.sweattrails.api[func]) == "function") && com.sweattrails.api[func])
+    }
 }
 
 function getChildrenByTagNameNS(elem, ns, tagname) {
@@ -377,15 +381,61 @@ com.sweattrails.api.renderObject = function(elem, content) {
     }
 }
 
+
+com.sweattrails.api.internal.DOMElementLike = function(obj, ns, tagname) {
+    this._ns = ns
+    this._tagname = tagname
+    this.object = obj
+}
+
+com.sweattrails.api.internal.DOMElementLike.prototype.getAttribute = function(attr) {
+    ret = (attr in this.object) ? this.object[attr] : null
+    if (["number", "string", "boolean"].indexOf(typeOf(ret)) >= 0) {
+        ret = ret.toString()
+    } else {
+        ret = null
+    }
+    return ret
+}
+
+Object.defineProperty(com.sweattrails.api.internal.DOMElementLike.prototype, "childNodes", {
+    get: function() {
+        ret = []
+        for (c in this.object) {
+            o = this.object[c]
+            if (typeof(o) == "object") {
+                ret.append(new com.sweattrails.api.internal.DOMElementLike(o, this._ns, c))
+            }
+        }
+        return ret
+    }
+})
+
+Object.defineProperty(com.sweattrails.api.internal.DOMElementLike.prototype, "namespaceURI", {
+    get: function() {
+        return this._ns
+    }
+})
+
+Object.defineProperty(com.sweattrails.api.internal.DOMElementLike.prototype, "localName", {
+    get: function() {
+        return this._tagname
+    }
+})
+
+getDOMElement = function(obj) {
+    return (obj.getAttribute) ? obj : DOMElementLike(obj, ST.xmlns, "object")
+}
+
 /*
  * MAYBE MOVE ME
  */
 
 function login_error(errorinfo) {
-	if (errorinfo != "401") return false
+    if (errorinfo != "401") return false
 	this.header.error("Mistyped email or password")
 	this.footer.error()
-	return true
+    return true
 }
 
 

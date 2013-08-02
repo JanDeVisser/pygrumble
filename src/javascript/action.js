@@ -54,9 +54,9 @@ com.sweattrails.api.internal.HTMLAction.prototype.render = function(parent) {
     }
 }
 
-com.sweattrails.api.internal.CustomAction = function(a) {
-    this.name = a.getAttribute("name") || a.getAttribute("action")
-    this.onclick = getfunc(a.getAttribute("action"))
+com.sweattrails.api.internal.CustomAction = function(name, action) {
+    this.name = name || action
+    this.onclick = getfunc(action)
     this.id = "custom"
 }
 
@@ -95,6 +95,7 @@ com.sweattrails.api.ActionContainer.prototype.add = function(action) {
 
 com.sweattrails.api.ActionContainer.prototype.build = function(elem) {
     if (!elem) return // FIXME -- when we register as a component this gets called.
+    elem = getDOMElement(elem)
     var actions = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "action")
     for (var i = 0; i < actions.length; i++) {
         this.buildAction(actions[i])
@@ -102,7 +103,8 @@ com.sweattrails.api.ActionContainer.prototype.build = function(elem) {
 }
 
 com.sweattrails.api.ActionContainer.prototype.buildAction = function(a) {
-    var action = new com.sweattrails.api.Action(a)
+    var action = new com.sweattrails.api.Action(a.getAttribute("name"), a.getAttribute("action"))
+    action.build(a)
     action.container = this
     this.add(action)
     return action
@@ -121,27 +123,27 @@ com.sweattrails.api.ActionContainer.prototype.getActiveActions = function() {
     var aix = 0
     var action = null
     for (aix = 0; aix < this.actions.length; aix++) {
-		action = this.actions[aix]
-		if (action.isActive()) a.push(action)
+        action = this.actions[aix]
+        if (action.isActive()) a.push(action)
     }
     return a
 }
 
 com.sweattrails.api.ActionContainer.prototype.render = function() {
-	a = this.getActiveActions()
+    a = this.getActiveActions()
 
-	this.actionbar = document.createElement("div")
+    this.actionbar = document.createElement("div")
     this.actionsdiv = document.createElement("div")
     if (a.length > 0) {
     	this.actionsdiv.className = "buttonbar-" + this.location
     } else {
     	this.actionsdiv.className = "buttonbar-empty"
     }
-	this.actionsdiv.id = this.id + "-actionbar"
+    this.actionsdiv.id = this.id + "-actionbar"
     this.actionbar.appendChild(this.actionsdiv)
     this.progressbar = document.createElement("div")
     this.progressbar.className = "buttonbar-" + this.location
-	this.progressbar.id = this.id + "-progressbar"
+    this.progressbar.id = this.id + "-progressbar"
     this.progressbar.hidden = true
     this.throbber = document.createElement("img")
     this.throbber.id = this.progressbar.id + "-throbber"
@@ -152,16 +154,16 @@ com.sweattrails.api.ActionContainer.prototype.render = function() {
     this.progressmsg.id = this.progressbar.id + "-message"
     this.progressbar.appendChild(this.progressmsg)
     this.actionbar.appendChild(this.progressbar)
-	this.owner.container.appendChild(this.actionbar)
+    this.owner.container.appendChild(this.actionbar)
 
-	for (var aix = 0; aix < a.length; aix++) {
-	    if (aix > 0) {
-			var span = document.createElement("span")
-			span.innerHTML = " | "
-			this.actionsdiv.appendChild(span)
-	    }
-	    a[aix].render(this.actionsdiv)
-	}
+    for (var aix = 0; aix < a.length; aix++) {
+        if (aix > 0) {
+            var span = document.createElement("span")
+            span.innerHTML = " | "
+            this.actionsdiv.appendChild(span)
+        }
+        a[aix].render(this.actionsdiv)
+    }
 }
 
 com.sweattrails.api.ActionContainer.prototype.progressOff = function() {
@@ -201,38 +203,40 @@ com.sweattrails.api.ActionContainer.prototype.error = function(msg) {
 }
 
 com.sweattrails.api.ActionContainer.prototype.onDataSubmitted = function() {
-	this.inprogress && this.inprogress.onDataSubmitted && this.inprogress.onDataSubmitted()
-	this.inprogress = null
+    this.inprogress && this.inprogress.onDataSubmitted && this.inprogress.onDataSubmitted()
+    this.inprogress = null
 }
 
 com.sweattrails.api.ActionContainer.prototype.onDataError = function(errorinfo) {
-	this.inprogress && this.inprogress.onDataError && this.inprogress.onDataError(errorinfo)
-	this.inprogress = null
+    this.inprogress && this.inprogress.onDataError && this.inprogress.onDataError(errorinfo)
+    this.inprogress = null
 }
 
 com.sweattrails.api.ActionContainer.prototype.onDataEnd = function() {
-	this.inprogress && this.inprogress.onDataEnd && this.inprogress.onDataEnd()
-	this.inprogress = null
+    this.inprogress && this.inprogress.onDataEnd && this.inprogress.onDataEnd()
+    this.inprogress = null
 }
 
 // --------------------------------------------------------------------------
 // --------------------------------------------------------------------------
 
 com.sweattrails.api.Action = function(a) {
+    a = getDOMElement(a)
     this.type = "action"
-    var name = a.getAttribute("name")
-    this.name = this.id = (name || this.action)
+    id = a.getAttribute("name")
+    ac = a.getAttribute("action")
+    this.name = this.id = (id || ac)
+    var ac = a.getAttribute("action")
     this.label = a.getAttribute("label")
     this.modes = a.getAttribute("mode")
-    var ac = a.getAttribute("action")
     var impl = null
     if (ac) {
     	var factory = com.sweattrails.api.internal.actions[ac]
-		if (factory) {
-			this.impl = new factory(a)
-		} else {
-			this.impl = new com.sweattrails.api.internal.CustomAction(a)
-		}
+        if (factory) {
+            this.impl = new factory(a)
+        } else {
+            this.impl = new com.sweattrails.api.internal.CustomAction(a.getAttribute("name"), a.getAttribute("action"))
+        }
     }
     this.action = (this.impl && this.impl.id) || "unknown"
     if (this.impl) this.impl.action = this
@@ -249,16 +253,16 @@ com.sweattrails.api.Action = function(a) {
 }
 
 com.sweattrails.api.Action.prototype.isActive = function() {
-	if (this.modes && this.owner.mode && (this.modes.indexOf(this.owner.mode) < 0)) {
-		return false
-	} else {
-		return this.isactive ? this.isactive() : true
-	}
+    if (this.modes && this.owner.mode && (this.modes.indexOf(this.owner.mode) < 0)) {
+        return false
+    } else {
+        return this.isactive ? this.isactive() : true
+    }
 }
 
 com.sweattrails.api.Action.prototype.doRedirect = function(redirect) {
-	console.log("Action::doRedirect: " + redirect)
-	document.location = redirect
+    console.log("Action::doRedirect: " + redirect)
+    document.location = redirect
 }
 
 com.sweattrails.api.Action.prototype.render = function(parent) {

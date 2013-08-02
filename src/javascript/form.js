@@ -167,16 +167,16 @@ com.sweattrails.api.Form.prototype.renderData = function(obj) {
     	this.table = null
     }
     if (this.table) {
-		this.container.removeChild(this.table)
-		this.table = null
+        this.container.removeChild(this.table)
+        this.table = null
     }
     this.header.render()
     this.renderedFields = []
     if (this.type == "form") {
         this.form = document.createElement("form")
-		this.form.name = "form-" + this.id
-		this.form.method = this.method
-		this.form.action = this.action
+        this.form.name = "form-" + this.id
+        this.form.method = this.method
+        this.form.action = this.action
         this.container.appendChild(this.form)    	
     }
     for (var ix in this.fields) {
@@ -233,7 +233,6 @@ com.sweattrails.api.Form.prototype.submit = function() {
 com.sweattrails.api.Form.prototype.progressOff = function() {
     this.footer.progressOff()
 }
-
 
 com.sweattrails.api.Form.prototype.progress = function(msg) {
     this.footer.progress(msg)
@@ -369,6 +368,121 @@ com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
 
 new com.sweattrails.api.FormBuilder()
 
+/*
+ * Alert -
+ */
+ 
+var alert_count = 0
+
+st_alert = function(msg) {
+    id = "alert-" + alert_count
+    alert_count += 1
+    var alert = new Alert(id)
+    alert.setMessage(msg)
+    alert.addAction(
+    alert.popup()
+}
+
+com.sweattrails.api.Alert = function(id) {
+    this.id = id
+    this.type = "alert"
+    var body = document.getElementsByTagName("body")[0]
+    this.overlay = document.getElementById("overlay")
+    if (!this.overlay) {
+    	this.overlay = document.createElement("div")
+        this.overlay.id = "overlay"
+        this.overlay.className = "overlay"
+        this.overlay.hidden = true
+        body.appendChild(this.overlay)
+    }
+    var container = document.createElement("div")
+    container.id = this.id + "-modal"
+    container.className = "modal"
+    container.hidden = true
+    body.appendChild(container)
+    this.container = container
+    this.footer = new com.sweattrails.api.ActionContainer(this, "footer")
+    com.sweattrails.api.STManager.register(this)
+    return this
+}
+
+com.sweattrails.api.Alert.prototype.setMessage = function(msg) {
+    this.message = message
+}
+
+com.sweattrails.api.Alert.prototype.build = function(f) {
+    this.footer.build(f)
+    var msgs = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "message")
+    if (msgs && (msgs.length > 0)) {
+    for (var j = 0; j < msgs.length; j++) {
+        this.message = msgs[0].innerHTML
+    }
+}
+
+com.sweattrails.api.Alert.prototype.render = function() {
+    console.log("Alert[" + this.id + "].render() " + this.container.className)
+    if (!this.container || !this.container.hidden || (this.container.className == "tabpage")) {
+        this.footer.erase()
+        var div = document.createElement("div")
+        div.innerHTML = this.message
+        this.container.appendChild(div)
+        this.footer.render()
+    }
+}
+
+com.sweattrails.api.Alert.prototype.submit = function() {
+    this.close()
+}
+
+com.sweattrails.api.Form.prototype.progressOff = function() {
+    this.footer.progressOff()
+}
+
+
+com.sweattrails.api.Form.prototype.progress = function(msg) {
+    this.footer.progress(msg)
+}
+
+com.sweattrails.api.Form.prototype.error = function(msg) {
+    this.footer.error(msg)
+}
+
+com.sweattrails.api.Alert.prototype.popup = function() {
+    document.getElementById("overlay").hidden = false
+    this.container.hidden = false
+    this.ispopup = true
+    this.render()
+}
+
+com.sweattrails.api.Alert.prototype.close = function() {
+    try {
+        this.progressOff()
+        this.container.hidden = true
+        this.overlay.hidden = true
+    } finally {
+        this.ispopup = false
+    }
+}
+
+/*
+ * AlertBuilder -
+ */
+
+com.sweattrails.api.AlertBuilder = function() {
+    this.type = "builder"
+    this.name = "alertbuilder"
+    com.sweattrails.api.STManager.processor("alert", this)
+}
+
+com.sweattrails.api.AlertBuilder.prototype.process = function(f) {
+    var id = f.getAttribute("name")
+    console.log("AlertBuilder: found form " + id)
+    var ds = com.sweattrails.api.dataSourceBuilder.build(f)
+    var alert = new com.sweattrails.api.Alert(id, f.parentNode)
+    alert.build(f)
+}
+
+new com.sweattrails.api.AlertBuilder()
 
 /**
  * FormField - Abstract base class for form elements

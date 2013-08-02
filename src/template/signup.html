@@ -3,15 +3,21 @@
 {% block tabs %}
 
 <st:tab code="signup" label="Sign up">
-  {{ errorlist() }}
-  <st:form name="login" type="form" method="post" action="/signup" onerror="login_error" mode="new">
-    <st:field id="userid" type="text" property="userid" label="Email" required="true"/>
-    <st:field id="password" type="password" property="password" label="Password" required="true" confirm="true"/>
-    <st:footer>
-      <st:action mode="new" label="Signup" action="save"/>
-      <st:action mode="new" label="Cancel" action="cancel"/>
-    </st:footer>
-  </st:form>
+    {% if request.method == "POST" %}
+        Thank you for joining the community at {{app.application_name}}.
+        <p/>
+        Please confirm your new account by clicking the link in the email that
+        was just sent to you.
+        <p/>
+    {% else %}
+    <st:form name="signup" type="form" method="post" action="/um/signup" onerror="signup_error" mode="new">
+      <st:field id="userid" type="text" property="userid" label="Email" required="true"/>
+      <st:field id="password" type="password" property="password" label="Password" required="true" confirm="true"/>
+      <st:footer>
+          <st:action mode="new" label="Sign up" action="save"/>
+      </st:footer>
+    </st:form>
+    {% endif %}
 </st:tab>
 
 {% endblock tabs %}

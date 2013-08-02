@@ -534,6 +534,8 @@ class ReqHandler(webapp2.RequestHandler):
         ctx['app'] = gripe.Config.app.get("about", {})
         ctx['user'] = self.user
         ctx['session'] = self.session
+        ctx['request'] = self.request
+        ctx['response'] = self.response
         ctx['params'] = self.request.params
         ctx['errors'] = self.errors
         urls = ctx.get("urls")

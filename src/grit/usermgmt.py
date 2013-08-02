@@ -100,25 +100,30 @@ class Signup(grit.ReqHandler):
     def post(self):
         if not self.request.headers.get("ST-JSON-Request"):
             logger.debug("Non-JSON post to /um/signup")
-            self.response.status_int = 500
+            params = self.request.params
+            do_json = False
         else:
             logger.debug("--> /um/signup: JSON body %s", self.request.body)
             params = json.loads(self.request.body)
             logger.debug("--> /um/signup: params %s", params)
+            do_json = True
             
-            userid = params.get("userid")
-            password = params.get("password")
-            wf = gripe.resolve(gripe.Config.app.workflows.signup)
-            if wf:
-                proc = wf.instantiate()
-                proc.userid = userid
-                proc.password = password
-                proc.put()
-                proc.start()
+        userid = params.get("userid")
+        password = params.get("password")
+        wf = gripe.resolve(gripe.Config.app.workflows.signup)
+        if wf:
+            proc = wf.instantiate()
+            proc.userid = userid
+            proc.password = password
+            proc.put()
+            proc.start()
+            if do_json:
                 self.json_dump( { "code": proc.id() } )
             else:
-                logger.error("No user signup workflow defined")
-                self.response_status_int = 500
+                self.render()
+        else:
+            logger.error("No user signup workflow defined")
+            self.response_status_int = 500
 
 @grudge.OnStarted("create_user")
 @grudge.OnAdd("user_created", grudge.SendMail(recipients = "@.:userid",
