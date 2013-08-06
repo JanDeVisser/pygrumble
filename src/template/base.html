@@ -30,20 +30,24 @@
     <script src="/javascript/grit.js" type="text/javascript"></script>
     <script src="/javascript/action.js" type="text/javascript"></script>
     <script src="/javascript/datasource.js" type="text/javascript"></script>
+    <script src="/javascript/alert.js" type="text/javascript"></script>
     <script src="/javascript/form.js" type="text/javascript"></script>
     <script src="/javascript/table.js" type="text/javascript"></script>
     <script src="/javascript/treeview.js" type="text/javascript"></script>
     <script src="/javascript/lookup.js" type="text/javascript"></script>
     <script>
-	{% block javascript %}
-	{% endblock javascript %}
+        function signup_submitted() {
+            st_alert("Your signup request is being processed. Check your email for further instructions.")
+        }
+        {% block javascript %}
+        {% endblock javascript %}
     </script>
     {% block imports %}
     {% endblock %}
     <title>
-	{% block title %}
-	SweatTrails
-	{% endblock %}
+        {% block title %}
+        SweatTrails
+        {% endblock %}
     </title>
   </head>
     <body onload="$$.run();">
@@ -58,7 +62,7 @@
                         <a class="whitelink" href="/">Home</a> |
                         <a class="whitelink" onclick="st_show_form('login');" href="#">Login</a> |				
                         <a class="whitelink" onclick="st_show_form('signup');" href="#">Sign up</a>
-                        <st:form name="login" url="/login" submit="post" modal="true" onerror="login_error">
+                        <st:form name="login" url="/login" modal="true" onerror="login_error">
                             <st:field id="userid" type="text" property="userid" label="Email" required="true"/>
                             <st:field id="password" type="password" property="password" label="Password" required="true"/>
                             <st:field id="remember_me" type="checkbox" property="remember_me" label="Remember me?"/>
@@ -67,15 +71,15 @@
                                 <st:action mode="new" label="I forgot my password" action="save"/>
                                 <st:action mode="new" label="Cancel" action="cancel"/>
                             </st:footer>
-                        </st:form>			
-                        <st:form name="signup" url="/um/signup" modal="true">
+                        </st:form>
+                        <st:form name="signup" url="/um/signup" modal="true" onsubmitted="signup_submitted">
                             <st:field id="userid" type="text" property="userid" label="Email" required="true"/>
                             <st:field id="password" type="password" property="password" label="Password" required="true" confirm="true"/>
                             <st:footer>
                                 <st:action mode="new" label="Sign up" action="save"/>
                                 <st:action mode="new" label="Cancel" action="cancel"/>
                             </st:footer>
-                        </st:form>			
+                        </st:form>
                     {% endif %}
                 {% endblock topbar %}
             </div>

@@ -385,12 +385,12 @@ com.sweattrails.api.renderObject = function(elem, content) {
 com.sweattrails.api.internal.DOMElementLike = function(obj, ns, tagname) {
     this._ns = ns
     this._tagname = tagname
-    this.object = obj
+    this.object = obj || {}
 }
 
 com.sweattrails.api.internal.DOMElementLike.prototype.getAttribute = function(attr) {
     ret = (attr in this.object) ? this.object[attr] : null
-    if (["number", "string", "boolean"].indexOf(typeOf(ret)) >= 0) {
+    if (["number", "string", "boolean"].indexOf(typeof(ret)) >= 0) {
         ret = ret.toString()
     } else {
         ret = null
@@ -401,10 +401,13 @@ com.sweattrails.api.internal.DOMElementLike.prototype.getAttribute = function(at
 Object.defineProperty(com.sweattrails.api.internal.DOMElementLike.prototype, "childNodes", {
     get: function() {
         ret = []
-        for (c in this.object) {
-            o = this.object[c]
+        for (var c in this.object) {
+            var o = this.object[c]
             if (typeof(o) == "object") {
-                ret.append(new com.sweattrails.api.internal.DOMElementLike(o, this._ns, c))
+                o = (Array.isArray(o)) ? o : [o]
+                for (var ix in o) {
+                    ret.append(new com.sweattrails.api.internal.DOMElementLike(o[ix], this._ns, c))
+                }
             }
         }
         return ret
@@ -424,7 +427,7 @@ Object.defineProperty(com.sweattrails.api.internal.DOMElementLike.prototype, "lo
 })
 
 getDOMElement = function(obj) {
-    return (obj.getAttribute) ? obj : DOMElementLike(obj, ST.xmlns, "object")
+    return (obj && obj.getAttribute) ? obj : new com.sweattrails.api.internal.DOMElementLike(obj, ST.xmlns, "object")
 }
 
 /*

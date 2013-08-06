@@ -6,9 +6,9 @@ com.sweattrails.api.MODE_VIEW = "view"
 com.sweattrails.api.MODE_EDIT = "edit"
 com.sweattrails.api.MODE_NEW = "new"
 
-st_show_form = function() {
-	formname = arguments[0]
-    mode = ((arguments.length > 1) && arguments[1]) ? arguments[1] : com.sweattrails.api.MODE_NEW 
+function st_show_form() {
+	var formname = arguments[0]
+    var mode = ((arguments.length > 1) && arguments[1]) ? arguments[1] : com.sweattrails.api.MODE_NEW
 	var form = $(formname)
     if (form && !form.ispopup) {
         form.popup(mode)
@@ -123,8 +123,8 @@ com.sweattrails.api.Form.field = function(fld) {
 com.sweattrails.api.Form.prototype.newTR = function() {
     if (!this.table) {
         this.table = document.createElement("table")
-		this.table.width = "100%"
-		p = (this.form) ? this.form : this.container
+        this.table.width = "100%"
+        p = (this.form) ? this.form : this.container
         p.appendChild(this.table)
     }
     var tr = document.createElement("tr")
@@ -135,25 +135,25 @@ com.sweattrails.api.Form.prototype.newTR = function() {
 com.sweattrails.api.Form.prototype.render = function() {
     console.log("Form[" + this.id + "].render() " + this.container.className)
     if (!this.container || !this.container.hidden || (this.container.className == "tabpage")) {
-    	console.log("Container visible")
-	    if ((arguments.length > 0) && arguments[0]) {
-	        this.mode = arguments[0]
-	    } else if (this.init_mode) {
-	        this.mode = this.init_mode
-	        this.init_mode = null
-	    } else {
-	        this.mode = com.sweattrails.api.MODE_VIEW
-	    }
-	    var obj = null
-	    if (this.mode != com.sweattrails.api.MODE_NEW) {
-	        this.datasource.execute()
-	    } else {
-	        if (typeof(this.initialize) == "function") {
-	            obj = this.initialize()
-	        }
-	        this.datasource.setObject(obj)
-	        this.renderData(this.datasource.object)
-	    }
+        console.log("Container visible")
+        if ((arguments.length > 0) && arguments[0]) {
+            this.mode = arguments[0]
+        } else if (this.init_mode) {
+            this.mode = this.init_mode
+            this.init_mode = null
+        } else {
+            this.mode = com.sweattrails.api.MODE_VIEW
+        }
+        var obj = null
+        if (this.mode != com.sweattrails.api.MODE_NEW) {
+            this.datasource.execute()
+        } else {
+            if (typeof(this.initialize) == "function") {
+                obj = this.initialize()
+            }
+            this.datasource.setObject(obj)
+            this.renderData(this.datasource.object)
+        }
     }
 }
 
@@ -257,7 +257,7 @@ com.sweattrails.api.Form.prototype.close = function() {
         if (this.ispopup) {
             this.container.hidden = true
             if (this.modal) {
-            	this.overlay.hidden = true
+                this.overlay.hidden = true
             }
         } else {
             this.render(com.sweattrails.api.MODE_VIEW)
@@ -290,6 +290,12 @@ com.sweattrails.api.Form.prototype.onDataEnd = function() {
     this.ondataend && this.ondataend()
 }
 
+com.sweattrails.api.Form.prototype.onRedirect = function(href) {
+    this.header.onRedirect(href)
+    this.footer.onRedirect(href)
+    this.ondataend && this.onredirect(href)
+}
+
 /**
  * FormBuilder -
  */
@@ -311,22 +317,22 @@ com.sweattrails.api.FormBuilder.prototype.process = function(f) {
 com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
     form.type = 'json'
     if (elem.getAttribute("type")) {
-	form.type = elem.getAttribute("type")
-	if ("json;form".indexOf(form.type) < 0) {
-	    console.log("Invalid form type " + form.type + " for form " + form.id)
-	    form.type = "json"
-	}
-	if (form.type == "form") {
-	    form.action = elem.getAttribute("action")
-	    if (!form.action) {
-		console.log("Missing form action for form " + form.id)
-		form.type = "json"	
-	    }
-	    form.method = "POST"
-	    if (elem.getAttribute("method")) {
-		form.method = elem.getAttribute("method")
-	    }
-	}
+        form.type = elem.getAttribute("type")
+        if ("json;form".indexOf(form.type) < 0) {
+            console.log("Invalid form type " + form.type + " for form " + form.id)
+            form.type = "json"
+        }
+        if (form.type == "form") {
+            form.action = elem.getAttribute("action")
+            if (!form.action) {
+                console.log("Missing form action for form " + form.id)
+                form.type = "json"
+            }
+            form.method = "POST"
+            if (elem.getAttribute("method")) {
+                form.method = elem.getAttribute("method")
+            }
+        }
     }
     if (elem.getAttribute("mode")) {
         form.init_mode = elem.getAttribute("mode")
@@ -338,10 +344,13 @@ com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
         form.onsubmitted = getfunc(elem.getAttribute("onsubmitted"))
     }
     if (elem.getAttribute("validate")) {
-	this.validator = getfunc(elem.getAttribute("validate"))
+        this.validator = getfunc(elem.getAttribute("validate"))
     }
     if (elem.getAttribute("onerror")) {
         form.onerror = getfunc(elem.getAttribute("onerror"))
+    }
+    if (elem.getAttribute("onredirect")) {
+        form.onredirect = getfunc(elem.getAttribute("onredirect"))
     }
     if (elem.getAttribute("class")) {
     	form.className = elem.getAttribute("class")
@@ -367,122 +376,6 @@ com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
 }
 
 new com.sweattrails.api.FormBuilder()
-
-/*
- * Alert -
- */
- 
-var alert_count = 0
-
-st_alert = function(msg) {
-    id = "alert-" + alert_count
-    alert_count += 1
-    var alert = new Alert(id)
-    alert.setMessage(msg)
-    alert.addAction(
-    alert.popup()
-}
-
-com.sweattrails.api.Alert = function(id) {
-    this.id = id
-    this.type = "alert"
-    var body = document.getElementsByTagName("body")[0]
-    this.overlay = document.getElementById("overlay")
-    if (!this.overlay) {
-    	this.overlay = document.createElement("div")
-        this.overlay.id = "overlay"
-        this.overlay.className = "overlay"
-        this.overlay.hidden = true
-        body.appendChild(this.overlay)
-    }
-    var container = document.createElement("div")
-    container.id = this.id + "-modal"
-    container.className = "modal"
-    container.hidden = true
-    body.appendChild(container)
-    this.container = container
-    this.footer = new com.sweattrails.api.ActionContainer(this, "footer")
-    com.sweattrails.api.STManager.register(this)
-    return this
-}
-
-com.sweattrails.api.Alert.prototype.setMessage = function(msg) {
-    this.message = message
-}
-
-com.sweattrails.api.Alert.prototype.build = function(f) {
-    this.footer.build(f)
-    var msgs = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "message")
-    if (msgs && (msgs.length > 0)) {
-    for (var j = 0; j < msgs.length; j++) {
-        this.message = msgs[0].innerHTML
-    }
-}
-
-com.sweattrails.api.Alert.prototype.render = function() {
-    console.log("Alert[" + this.id + "].render() " + this.container.className)
-    if (!this.container || !this.container.hidden || (this.container.className == "tabpage")) {
-        this.footer.erase()
-        var div = document.createElement("div")
-        div.innerHTML = this.message
-        this.container.appendChild(div)
-        this.footer.render()
-    }
-}
-
-com.sweattrails.api.Alert.prototype.submit = function() {
-    this.close()
-}
-
-com.sweattrails.api.Form.prototype.progressOff = function() {
-    this.footer.progressOff()
-}
-
-
-com.sweattrails.api.Form.prototype.progress = function(msg) {
-    this.footer.progress(msg)
-}
-
-com.sweattrails.api.Form.prototype.error = function(msg) {
-    this.footer.error(msg)
-}
-
-com.sweattrails.api.Alert.prototype.popup = function() {
-    document.getElementById("overlay").hidden = false
-    this.container.hidden = false
-    this.ispopup = true
-    this.render()
-}
-
-com.sweattrails.api.Alert.prototype.close = function() {
-    try {
-        this.progressOff()
-        this.container.hidden = true
-        this.overlay.hidden = true
-    } finally {
-        this.ispopup = false
-    }
-}
-
-/*
- * AlertBuilder -
- */
-
-com.sweattrails.api.AlertBuilder = function() {
-    this.type = "builder"
-    this.name = "alertbuilder"
-    com.sweattrails.api.STManager.processor("alert", this)
-}
-
-com.sweattrails.api.AlertBuilder.prototype.process = function(f) {
-    var id = f.getAttribute("name")
-    console.log("AlertBuilder: found form " + id)
-    var ds = com.sweattrails.api.dataSourceBuilder.build(f)
-    var alert = new com.sweattrails.api.Alert(id, f.parentNode)
-    alert.build(f)
-}
-
-new com.sweattrails.api.AlertBuilder()
 
 /**
  * FormField - Abstract base class for form elements

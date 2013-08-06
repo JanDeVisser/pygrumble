@@ -39,17 +39,19 @@ class Login(grit.ReqHandler):
         logger.debug("main::login.post(%s/%s)", userid, password)
         url = "/"
         if "redirecturl" in self.session:
-            url = self.session["redirecturl"]
+            url = str(self.session["redirecturl"])
             del self.session["redirecturl"]
         else:
-            url = self.request.get("redirecturl", "/")
+            url = str(self.request.get("redirecturl", "/"))
         assert self.session is not None, "Session missing from request handler"
         if self.session.login(userid, password, remember_me):
             logger.debug("Login OK")
+            logger.debug("Sending redirect to %s", url)
             if not json_request:
-                logger.debug("Sending redirect to %s", str(url))
                 self.response.status = "302 Moved Temporarily"
-                self.response.headers["Location"] = str(url)
+                self.response.headers["Location"] = url
+            else:
+                self.response.headers["ST-JSON-Redirect"] = url
         else:
             logger.debug("Login FAILED")
             self.response.status_int = 401
@@ -107,7 +109,7 @@ class Signup(grit.ReqHandler):
             params = json.loads(self.request.body)
             logger.debug("--> /um/signup: params %s", params)
             do_json = True
-            
+
         userid = params.get("userid")
         password = params.get("password")
         wf = gripe.resolve(gripe.Config.app.workflows.signup)
@@ -118,7 +120,7 @@ class Signup(grit.ReqHandler):
             proc.put()
             proc.start()
             if do_json:
-                self.json_dump( { "code": proc.id() } )
+                self.json_dump({ "code": proc.id() })
             else:
                 self.render()
         else:
@@ -126,6 +128,7 @@ class Signup(grit.ReqHandler):
             self.response_status_int = 500
 
 @grudge.OnStarted("create_user")
+@grudge.OnAdd("user_exists", grudge.Stop())
 @grudge.OnAdd("user_created", grudge.SendMail(recipients = "@.:userid",
     subject = "Confirm your registration with %s" % gripe.Config.app.about.application_name,
     text = "&signup_confirmation", status = "mail_sent"))
@@ -136,6 +139,7 @@ class UserSignup(grumble.Model):
     userid = grumble.TextProperty()
     password = grumble.PasswordProperty()
 
+    user_exists = grudge.Status()
     user_created = grudge.Status()
     mail_sent = grudge.Status()
     confirmed = grudge.Status()
@@ -143,13 +147,17 @@ class UserSignup(grumble.Model):
 
     def create_user(self):
         um = grit.Session.get_usermanager()
-        try:
-            um.add(self.userid, self.password)
-            logger.debug("Create User OK")
-            return self.user_created
-        except gripe.Error as e:
-            logger.debug("Create user Error: %s" % e)
-            raise
+        user = um.get(self.userid)
+        if user is not None:
+            return self.user_exists
+        else:
+            try:
+                um.add(self.userid, self.password)
+                logger.debug("Create User OK")
+                return self.user_created
+            except gripe.Error as e:
+                logger.debug("Create user Error: %s" % e)
+                raise
 
     def activate_user(self):
         um = grit.Session.get_usermanager()
@@ -259,6 +267,6 @@ app = webapp2.WSGIApplication([
 #                                      defaults = { "root": self, "handler": "grit.usermgmt.ChangePassword", "roles": [] }))
 #        self.router.add(webapp2.Route("/resetpwd", handler = handle_request, name = "reset-password",
 #                                      defaults = { "root": self, "handler": "grit.usermgmt.ResetPassword", "roles": [] }))
-##        self.router.add(webapp2.Route("/confirmreset", handler = handle_request, name = "confirm-reset",
+# #        self.router.add(webapp2.Route("/confirmreset", handler = handle_request, name = "confirm-reset",
 #                                      defaults = { "root": self, "handler": "grit.usermgmt.ConfirmReset", "roles": [] }))
 

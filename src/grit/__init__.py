@@ -105,7 +105,6 @@ class SessionManager(object):
             delta = datetime.datetime.now() - self._lastharvest if self._lastharvest else None
             if (not delta) or (delta.days > 0):
                 logger.info("Weeding UserData")
-                mm = UserData.modelmanager
                 cutoff = datetime.datetime.now() - datetime.timedelta(100)
                 q = grumble.Query(UserData)
                 q.add_filter("last_access <= ", cutoff)
@@ -556,7 +555,7 @@ class ReqHandler(webapp2.RequestHandler):
             logger.debug("self.user is None.")
         if hasattr(self, "urls"):
             urls.copy(self.urls())
-        logger.debug("urls: %s", urls)  
+        logger.debug("urls: %s", urls)
         ctx["urls"] = urls
         if hasattr(self, "get_context") and callable(self.get_context):
             ctx = self.get_context(ctx)

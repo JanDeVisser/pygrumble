@@ -16,21 +16,21 @@ com.sweattrails.api.internal.NewAction.prototype.onClick = function() {
 
 com.sweattrails.api.internal.SaveAction = function(elem) {
     if (elem.getAttribute("onsubmitted")) {
-        this.onsubmitted = getfunc(elem.getAttribute("onsubmitted"))
+        this.onsubmitted = getfunc(elem.getAttribute("onsubmitted"));
     }
     if (elem.getAttribute("redirect")) {
-        var destination = elem.getAttribute("redirect")
-        console.log("SaveAction.redirect: " + destination)
-        this.onsubmitted = function() { document.location = destination }
+        var destination = elem.getAttribute("redirect");
+        console.log("SaveAction.redirect: " + destination);
+        this.onredirect = function(href) { return destination; };
     }
-    this.id = "save"
+    this.id = "save";
 }
 
 com.sweattrails.api.internal.SaveAction.prototype.onClick = function() {
     if (this.onsubmitted) {
-        this.action.owner.onsubmitted = this.onsubmitted.bind(this.action.owner)
+        this.action.owner.onsubmitted = this.onsubmitted.bind(this.action.owner);
     }
-	this.action.container.inprogress = this
+	this.action.container.inprogress = this;
     this.action.owner.submit();
 }
 
@@ -103,6 +103,7 @@ com.sweattrails.api.ActionContainer.prototype.build = function(elem) {
 }
 
 com.sweattrails.api.ActionContainer.prototype.buildAction = function(a) {
+    a = getDOMElement(a)
     var action = new com.sweattrails.api.Action(a.getAttribute("name"), a.getAttribute("action"))
     action.build(a)
     action.container = this
@@ -220,12 +221,13 @@ com.sweattrails.api.ActionContainer.prototype.onDataEnd = function() {
 // --------------------------------------------------------------------------
 // --------------------------------------------------------------------------
 
-com.sweattrails.api.Action = function(a) {
-    a = getDOMElement(a)
+com.sweattrails.api.Action = function(id, action) {
     this.type = "action"
-    id = a.getAttribute("name")
-    ac = a.getAttribute("action")
-    this.name = this.id = (id || ac)
+    this.name = this.id = (id || action)
+}
+
+com.sweattrails.api.Action.prototype.build = function(a) {
+    a = getDOMElement(a)
     var ac = a.getAttribute("action")
     this.label = a.getAttribute("label")
     this.modes = a.getAttribute("mode")
@@ -242,13 +244,13 @@ com.sweattrails.api.Action = function(a) {
     if (this.impl) this.impl.action = this
     $$.register(this)
     if (a.getAttribute("isactive")) {
-    	this.isactive = getfunc(a.getAttribute("isactive"))
+        this.isactive = getfunc(a.getAttribute("isactive"))
     }
     if (a.getAttribute("ondone")) {
-    	this.onDataEnd = getfunc(a.getAttribute("ondone"))
+        this.onDataEnd = getfunc(a.getAttribute("ondone"))
     }
     if (a.getAttribute("redirect")) {
-    	this.onDataEnd = this.doRedirect.bind(this, a.getAttribute("redirect"))
+        this.onDataEnd = this.doRedirect.bind(this, a.getAttribute("redirect"))
     }
 }
 
@@ -283,8 +285,8 @@ com.sweattrails.api.Action.prototype.render = function(parent) {
 }
 
 com.sweattrails.api.Action.prototype.onClick = function() {
-	if ((this.owner.inprogress == null) && this.impl) {
-    	this.impl.onClick()
+    if ((this.owner.inprogress == null) && this.impl) {
+        this.impl.onClick()
     }
 }
 

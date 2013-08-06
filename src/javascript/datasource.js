@@ -238,7 +238,7 @@ com.sweattrails.api.internal.DataSource.prototype.runCallbacks = function(cb, ar
         var v = this.view[vix]
         r = v[cb] && v[cb].apply(v, args)
         if (r) {
-        	ret.push(r)
+            ret.push(r)
         }
     }
     return (ret.length > 0) ? ((ret.length == 1) ? ret[0] : ret) : null
@@ -246,6 +246,10 @@ com.sweattrails.api.internal.DataSource.prototype.runCallbacks = function(cb, ar
 
 com.sweattrails.api.internal.DataSource.prototype.onSubmitted = function() {
     this.runCallbacks("onDataSubmitted", [])
+    var r = this.runCallbacks("onRedirect", [object, null])
+    if (r) {
+        document.location = r
+    }
 }
 
 com.sweattrails.api.internal.DataSource.prototype.onRedirected = function(object, redir) {
@@ -557,3 +561,4 @@ com.sweattrails.api.DataSourceBuilder.prototype.build = function(elem) {
 com.sweattrails.api.dataSourceBuilder = new com.sweattrails.api.DataSourceBuilder()
 
 
+console.log("HERE")
