@@ -2,36 +2,36 @@
  * Form -
  */
 
-com.sweattrails.api.MODE_VIEW = "view"
-com.sweattrails.api.MODE_EDIT = "edit"
-com.sweattrails.api.MODE_NEW = "new"
+com.sweattrails.api.MODE_VIEW = "view";
+com.sweattrails.api.MODE_EDIT = "edit";
+com.sweattrails.api.MODE_NEW = "new";
 
 function st_show_form() {
-	var formname = arguments[0]
-    var mode = ((arguments.length > 1) && arguments[1]) ? arguments[1] : com.sweattrails.api.MODE_NEW
-	var form = $(formname)
+    var formname = arguments[0];
+    var mode = ((arguments.length > 1) && arguments[1]) ? arguments[1] : com.sweattrails.api.MODE_NEW;
+    var form = $(formname);
     if (form && !form.ispopup) {
-        form.popup(mode)
+        form.popup(mode);
     }
 }
 
 com.sweattrails.api.internal.buildErrors = function(obj, e) {
-    if (!e) return
-    if (typeof(e) == "string") {
-        var o = {}
-        o.message = e
-        o.field = this
-        e = o
+    if (!e) return;
+    if (typeof(e) === "string") {
+        var o = {};
+        o.message = e;
+        o.field = this;
+        e = o;
     }
-    obj.errors = obj.errors || []
+    obj.errors = obj.errors || [];
     if (Array.isArray(e)) {
     	for (var ix in e) {
-    	    ST_int.buildErrors(e[ix])
+    	    ST_int.buildErrors(e[ix]);
     	}
     } else {
-    	obj.errors.push(e)
+    	obj.errors.push(e);
     }
-}
+};
 
 com.sweattrails.api.Form = function(id, container, ds, popup) {
     this.id = id
@@ -183,7 +183,7 @@ com.sweattrails.api.Form.prototype.renderData = function(obj) {
     	var f = this.fields[ix]
         f.element = null
         if (f.render(this.mode, obj)) {
-        	this.renderedFields.push(f)
+            this.renderedFields.push(f)
         }
     }
     this.footer.render()
@@ -200,101 +200,101 @@ com.sweattrails.api.Form.prototype.applyData = function() {
             f.setValue(this.datasource.object)
         }
     }
-    if (typeof(this.prepare) == "function") {
-        this.prepare(this.datasource.object)
+    if (typeof(this.prepare) === "function") {
+        this.prepare(this.datasource.object);
     }
 }
 
 com.sweattrails.api.Form.prototype.submit = function() {
-    this.errors = []
+    this.errors = [];
     if (this.validator != null) {
-        ST_int.buildErrors(this, this.validator())
+        ST_int.buildErrors(this, this.validator());
     }
-    var f = null
+    var f = null;
     for (var fix in this.renderedFields) {
-    	f = this.renderedFields[fix]
-        f.errors = f.validate()
-        if (f.errors) this.errors = this.errors.concat(f.errors)
+    	f = this.renderedFields[fix];
+        f.errors = f.validate();
+        if (f.errors) this.errors = this.errors.concat(f.errors);
     }
     if (this.errors.length > 0) {
-        this.render(this.mode)
+        this.render(this.mode);
     } else {
-        this.applyData()
-        this.progress("Saving ...")
-        console.log("Submitting form " + this.id)
+        this.applyData();
+        this.progress("Saving ...");
+        console.log("Submitting form " + this.id);
         if (this.form) {
-            this.form.submit()
+            this.form.submit();
         } else {
-            this.datasource.submit()
+            this.datasource.submit();
         }
     }
-}
+;}
 
 com.sweattrails.api.Form.prototype.progressOff = function() {
-    this.footer.progressOff()
-}
+    this.footer.progressOff();
+};
 
 com.sweattrails.api.Form.prototype.progress = function(msg) {
-    this.footer.progress(msg)
-}
+    this.footer.progress(msg);
+};
 
 com.sweattrails.api.Form.prototype.error = function(msg) {
-    this.footer.error(msg)
-}
+    this.footer.error && this.footer.error(msg);
+};
 
 com.sweattrails.api.Form.prototype.popup = function(mode) {
     if (this.modal) {
-    	document.getElementById("overlay").hidden = false
+    	document.getElementById("overlay").hidden = false;
     }
-    this.container.hidden = false
-    this.ispopup = true
-    this.render(mode)
-}
+    this.container.hidden = false;
+    this.ispopup = true;
+    this.render(mode);
+};
 
 com.sweattrails.api.Form.prototype.close = function() {
     try {
-        this.progressOff()
+        this.progressOff();
         if (this.ispopup) {
-            this.container.hidden = true
+            this.container.hidden = true;
             if (this.modal) {
-                this.overlay.hidden = true
+                this.overlay.hidden = true;
             }
         } else {
-            this.render(com.sweattrails.api.MODE_VIEW)
+            this.render(com.sweattrails.api.MODE_VIEW);
         }
     } finally {
-        this.ispopup = false
+        this.ispopup = false;
     }
-}
+};
 
 com.sweattrails.api.Form.prototype.onDataSubmitted = function() {
-    this.close()
-    this.header.onDataSubmitted()
-    this.footer.onDataSubmitted()
-    this.onsubmitted && this.onsubmitted()
-}
+    this.close();
+    this.header.onDataSubmitted && this.header.onDataSubmitted();
+    this.footer.onDataSubmitted && this.footer.onDataSubmitted();
+    this.onsubmitted && this.onsubmitted();
+};
 
 com.sweattrails.api.Form.prototype.onDataError = function(errorinfo) {
-    this.header.onDataError(errorinfo)
-    this.footer.onDataError(errorinfo)
-    handled = false
+    this.header.onDataError && this.header.onDataError(errorinfo);
+    this.footer.onDataError && this.footer.onDataError(errorinfo);
+    handled = false;
     if (this.onerror) {
-    	handled = this.onerror(errorinfo)
+    	handled = this.onerror(errorinfo);
     }
-    if (!handled) this.error("Error saving: " + errorinfo)
-}
+    if (!handled) this.error("Error saving: " + errorinfo);
+};
 
 com.sweattrails.api.Form.prototype.onDataEnd = function() {
-    this.header.onDataEnd()
-    this.footer.onDataEnd()
-    this.ondataend && this.ondataend()
-}
+    this.header.onDataEnd && this.header.onDataEnd();
+    this.footer.onDataEnd && this.footer.onDataEnd();
+    this.ondataend && this.ondataend();
+};
 
 com.sweattrails.api.Form.prototype.onRedirect = function(href) {
-    this.header.onRedirect(href)
-    this.footer.onRedirect(href)
-    this.ondataend && this.onredirect(href)
-}
+    this.header.onRedirect && this.header.onRedirect(href);
+    this.footer.onRedirect && this.footer.onRedirect(href);
+    this.onredirect && this.onredirect(href);
+};
 
 /**
  * FormBuilder -

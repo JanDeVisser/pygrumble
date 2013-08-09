@@ -20,11 +20,13 @@ import gripe
 
 logger = gripe.get_logger("gripe")
 
-def sendMail(recipients, subject, text, *attachmentFilePaths):
+def sendMail(recipients, subject, text, *attachmentFilePaths, **headers):
     msg = MIMEMultipart()
     msg['From'] = gripe.Config.smtp.username
     msg['To'] = recipients if isinstance(recipients, basestring) else ",".join(recipients)
     msg['Subject'] = subject
+    for header in headers:
+        msg[header] = headers[header]
     msg.attach(MIMEText(text))
     for attachmentFilePath in attachmentFilePaths:
         msg.attach(getAttachment(attachmentFilePath))
@@ -64,6 +66,8 @@ class TemplateMailMessage(object):
 
     def __init__(self, template):
         self.template = template
+        self._attachments = []
+        self._headers = {}
 
     @classmethod
     def _get_env(cls):
@@ -100,12 +104,18 @@ class TemplateMailMessage(object):
         ret = gripe.Config.app.get(cname, ret)
         logger.info("TemplateMailMessage: using template %s", ret)
         return ret
+    
+    def set_header(self, header, value):
+        self._headers[header] = value
+        
+    def add_attachment(self, att_path):
+        self._attachments.append(att_path)
 
     def render(self, ctx = None):
         ctx = self._get_context(ctx)
         return self._get_env().get_template(self._get_template() + ".txt").render(ctx)
 
-    def send(self, recipients, subject, ctx = None, *attachmentFilePaths):
+    def send(self, recipients, subject, ctx = None):
         # FIXME Make subject template/config something
         recipients = recipients if not isinstance(recipients, basestring) else [ recipients ]
         recipient_str = ",".join(recipients)
@@ -116,7 +126,7 @@ class TemplateMailMessage(object):
         ctx["recipient_str"] = recipient_str
         ctx['app'] = gripe.Config.app.get("about", {})
         body = self.render(ctx)
-        return sendMail(recipients, subject, body, *attachmentFilePaths)
+        return sendMail(recipients, subject, body, *self._attachments, **self._headers)
 
 if __name__ == '__main__':
     sendMail("jan@de-visser.net", "Test", """

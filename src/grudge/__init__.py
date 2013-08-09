@@ -230,6 +230,7 @@ class SendMail(Action):
         self._subject = kwargs.get("subject") or ""
         self._text = kwargs["text"]
         self._status = kwargs.get("status")
+        self._headers = kwargs.get("headers", {})
 
     def __str__(self):
         return "mailto:%s" % self._recipients
@@ -248,6 +249,13 @@ class SendMail(Action):
         logger.debug("Sending email\nTo: %s\nSubject: %s", recipients, subject)
         if text.startswith("&"):
             msg = gripe.smtp.TemplateMailMessage(text[1:])
+            if self._headers:
+                for header in self._headers:
+                    val = self._headers[header]
+                    if process and val.startswith("@"):
+                        val = process().resolve_attribute(val[1:])
+                    logger.debug("Adding header %s: %s", header, val)
+                    msg.set_header(header, val)
             msg.send(recipients, subject, { "process": process()})
         else:
             gripe.smtp.sendMail(recipients, subject, text)

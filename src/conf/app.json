@@ -45,7 +45,8 @@
     	}
     ],
     "workflows": {
-        "signup": "grit.usermgmt.UserSignup"
+        "signup": "grit.usermgmt.UserSignup",
+        "pwdreset": "grit.usermgmt.PasswordReset"
     },
     "mounts": [
         { "path": "/", "app": "index.app", "roles": [] },

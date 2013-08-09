@@ -85,6 +85,12 @@ class Logout(grit.ReqHandler):
     def post(self):
         self.get()
 
+#
+# ==========================================================================
+# S I G N U P  R E Q U E S T S
+# ==========================================================================
+#
+
 class Signup(grit.ReqHandler):
     def get_context(self, ctx):
         return ctx
@@ -131,13 +137,14 @@ class Signup(grit.ReqHandler):
 @grudge.OnAdd("user_exists", grudge.Stop())
 @grudge.OnAdd("user_created", grudge.SendMail(recipients = "@.:userid",
     subject = "Confirm your registration with %s" % gripe.Config.app.about.application_name,
-    text = "&signup_confirmation", status = "mail_sent"))
+    text = "&signup_confirmation", status = "mail_sent", headers = {"X-ST-URL": "@.:confirm_url"}))
 @grudge.OnAdd("confirmed", "activate_user")
 @grudge.OnAdd("user_activated", grudge.Stop())
 @grudge.Process()
 class UserSignup(grumble.Model):
     userid = grumble.TextProperty()
     password = grumble.PasswordProperty()
+    confirm_url = grumble.TextProperty()
 
     user_exists = grudge.Status()
     user_created = grudge.Status()
@@ -146,18 +153,18 @@ class UserSignup(grumble.Model):
     user_activated = grudge.Status()
 
     def create_user(self):
-        um = grit.Session.get_usermanager()
-        user = um.get(self.userid)
-        if user is not None:
+        try:
+            self.confirm_url = "http://localhost/um/confirm/%s" % self.id()
+            self.put()
+            um = grit.Session.get_usermanager()
+            um.add(self.userid, self.password)
+            logger.debug("Create User OK")
+            return self.user_created
+        except gripe.auth.UserExists as e:
             return self.user_exists
-        else:
-            try:
-                um.add(self.userid, self.password)
-                logger.debug("Create User OK")
-                return self.user_created
-            except gripe.Error as e:
-                logger.debug("Create user Error: %s" % e)
-                raise
+        except gripe.Error as e:
+            logger.debug("Create user Error: %s" % e)
+            raise
 
     def activate_user(self):
         um = grit.Session.get_usermanager()
@@ -169,21 +176,14 @@ class UserSignup(grumble.Model):
             logger.debug("Activate user Error: %s" % e)
             raise
 
-class ConfirmSignup(grit.ReqHandler):
-    def get_template(self):
-        if self._process is not None and self._process.exists() and self._process.has_status("confirmed"):
-            return "confirmation_success"
-        else:
-            if self._process is None:
-                logger.debug("get_template: _process is None")
-            elif not self._process.exists():
-                logger.debug("get_template: _process does not exist")
-            elif not self._process.has_status("confirmed"):
-                logger.debug("get_template: _process does not have status")
-            return "confirm"
+#
+# ==========================================================================
+# P A S S W O R D  R E S E T  R E Q U E S T S
+# ==========================================================================
+#
 
+class RequestPasswordReset(grit.ReqHandler):
     def get_context(self, ctx):
-        ctx["process"] = self._process
         return ctx
 
     def get_urls(self, urls):
@@ -192,73 +192,95 @@ class ConfirmSignup(grit.ReqHandler):
         urls.append("signup", "Sign up", None, 30)
         return urls
 
-    def get(self, code = None):
-        logger.debug("confirm.get(%s)", code)
-        logger.debug("req: %s", self.request)
-        self._process = grumble.Model.get(code) if code else None
-        if self._process and self._process.exists():
-            logger.debug("Process exists. Setting confirmed status")
-            self._process.add_status("confirmed")
-        else:
-            logger.debug("No process")
-        self.render()
-
-    def post(self, key = None):
-        return self.get(key)
-
-
-class RequestPasswordReset(grit.ReqHandler):
-    '''
-    classdocs
-    '''
-
     def get(self):
-        logger.debug("ResetPassword.get")
+        logger.debug("main::passwordreset.get")
         self.render()
 
     def post(self):
-        assert self.session is not None, "Session missing from request handler"
-        logger.debug("ResetPassword.post(%s)", self.request.get("userid"))
-        userid = self.request.get("userid")
-        if userid:
-            self.session.get_usermanager().reset_pwd(userid)
-            self.render()
+        if not self.request.headers.get("ST-JSON-Request"):
+            logger.debug("Non-JSON post to /um/reset")
+            params = self.request.params
+            do_json = False
         else:
-            self.error(401)
+            logger.debug("--> /um/reset: JSON body %s", self.request.body)
+            params = json.loads(self.request.body)
+            logger.debug("--> /um/reset: params %s", params)
+            do_json = True
 
-
-class ConfirmPasswordReset(grit.ReqHandler):
-    '''
-    classdocs
-    '''
-
-    def get(self, code = None):
-        if not code:
-            code = self.request.get("code")
-        if code:
-            logger.debug("ConfirmReset.get(%s)", self.request.get("userid"))
-            assert self.session is not None, "Session missing from request handler"
-            confirm_result = self.session.get_usermanager().confirm_reset(code)
-            if confirm_result == 0:
-                self.error(401)
-            if confirm_result == 1:
-                url = self.session["redirecturl"] if "redirecturl" in self.session else "/"
-                self.render(urls = { "redirecturl": url })
-            elif confirm_result == 2:
-                self.redirect_to("login")
-            elif confirm_result == 3:
-                self.redirect_to("change-password")
+        userid = params.get("userid")
+        wf = gripe.resolve(gripe.Config.app.workflows.pwdreset)
+        if wf:
+            proc = wf.instantiate()
+            proc.userid = userid
+            proc.put()
+            proc.start()
+            if do_json:
+                self.json_dump({ "code": proc.id() })
+            else:
+                self.render()
         else:
-            self.error(401)
+            logger.error("No password reset workflow defined")
+            self.response_status_int = 500
 
+@grudge.OnStarted("generate_password")
+@grudge.OnAdd("user_doesnt_exists", grudge.Stop())
+@grudge.OnAdd("password_generated", grudge.SendMail(recipients = "@.:userid",
+    subject = "New password request for %s" % gripe.Config.app.about.application_name,
+    text = "&password_reset", status = "mail_sent"))
+@grudge.OnAdd("confirmed", "reset_password")
+@grudge.OnAdd("password_reset", grudge.Stop())
+@grudge.Process()
+class PasswordReset(grumble.Model):
+    userid = grumble.TextProperty()
+    password = grumble.PasswordProperty()
 
-    def post(self):
-        self.get()
+    user_doesnt_exists = grudge.Status()
+    password_generated = grudge.Status()
+    mail_sent = grudge.Status()
+    confirmed = grudge.Status()
+    password_reset = grudge.Status()
 
+    def generate_password(self):
+        try:
+            logger.debug("PasswordReset::generate_password")
+            um = grit.Session.get_usermanager()
+            user = um.get(self.userid)
+            if user is None or not user.exists():
+                logger.debug("User %s does not exist", self.userid)
+                return self.user_doesnt_exist
+            logger.debug("User OK")
+            self.password = um.gen_password()
+            return self.password_generated
+        except gripe.auth.UserExists as e:
+            return self.user_exists
+        except gripe.Error as e:
+            logger.debug("Create user Error: %s" % e)
+            raise
+
+    def reset_password(self):
+        um = grit.Session.get_usermanager()
+        try:
+            user = um.get(self.userid)
+            if user is None or not user.exists():
+                logger.debug("User %s does not exist", self.userid)
+                return self.user_doesnt_exist
+            user.password = self.password
+            user.put()
+            logger.debug("Password successfully reset")
+            return self.password_reset
+        except gripe.Error as e:
+            logger.debug("Password Reset Error: %s" % e)
+            raise
 
 app = webapp2.WSGIApplication([
         webapp2.Route(r'/um/signup', handler = Signup, name = 'signup'),
-        webapp2.Route(r'/um/confirm/<code>', handler = ConfirmSignup, name = 'confirm'),
+        webapp2.Route(r'/um/confirm/<code>', 
+            handler = "grudge.control.AddStatus", name = 'confirm', 
+            defaults = { "status": "confirmed" }),
+        webapp2.Route(r'/um/reset', handler = RequestPasswordReset, name = 'reset'),
+        webapp2.Route(r'/um/confirmreset/<code>', 
+            handler = "grudge.control.AddStatus", name = 'confirmreset',
+            defaults = { "status": "confirmed" }),
         webapp2.Route(r'/login', handler = Login, name = 'login'),
         webapp2.Route(r'/logout', handler = Logout, name = 'logout'),
     ], debug = True)
