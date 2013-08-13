@@ -494,7 +494,7 @@ class ReqHandler(webapp2.RequestHandler):
                 jinja2.FileSystemLoader("%s/%s" % (gripe.root_dir(), cls.template_dir)), \
                 jinja2.PackageLoader("grit", "template") \
             ])
-            env = jinja2.Environment(loader = loader)
+            env = jinja2.Environment(loader = loader, extensions=['jinja2.ext.do'])
             if hasattr(cls, "get_env") and callable(cls.get_env):
                 env = cls.get_env(env)
             cls.env = env
@@ -600,6 +600,11 @@ class ReqHandler(webapp2.RequestHandler):
     def render(self):
         ctx = self._get_context()
         self.response.content_type = self._get_content_type()
+        if hasattr(self, "get_headers") and callable(self.get_headers):
+            headers = self.get_headers(ctx)
+            if headers:
+                for header in headers:
+                    self.response.headers[header] = headers[header]
         self.response.out.write(self._get_env().get_template(self._get_template() + "." + self.file_suffix).render(ctx))
 
 

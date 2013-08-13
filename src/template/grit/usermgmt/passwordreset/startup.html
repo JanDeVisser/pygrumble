@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block tabs %}
+
+<st:tab code="reset" label="Password Reset">
+    {% if request.method == "POST" %}
+        An email with further instructions has been sent to you.
+        <p/>
+    {% else %}
+        <st:form name="pwdreset" type="form" method="post" action="/um/reset" mode="new">
+          <st:field id="userid" type="text" property="userid" label="Email" required="true"/>
+          <st:footer>
+              <st:action mode="new" label="Reset Password" action="save"/>
+          </st:footer>
+        </st:form>
+    {% endif %}
+</st:tab>
+
+{% endblock tabs %}
+
+{% block topbar %}
+{% endblock topbar %}
+
+

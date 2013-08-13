@@ -123,3 +123,68 @@ print "Logged out, redirecting to ", location
 
 
 
+print "Password Reset"
+request = webapp2.Request.blank("/um/reset", POST = '{ "userid": "runnr@de-visser.net" }')
+request.headers['ST-JSON-Request'] = "True"
+request.method = "POST"
+request.content_type = "application/x-www-form-urlencoded"
+request.charset = "utf8"
+response = request.get_response(app)
+assert response.status_int == 200, "Expected 200 OK, got %s" % response.status
+print "Submitted reset request"
+
+url = None
+while not url:
+    time.sleep(10)
+    print "Checking mail"
+    messages = get_messages()
+    for message in messages:
+        print "Message:", message["subject"]
+        subj = message["subject"]
+        if subj == "New password request for Grumble test app":
+            url = message["X-ST-URL"]
+            print "url:", url
+        else:
+            print "Spam"
+
+print "Confirming reset request"
+request = webapp2.Request.blank(url)
+request.method = "GET"
+request.charset = "utf8"
+response = request.get_response(app)
+assert response.status_int == 200, "Expected 200 OK, got %s" % response.status
+password = response.headers["X-ST-Password"]
+print "Confirmed reset request. New password is ", password
+
+print "Logging in with new password"
+location = "/"
+request = webapp2.Request.blank("/login")
+request.method = "POST"
+request.POST["userid"] = "runnr@de-visser.net"
+request.POST["password"] = password
+request.POST["remember"] = "x"
+response = request.get_response(app)
+print response.status_int
+location = response.headers["Location"] if response.status_int == 302 else location
+cookie = response.headers["Set-Cookie"]
+parts = cookie.split(";")
+cookie = parts[0]
+print "POSTed login data"
+
+print "Getting", location
+request = webapp2.Request.blank(location)
+request.headers['Cookie'] = cookie
+response = request.get_response(app)
+assert response.status_int == 200, "Expected 200 OK, got %s" % response.status
+print "Requested / and got OK"
+
+location = "**"
+print "Logging out"
+request = webapp2.Request.blank("/logout")
+request.headers['Cookie'] = cookie
+response = request.get_response(app)
+assert response.status_int in [200, 302], "Expected 200 OK or 302 Redirected, got %s" % response.status
+location = response.headers["Location"] if response.status_int == 302 else location
+print "Logged out, redirecting to ", location
+
+

@@ -113,10 +113,14 @@ class MailMessage(object):
     def _get_template(self):
         return jinja2.Template(self.body())
 
-    def send(self):
+    def send(self, ctx = None):
         recipients = self.recipients if not isinstance(self.recipients, basestring) else [ recipients ]
         ctx_factory = self.context_factory()
-        ctx = ctx_factory(self) if callable(ctx_factory) else ctx_factory
+        if ctx_factory is not None:
+            if callable(ctx_factory):
+                ctx = ctx_factory(self, ctx)
+            elif ctx is not None:
+                ctx.update(ctx_factory)
         ctx = ctx if ctx is not None else {}
         if "app" not in ctx:
             ctx['app'] = gripe.Config.app.get("about", {})

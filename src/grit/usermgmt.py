@@ -91,60 +91,17 @@ class Logout(grit.ReqHandler):
 # ==========================================================================
 #
 
-class Signup(grit.ReqHandler):
-    def get_context(self, ctx):
-        return ctx
-
-    def get_urls(self, urls):
-        urls.append("login", "Login", None, 10)
-        urls.append("reset-password", "Reset Password", None, 20)
-        urls.append("signup", "Sign up", None, 30)
-        return urls
-
-    def get(self):
-        logger.debug("main::signup.get")
-        self.render()
-
-    def post(self):
-        if not self.request.headers.get("ST-JSON-Request"):
-            logger.debug("Non-JSON post to /um/signup")
-            params = self.request.params
-            do_json = False
-        else:
-            logger.debug("--> /um/signup: JSON body %s", self.request.body)
-            params = json.loads(self.request.body)
-            logger.debug("--> /um/signup: params %s", params)
-            do_json = True
-
-        userid = params.get("userid")
-        password = params.get("password")
-        wf = gripe.resolve(gripe.Config.app.workflows.signup)
-        if wf:
-            proc = wf.instantiate()
-            proc.userid = userid
-            proc.password = password
-            proc.put()
-            proc.start()
-            if do_json:
-                self.json_dump({ "status": "OK" })
-            else:
-                self.render()
-        else:
-            logger.error("No user signup workflow defined")
-            self.response_status_int = 500
-
 @grudge.OnStarted("create_user")
 @grudge.OnAdd("user_exists", grudge.Stop())
 @grudge.OnAdd("user_created", grudge.SendMail(recipients = "@.:userid",
     subject = "Confirm your registration with %s" % gripe.Config.app.about.application_name,
-    text = "&signup_confirmation", status = "mail_sent", headers = {"X-ST-URL": "@.:confirm_url"}))
+    text = "&signup_confirmation", status = "mail_sent", context = ".:prepare_message"))
 @grudge.OnAdd("confirmed", "activate_user")
 @grudge.OnAdd("user_activated", grudge.Stop())
 @grudge.Process()
 class UserSignup(grumble.Model):
     userid = grumble.TextProperty()
     password = grumble.PasswordProperty()
-    confirm_url = grumble.TextProperty()
 
     user_exists = grudge.Status()
     user_created = grudge.Status()
@@ -154,8 +111,6 @@ class UserSignup(grumble.Model):
 
     def create_user(self):
         try:
-            self.confirm_url = "http://localhost/um/confirm/%s" % self.id()
-            self.put()
             um = grit.Session.get_usermanager()
             um.add(self.userid, self.password)
             logger.debug("Create User OK")
@@ -165,6 +120,10 @@ class UserSignup(grumble.Model):
         except gripe.Error as e:
             logger.debug("Create user Error: %s" % e)
             raise
+        
+    def prepare_message(self, msg, ctx):
+        msg.set_header("X-ST-URL", "http://localhost/um/confirm/%s" % self.id())
+        return ctx
 
     def activate_user(self):
         um = grit.Session.get_usermanager()
@@ -182,57 +141,17 @@ class UserSignup(grumble.Model):
 # ==========================================================================
 #
 
-class RequestPasswordReset(grit.ReqHandler):
-    def get_context(self, ctx):
-        return ctx
-
-    def get_urls(self, urls):
-        urls.append("login", "Login", None, 10)
-        urls.append("reset-password", "Reset Password", None, 20)
-        urls.append("signup", "Sign up", None, 30)
-        return urls
-
-    def get(self):
-        logger.debug("main::passwordreset.get")
-        self.render()
-
-    def post(self):
-        if not self.request.headers.get("ST-JSON-Request"):
-            logger.debug("Non-JSON post to /um/reset")
-            params = self.request.params
-            do_json = False
-        else:
-            logger.debug("--> /um/reset: JSON body %s", self.request.body)
-            params = json.loads(self.request.body)
-            logger.debug("--> /um/reset: params %s", params)
-            do_json = True
-
-        userid = params.get("userid")
-        wf = gripe.resolve(gripe.Config.app.workflows.pwdreset)
-        if wf:
-            proc = wf.instantiate()
-            proc.userid = userid
-            proc.put()
-            proc.start()
-            if do_json:
-                self.json_dump({ "code": proc.id() })
-            else:
-                self.render()
-        else:
-            logger.error("No password reset workflow defined")
-            self.response_status_int = 500
-
 @grudge.OnStarted("generate_password")
 @grudge.OnAdd("user_doesnt_exists", grudge.Stop())
 @grudge.OnAdd("password_generated", grudge.SendMail(recipients = "@.:userid",
     subject = "New password request for %s" % gripe.Config.app.about.application_name,
-    text = "&password_reset", status = "mail_sent"))
+    text = "&password_reset", status = "mail_sent", context = ".:prepare_message"))
 @grudge.OnAdd("confirmed", "reset_password")
 @grudge.OnAdd("password_reset", grudge.Stop())
 @grudge.Process()
 class PasswordReset(grumble.Model):
     userid = grumble.TextProperty()
-    password = grumble.PasswordProperty()
+    password = grumble.TextProperty()
 
     user_doesnt_exists = grudge.Status()
     password_generated = grudge.Status()
@@ -250,12 +169,17 @@ class PasswordReset(grumble.Model):
                 return self.user_doesnt_exist
             logger.debug("User OK")
             self.password = um.gen_password()
+            self.put()
             return self.password_generated
         except gripe.auth.UserExists as e:
             return self.user_exists
         except gripe.Error as e:
             logger.debug("Create user Error: %s" % e)
             raise
+
+    def prepare_message(self, msg, ctx):
+        msg.set_header("X-ST-URL", "http://localhost/um/confirmreset/%s" % self.id())
+        return ctx
 
     def reset_password(self):
         um = grit.Session.get_usermanager()
@@ -267,22 +191,48 @@ class PasswordReset(grumble.Model):
             user.password = self.password
             user.put()
             logger.debug("Password successfully reset")
+            self.password = None
+            self.put()
             return self.password_reset
         except gripe.Error as e:
             logger.debug("Password Reset Error: %s" % e)
             raise
 
 app = webapp2.WSGIApplication([
-        webapp2.Route(r'/um/signup', handler = Signup, name = 'signup'),
-        webapp2.Route(r'/um/confirm/<code>', 
-            handler = "grudge.control.AddStatus", name = 'confirm', 
-            defaults = { "status": "confirmed" }),
-        webapp2.Route(r'/um/reset', handler = RequestPasswordReset, name = 'reset'),
-        webapp2.Route(r'/um/confirmreset/<code>', 
-            handler = "grudge.control.AddStatus", name = 'confirmreset',
-            defaults = { "status": "confirmed" }),
         webapp2.Route(r'/login', handler = Login, name = 'login'),
         webapp2.Route(r'/logout', handler = Logout, name = 'logout'),
+
+        webapp2.Route(
+            r'/um/signup', 
+            handler = "grudge.control.Startup", name = 'signup', 
+            defaults = { 
+                "process": gripe.Config.app.workflows.signup,
+                "mapping": ["userid", "password"]
+            }
+        ),
+        webapp2.Route(
+            r'/um/confirm/<code>', 
+            handler = "grudge.control.AddStatus", name = 'confirm-signup', 
+            defaults = { 
+                "status": "confirmed" 
+            }
+        ),
+
+        webapp2.Route(
+            r'/um/reset', 
+            handler = "grudge.control.Startup", name = 'reset', 
+            defaults = { 
+                "process": gripe.Config.app.workflows.pwdreset,
+                "mapping": ["userid"]
+            }
+        ),
+        webapp2.Route(
+            r'/um/confirmreset/<code>', 
+            handler = "grudge.control.AddStatus", name = 'confirm-reset', 
+            defaults = { 
+                "status": "confirmed" 
+            }
+        ),
     ], debug = True)
 
 #        self.router.add(webapp2.Route("/changepwd", handler = handle_request, name = "change-password",

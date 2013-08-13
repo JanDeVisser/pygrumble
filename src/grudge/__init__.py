@@ -222,12 +222,13 @@ class Invoke(Action):
         logger.debug("Invoking %s", self._method)
         return process().resolve_attribute(self._method, self._args, self._kwargs)
 
+
 class SendMail(Action):
     def __init__(self, **kwargs):
         assert "recipients" in kwargs, "Recipients must be specified for SendMail action"
         assert "text" in kwargs, "Text must be specified for SendMail action"
-        self._recipients = kwargs["recipients"]
-        self._subject = kwargs.get("subject") or ""
+        self._recipients = kwargs.get("recipients")
+        self._subject = kwargs.get("subject")
         self._text = kwargs["text"]
         self._status = kwargs.get("status")
         self._headers = kwargs.get("headers", {})
@@ -236,37 +237,43 @@ class SendMail(Action):
     def __str__(self):
         return "mailto:%s" % self._recipients
 
-    def _ctx_factory(self, msg):
-        %%%%%%%%%%%%%%%
+    def _ctx_factory(self, msg, ctx):
+        process = ctx["process"]()
+        msg.recipients(process.resolve_attribute(self._recipients[1:])
+            if process and self._recipients and self._recipients.startswith("@")
+            else self._recipients)
+        msg.subject(process.resolve_attribute(self._subject[1:])
+            if process and self._subject and self._subject.startswith("@")
+            else self._subject)
+        if self._headers:
+            for header in self._headers:
+                val = self._headers[header]
+                if process and val.startswith("@"):
+                    val = process().resolve_attribute(val[1:])
+                logger.debug("Adding header %s: %s", header, val)
+                msg.set_header(header, val)
+        if self._ctx is not None:
+            ctx_obj = process().resolve_attribute(self._ctx)
+            if callable(ctx_obj):
+                ctx = ctx_obj(msg, ctx)
+            elif ctx is not None:
+                ctx.update(ctx_obj)
+        logger.debug("Sending email\nTo: %s\nSubject: %s", msg.recipients(), msg.subject())
+        return ctx
 
     def __call__(self, **kwargs):
         process = kwargs.get("process")
-        recipients = process().resolve_attribute(self._recipients[1:]) \
-            if process and self._recipients.startswith("@") \
-            else self._recipients
-        subject =  process().resolve_attribute(self._subject[1:]) \
-            if process and self._subject.startswith("@") \
-            else self._subject
         text =  process().resolve_attribute(self._text[1:]) \
             if process and self._text.startswith("@") \
             else self._text
-        logger.debug("Sending email\nTo: %s\nSubject: %s", recipients, subject)
         msg = None
         if text.startswith("&"):
             msg = gripe.smtp.TemplateMailMessage(text[1:])
-            if self._headers:
-                for header in self._headers:
-                    val = self._headers[header]
-                    if process and val.startswith("@"):
-                        val = process().resolve_attribute(val[1:])
-                    logger.debug("Adding header %s: %s", header, val)
-                    msg.set_header(header, val)
-            msg.send({ "process": process()})
         else:
             msg = gripe.smtp.MailMessage()
-        msg.recipients(recipients)
-        msg.subject(subject)
-        msg.send()
+            msg.body(text)
+        msg.context_factory(self._ctx_factory)
+        msg.send({"process": process()})
         return self._status
 
 #
