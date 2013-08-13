@@ -4,9 +4,9 @@ __date__ ="$25-Jul-2013 1:06:37 PM$"
 import sys
 
 if __name__ != '__main__':
-    print "Get off my lawm, punk!"
+    print "Get off my lawn, punk!"
     sys.exit(0)
-    
+
 import webapp2
 import time
 import re
@@ -71,7 +71,7 @@ while not url:
             print "url:", url
         else:
             print "Spam"
-            
+
 print "Confirming signup request"
 request = webapp2.Request.blank(url)
 request.method = "GET"

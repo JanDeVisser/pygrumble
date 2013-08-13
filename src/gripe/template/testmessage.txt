@@ -6,6 +6,6 @@ Thanks,
 
 jan
 
-ctx["subject"] = {{subject}}
-ctx["recipients"] = {{recipients}}
-ctx["recipient_str"] = {{recipient_str}}
+ctx["subject"] = {{msg.subject()}}
+ctx["recipients"] = {{msg.recipients()}}
+ctx["recipient_str"] = {{msg.recipients_string()}}

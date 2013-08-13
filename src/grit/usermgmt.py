@@ -126,7 +126,7 @@ class Signup(grit.ReqHandler):
             proc.put()
             proc.start()
             if do_json:
-                self.json_dump({ "code": proc.id() })
+                self.json_dump({ "status": "OK" })
             else:
                 self.render()
         else:

@@ -3,7 +3,9 @@
     "author": "jan",
     "version": "1.0",
     "level": "debug", "destination": "file", "flat": true,
+    "__main__": { "destination": "stderr" },
     "gripe.pgsql": { "flat": false },
+    "gripe.smtp": { "flat": false, "destination": "stderr" },
     "grudge": { "destination": "stderr" },
     "grudge.control": { "flat": false, "destination": "stderr" },
     "grit.usermgmt": { "flat": false, "destination": "stderr" }
