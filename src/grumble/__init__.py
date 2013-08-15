@@ -1047,7 +1047,10 @@ class Model(object):
             for prop in self._properties.values():
                 prop._update_fromsql(self, v)
             if (self._key_name is None) and hasattr(self, "key_prop"):
+                logger.debug("Assigning key from key property: %s", self.key_prop)
                 self._key_name = self.key_prop
+            else:
+                logger.debug("No key prop. Using key_name %s", self._key_name)
             self._set_ancestors(ancestors, parent)
             self._exists = True
             self._id = self.key().id
@@ -1055,8 +1058,12 @@ class Model(object):
             self._exists = False
 
     def _load(self):
+        #logger.debug("_load -> kind: %s, _id: %s, _key_name: %s", self.kind(), self._id, self._key_name)
         if (not hasattr(self, "_values") or (self._values is None)) and (self._id or self._key_name):
             self._populate(ModelQuery.get(self.key()))
+        else:
+            assert hasattr(self, "_ancestors"), "Object of kind %s doesn't have _ancestors" % self.kind()
+            assert hasattr(self, "_parent"), "Object of kind %s doesn't have _parent" % self.kind()
 
     def _store(self):
         self._load()

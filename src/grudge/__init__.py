@@ -128,6 +128,8 @@ class ProcessAction(Action):
             self._target = kwargs["process"]
         else:
             self._target = None
+        if self._target:
+            self._target = grumble.Key(self._target)
 
     def get_target(self, ctx):
         if not self._target:
