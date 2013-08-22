@@ -39,6 +39,9 @@
         function signup_submitted() {
             st_alert("Your signup request is being processed. Check your email for further instructions.")
         }
+        function password_changed() {
+            st_alert("Your password is changed. Remember to use your new password the next time you check in.")
+        }
         {% block javascript %}
         {% endblock javascript %}
     </script>
@@ -53,34 +56,67 @@
     <body onload="$$.run();">
         <div id="topbar" class="topbar">
             <div class="tools">
-            	{% block topbar %}
-                    {% if user %}
-                        {{ user.display_name|d(user.email) }} |
-                        <a class="whitelink" href="/">Home</a> |
-                        <a class="whitelink" href="{{urls['user']['logout'].url()|e}}">{{urls['user']['logout'].label()}}</a>
-                    {% else %}
-                        <a class="whitelink" href="/">Home</a> |
-                        <a class="whitelink" onclick="st_show_form('login');" href="#">Login</a> |				
-                        <a class="whitelink" onclick="st_show_form('signup');" href="#">Sign up</a>
-                        <st:form name="login" url="/login" modal="true" onerror="login_error">
-                            <st:field id="userid" type="text" property="userid" label="Email" required="true"/>
-                            <st:field id="password" type="password" property="password" label="Password" required="true"/>
-                            <st:field id="remember_me" type="checkbox" property="remember_me" label="Remember me?"/>
-                            <st:footer>
-                                <st:action mode="new" label="Log in" action="save" redirect="/"/>
-                                <st:action mode="new" label="I forgot my password" action="save"/>
-                                <st:action mode="new" label="Cancel" action="cancel"/>
-                            </st:footer>
-                        </st:form>
-                        <st:form name="signup" url="/um/signup" modal="true" onsubmitted="signup_submitted">
-                            <st:field id="userid" type="text" property="userid" label="Email" required="true"/>
-                            <st:field id="password" type="password" property="password" label="Password" required="true" confirm="true"/>
-                            <st:footer>
-                                <st:action mode="new" label="Sign up" action="save"/>
-                                <st:action mode="new" label="Cancel" action="cancel"/>
-                            </st:footer>
-                        </st:form>
-                    {% endif %}
+                {% block topbar %}
+                    <nav>
+                        <ul>
+                            {% if user %}
+                                <li>
+                                    <a class="navitem" href="/">Home</a>
+                                </li>
+                                <li>
+                                    <div class="navitem">{{ user.display_name|d(user.email) }}</div>
+                                    <ul>
+                                        <li>
+                                            <a class="navitem" onclick="st_show_form('changepwd')" href="#">Change Password</a></li>
+                                        <li><a class="navitem" href="/">Profile</a></li>
+                                        <li><a class="navitem" href="/">Settings</a></li>
+                                        <li>
+                                            <a class="navitem" href="{{urls['user']['logout'].url()|e}}">
+                                                {{urls['user']['logout'].label()}}
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </li>
+                                <st:form name="changepwd" url="/um/changepwd" modal="true" onsubmitted="password_changed">
+                                    <st:field id="oldpassword" type="password" property="oldpassword" label="Old Password" required="true"/>
+                                    <st:field id="newpassword" type="password" property="newpassword" label="Password" required="true" confirm="true"/>
+                                    <st:footer>
+                                        <st:action mode="new" label="Change Password" action="save"/>
+                                        <st:action mode="new" label="Cancel" action="cancel"/>
+                                    </st:footer>
+                                </st:form>
+                            {% else %}
+                                <li>
+                                    <a class="navitem" href="/">Home</a>
+                                </li>
+                                <li>
+                                    <a class="navitem" onclick="st_show_form('login');" href="#">Login</a>
+                                </li>
+                                <li>
+                                    <a class="navitem" onclick="st_show_form('signup');" href="#">Sign up</a>
+                                </li>
+                                <st:form name="login" url="/login" modal="true" onerror="login_error">
+                                    <st:field id="userid" type="text" property="userid" label="Email" required="true"/>
+                                    <st:field id="password" type="password" property="password" label="Password" required="true"/>
+                                    <st:field id="remember_me" type="checkbox" property="remember_me" label="Remember me?"/>
+                                    <st:footer>
+                                        <st:action mode="new" label="Log in" action="save" redirect="/"/>
+                                        <st:action mode="new" label="I forgot my password" 
+                                                   action="link" href="/um/reset"/>
+                                        <st:action mode="new" label="Cancel" action="cancel"/>
+                                    </st:footer>
+                                </st:form>
+                                <st:form name="signup" url="/um/signup" modal="true" onsubmitted="signup_submitted">
+                                    <st:field id="userid" type="text" property="userid" label="Email" required="true"/>
+                                    <st:field id="password" type="password" property="password" label="Password" required="true" confirm="true"/>
+                                    <st:footer>
+                                        <st:action mode="new" label="Sign up" action="save"/>
+                                        <st:action mode="new" label="Cancel" action="cancel"/>
+                                    </st:footer>
+                                </st:form>
+                            {% endif %}
+                        </ul>
+                    </nav>
                 {% endblock topbar %}
             </div>
     	</div>
@@ -109,8 +145,8 @@
         <div id="sidebarwrapper" class="sidebarwrapper">
             <div id="sidebar" class="sidebar">
                 {% block sidebar %}
-                    URLs: {{ urls|e }}
-                    <p/>
+                    <!-- URLs: {{ urls|e }} -->
+                    <!-- <p/> -->
                     {% for u in urls.urls() %}
                         {% if loop.first %}
                             <ul>

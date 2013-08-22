@@ -65,32 +65,52 @@ class UserManager(gripe.auth.AbstractUserManager):
         return User.get_by_key(userid)
 
     def login(self, userid, password):
+        logger.debug("UserManager.login(%s, %s)", userid, password)
         pwdhash = grumble.PasswordProperty.hash(password)
         user = User.query("email = ", userid, "password = ", pwdhash, ancestor = None).fetch()
         if user:
             assert isinstance(user, User), "Huh? More than one user with the same email and password?? %s" % type(user)
+        if user is None:
+            logger.debug("UserManager.login(%s, %s) Login failed", userid, password)            
         if user and not user.is_active():
+            logger.debug("UserManager.login(%s, %s) User not active", userid, password)
             user = None
         return user
 
     def add(self, userid, password):
+        logger.debug("UserManager.add(%s, %s)", userid, password)
         user = self.get(userid)
         if user and user.exists():
+            logger.debug("UserManager.add(%s, %s) User exists", userid, password)
             raise gripe.auth.UserExists(userid)
         else:
             user = User(email = userid, password = password)
             user.put()
+            logger.debug("UserManager.add(%s, %s) OK", userid, password)
             return user.id()
 
     def confirm(self, userid, status = 'Active'):
+        logger.debug("UserManager.confirm(%s, %s)", userid, status)
         user = self.get(userid)
         if user and user.exists():
+            logger.debug("UserManager.confirm(%s, %s) OK", userid, status)
             user.status = status
             if 'user' not in user.has_roles:
                 user.has_roles.append('user')
             user.put()
         else:
+            logger.debug("UserManager.confirm(%s, %s) doesn't exists", userid, status)
             raise gripe.auth.UserDoesntExists(userid)
+        
+    def changepwd(self, userid, oldpassword, newpassword):
+        logger.debug("UserManager.changepwd(%s, %s, %s)", userid, oldpassword, newpassword)
+        user = self.login(userid, oldpassword)
+        if user:
+            logger.debug("UserManager.changepwd(%s, %s, %s) login OK. Changing pwd", userid, oldpassword, newpassword)
+            user.password = newpassword
+            user.put()
+        else:
+            raise gripe.auth.BadPassword(userid)
 
 def currentuser():
     return UserManager().get(grumble.get_sessionbridge().userid())

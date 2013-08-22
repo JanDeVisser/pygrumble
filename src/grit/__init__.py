@@ -18,7 +18,6 @@ import uuid
 import webapp2
 import sys
 
-
 import gripe
 import gripe.json_util
 import gripe.pgsql
@@ -60,10 +59,23 @@ class SessionData(dict):
     def touch(self):
         self._last_access = datetime.datetime.now()
 
+    def is_empty(self):
+        return (len(self) == 0) and (self._user is None)
+
     def valid(self):
+        """
+            Checks if this session is still valid. A session is valid if
+            it is not empty and is less than 2 hours old, or, if it is empty,
+            is less than a minute old. This last condition gives users a 
+            minute to login or sign up a new account.
+            
+            FIXME: Is that last check really necessary or can we just discard
+            empty sessions at will?
+            FIXME: Make time limit(s) configurable
+        """
         delta = datetime.datetime.now() - self._last_access
-        return (((delta.seconds < 7200) and (len(self) > 0)) or
-                    (delta.seconds < 60))
+        return ((delta.seconds < 7200) and not self.is_empty()) or \
+            (delta.seconds < 60)
 
     def set_user(self, user):
         self._user = user
@@ -574,8 +586,10 @@ class ReqHandler(webapp2.RequestHandler):
                 if hasattr(self, "get_kind") and callable(self.get_kind) \
                 else None
         cname = self.__class__.__name__.lower()
+        module = self.__class__.__module__.lower()
         if not ret:
-            ret = cname
+            ret = module + "." + cname if module != '__main__' else cname
+            ret = ret.replace(".", "/")        
         ret = gripe.Config.app.get(cname, ret)
         logger.info("ReqHandler: using template %s", ret)
         return ret
@@ -726,7 +740,7 @@ class WSGIApplication(webapp2.WSGIApplication):
             assert raw_path, "Must specify a path for each mount in app.conf"
             path = "<:^%s$>" % raw_path
             roles = mp.get("roles", [])
-            roles = [roles] if isinstance(roles, basestring) else roles
+            roles = roles.split() if isinstance(roles, basestring) else roles
             handler = None
             defaults = { "root": self, "roles": roles }
 

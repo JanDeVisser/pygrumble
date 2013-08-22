@@ -2,17 +2,21 @@
  * FormAction -
  */
 
-com.sweattrails.api.internal.EditAction = function() { this.id = "edit" }
+com.sweattrails.api.internal.EditAction = function() { 
+    this.id = "edit";
+};
 
 com.sweattrails.api.internal.EditAction.prototype.onClick = function() {
-    this.action.owner.render("edit")
-}
+    this.action.owner.render("edit");
+};
 
-com.sweattrails.api.internal.NewAction = function() { this.id = "new" }
+com.sweattrails.api.internal.NewAction = function() {
+    this.id = "new";
+};
 
 com.sweattrails.api.internal.NewAction.prototype.onClick = function() {
-    (this.action.owner.openForm && this.action.owner.openForm(null)) || this.action.owner.render("new")
-}
+    (this.action.owner.openForm && this.action.owner.openForm(null)) || this.action.owner.render("new");
+};
 
 com.sweattrails.api.internal.SaveAction = function(elem) {
     if (elem.getAttribute("onsubmitted")) {
@@ -24,7 +28,7 @@ com.sweattrails.api.internal.SaveAction = function(elem) {
         this.onredirect = function(href) { return destination; };
     }
     this.id = "save";
-}
+};
 
 com.sweattrails.api.internal.SaveAction.prototype.onClick = function() {
     if (this.onsubmitted) {
@@ -32,27 +36,38 @@ com.sweattrails.api.internal.SaveAction.prototype.onClick = function() {
     }
 	this.action.container.inprogress = this;
     this.action.owner.submit();
-}
+};
 
-com.sweattrails.api.internal.CancelAction = function() { this.id = "cancel" }
+com.sweattrails.api.internal.CancelAction = function() {
+    this.id = "cancel";
+};
 
 com.sweattrails.api.internal.CancelAction.prototype.onClick = function() {
-    this.action.owner.close()
-}
+    this.action.owner.close();
+};
+
+com.sweattrails.api.internal.LinkAction = function(elem) {
+    this.id = "link";
+    this.href = elem.getAttribute("href");
+};
+
+com.sweattrails.api.internal.LinkAction.prototype.onClick = function() {
+    document.location = this.href;
+};
 
 com.sweattrails.api.internal.HTMLAction = function(elem) {
-    this.id = "html"
-    this.nodes = []
+    this.id = "html";
+    this.nodes = [];
     for (var nix = 0; nix < elem.childNodes.length; nix++) {
-        this.nodes.push(elem.childNodes[nix])
+        this.nodes.push(elem.childNodes[nix]);
     }
-}
+};
 
 com.sweattrails.api.internal.HTMLAction.prototype.render = function(parent) {
     for (var nix = 0; nix < this.nodes.length; nix++) {
-        parent.appendChild(this.nodes[nix])
-    }
-}
+        parent.appendChild(this.nodes[nix]);
+    };
+};
 
 com.sweattrails.api.internal.CustomAction = function(name, action) {
     this.name = name || action
@@ -69,6 +84,7 @@ com.sweattrails.api.internal.actions.edit = com.sweattrails.api.internal.EditAct
 com.sweattrails.api.internal.actions.new = com.sweattrails.api.internal.NewAction
 com.sweattrails.api.internal.actions.save = com.sweattrails.api.internal.SaveAction
 com.sweattrails.api.internal.actions.cancel = com.sweattrails.api.internal.CancelAction
+com.sweattrails.api.internal.actions.link = com.sweattrails.api.internal.LinkAction
 com.sweattrails.api.internal.actions.html = com.sweattrails.api.internal.HTMLAction
 
 com.sweattrails.api.ActionContainer = function(owner) {
@@ -231,62 +247,62 @@ com.sweattrails.api.Action.prototype.build = function(a) {
     var ac = a.getAttribute("action")
     this.label = a.getAttribute("label")
     this.modes = a.getAttribute("mode")
-    var impl = null
+    var impl = null;
     if (ac) {
-    	var factory = com.sweattrails.api.internal.actions[ac]
+    	var factory = com.sweattrails.api.internal.actions[ac];
         if (factory) {
-            this.impl = new factory(a)
+            this.impl = new factory(a);
         } else {
-            this.impl = new com.sweattrails.api.internal.CustomAction(a.getAttribute("name"), a.getAttribute("action"))
+            this.impl = new com.sweattrails.api.internal.CustomAction(a.getAttribute("name"), a.getAttribute("action"));
         }
     }
-    this.action = (this.impl && this.impl.id) || "unknown"
-    if (this.impl) this.impl.action = this
-    $$.register(this)
+    this.action = (this.impl && this.impl.id) || "unknown";
+    if (this.impl) this.impl.action = this;
+    $$.register(this);
     if (a.getAttribute("isactive")) {
-        this.isactive = getfunc(a.getAttribute("isactive"))
+        this.isactive = getfunc(a.getAttribute("isactive"));
     }
     if (a.getAttribute("ondone")) {
-        this.onDataEnd = getfunc(a.getAttribute("ondone"))
+        this.onDataEnd = getfunc(a.getAttribute("ondone"));
     }
     if (a.getAttribute("redirect")) {
-        this.onDataEnd = this.doRedirect.bind(this, a.getAttribute("redirect"))
+        this.onDataEnd = this.doRedirect.bind(this, a.getAttribute("redirect"));
     }
-}
+};
 
 com.sweattrails.api.Action.prototype.isActive = function() {
     if (this.modes && this.owner.mode && (this.modes.indexOf(this.owner.mode) < 0)) {
-        return false
+        return false;
     } else {
-        return this.isactive ? this.isactive() : true
+        return this.isactive ? this.isactive() : true;
     }
-}
+};
 
 com.sweattrails.api.Action.prototype.doRedirect = function(redirect) {
-    console.log("Action::doRedirect: " + redirect)
-    document.location = redirect
-}
+    console.log("Action::doRedirect: " + redirect);
+    document.location = redirect;
+};
 
 com.sweattrails.api.Action.prototype.render = function(parent) {
-    var ret = null
+    var ret = null;
     if (!this.impl || !this.impl.render) {
-        ret = document.createElement("a")
-        ret.className = "menulink"
-        ret.href = "#"
-        ret.innerHTML = this.label || this.name || this.action
-        ret.id = this.owner.id + "-" + (this.name || this.action) + "-action"
-        ret.action = this
-        ret.onclick = function(e) { e.currentTarget.action.onClick(); return true; }
-        parent.appendChild(ret)
+        ret = document.createElement("a");
+        ret.className = "menulink";
+        ret.href = "#";
+        ret.innerHTML = this.label || this.name || this.action;
+        ret.id = this.owner.id + "-" + (this.name || this.action) + "-action";
+        ret.action = this;
+        ret.onclick = function(e) { e.currentTarget.action.onClick(); return true; };
+        parent.appendChild(ret);
     } else {
-        ret = this.impl.render(parent)
+        ret = this.impl.render(parent);
     }
-    return ret
-}
+    return ret;
+};
 
 com.sweattrails.api.Action.prototype.onClick = function() {
     if ((this.owner.inprogress == null) && this.impl) {
-        this.impl.onClick()
+        this.impl.onClick();
     }
-}
+};
 

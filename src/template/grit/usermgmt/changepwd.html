@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block tabs %}
+
+<st:tab code="changepwd" label="Change Password">
+    {% if request.method == "POST" %}
+        Your password has been changed. Remember to use your new password
+        when logging in.
+        <p/>
+    {% else %}
+        <st:form name="changepwd" type="form" method="post" action="/um/changepwd" mode="new">
+            <st:field id="oldpassword" type="password" property="oldpassword" label="Old Password" required="true" confirm="true"/>
+            <st:field id="newpassword" type="password" property="newpassword" label="New Password" required="true"/>
+            <st:footer>
+                <st:action mode="new" label="Change Password" action="save"/>
+                <st:action mode="new" label="Cancel" action="link" href="/"/>
+            </st:footer>
+        </st:form>
+    {% endif %}
+</st:tab>
+
+{% endblock tabs %}
+
+{% block topbar %}
+{% endblock topbar %}

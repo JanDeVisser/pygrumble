@@ -1,14 +1,14 @@
 com.sweattrails.api.JSONRequest = function(url) {
-    this.url = url
+    this.url = url;
     if (arguments.length > 1) {
-        this.onSuccess = arguments[1]
+        this.onSuccess = arguments[1];
     }
     if (arguments.length > 2) {
-        this.onError = arguments[2]
+        this.onError = arguments[2];
     }
-    this.params = {}
-    return this
-}
+    this.params = {};
+    return this;
+};
 
 com.sweattrails.api.JSONRequest.prototype.parameter = function(param, value) {
     this.params[param] = value
@@ -23,33 +23,33 @@ com.sweattrails.api.getHttpRequest = function(jsonRequest) {
     httpRequest.request = jsonRequest
     httpRequest.onreadystatechange = function() {
         if (this.readyState == 4) {
-        	this.request.log("Received response. Status " + this.status)
-        	var object = {}
-			if (this.responseText != "") {
-				try {
-					object = JSON.parse(this.responseText)
-				} catch (e) {
-					// Ignored
-				}
-			}
+            this.request.log("Received response. Status " + this.status)
+            var object = {}
+            if (this.responseText != "") {
+                try {
+                    object = JSON.parse(this.responseText)
+                } catch (e) {
+                    // Ignored
+                }
+            }
             if ((this.status >= 200 && this.status <= 200) || this.status == 304) {
-				var redir = this.getResponseHeader("ST-JSON-Redirect")
-				if (redir && this.request.onRedirect) {
-				    this.request.onRedirect(object, redir)
-				} else {
-	                var posted = this.request.post
-	                this.request.post = false
-	                this.request.object = null
-	                this.request.params = []
-	                this.request.onSuccess(object)
-	                if (posted && this.request.onSubmitted) {
-                		this.request.onSubmitted()
+                var redir = this.getResponseHeader("ST-JSON-Redirect")
+                if (redir && this.request.onRedirect) {
+                    this.request.onRedirect(object, redir)
+                } else {
+                    var posted = this.request.post
+                    this.request.post = false
+                    this.request.object = null
+                    this.request.params = []
+                    this.request.onSuccess(object)
+                    if (posted && this.request.onSubmitted) {
+                        this.request.onSubmitted()
                     }
-				}
+                }
                 this.request.semaphore = 0
                 this.request.log("response processed")
             } else {
-            	this.request.log("  *** XMLHttp Error *** " + this.status)
+                this.request.log("  *** XMLHttp Error *** " + this.status)
                 if (this.request.onError != null) {
                     this.request.onError(this.status, object)
                 } else {
@@ -110,17 +110,17 @@ com.sweattrails.api.JSONRequest.prototype.onRedirect = function(object, redir) {
 }
 
 com.sweattrails.api.JSONRequest.prototype.onError = function(code, object) {
-    this.log("HTTP Error " + code)
-    this.post = false
+    this.log("HTTP Error " + code);
+    this.post = false;
     if (this.datasource && this.datasource.onError) {
-		this.log("Calling onError on datasource")
-    	this.datasource.onError(code, object)
+        this.log("Calling onError on datasource");
+    	this.datasource.onError(code, object);
     }
-}
+};
 
 com.sweattrails.api.JSONRequest.prototype.log = function(msg) {
-	this.datasource && $$.log(this.datasource, "XMLHttp - " + msg)
-}
+    this.datasource && $$.log(this.datasource, "XMLHttp - " + msg);
+};
 
 /**
  * DataSource -
@@ -137,11 +137,11 @@ com.sweattrails.api.internal.DataSource.prototype.addView = function(v) {
 }
 
 com.sweattrails.api.internal.DataSource.prototype.submitParameter = function(p, v) {
-	if (this.submitparams == null) {
-		this.submitparams = {}
-	}
-    this.submitparams[p] = v
-}
+    if (this.submitparams == null) {
+        this.submitparams = {};
+    }
+    this.submitparams[p] = v;
+};
 
 com.sweattrails.api.internal.DataSource.prototype.processData = function() {
     if (!this.view) {
@@ -159,21 +159,21 @@ com.sweattrails.api.internal.DataSource.prototype.processData = function() {
 }
 
 com.sweattrails.api.internal.DataSource.prototype.next = function() {
-	if (this.data == null) {
-		return null
-	} else {
-		if (Array.isArray(this.data)) {
-			if (this.ix < this.data.length) {
-				return this.data[this.ix++]
-			} else {
-				return null
-			}
-		} else {
-			this.object = (this.object == null) ? this.data : null
-			return this.object
-		}
-	}
-}
+    if (this.data == null) {
+        return null;
+    } else {
+        if (Array.isArray(this.data)) {
+            if (this.ix < this.data.length) {
+                return this.data[this.ix++];
+            } else {
+                return null;
+            }
+        } else {
+            this.object = (this.object == null) ? this.data : null;
+            return this.object;
+        }
+    }
+};
 
 com.sweattrails.api.internal.DataSource.prototype.reset = function() {
     if (arguments.length > 0) {
@@ -229,7 +229,7 @@ com.sweattrails.api.internal.DataSource.prototype.submit = function() {
 }
 
 com.sweattrails.api.internal.DataSource.prototype.runCallbacks = function(cb, args) {
-	var ret = []
+    var ret = []
     var r = this[cb] && this[cb].apply(this, args)
     if (r) {
     	ret.push(r)
@@ -246,7 +246,7 @@ com.sweattrails.api.internal.DataSource.prototype.runCallbacks = function(cb, ar
 
 com.sweattrails.api.internal.DataSource.prototype.onSubmitted = function() {
     this.runCallbacks("onDataSubmitted", [])
-    var r = this.runCallbacks("onRedirect", [object, null])
+    var r = this.runCallbacks("onRedirect", [null, null])
     if (r) {
         document.location = r
     }
@@ -266,9 +266,9 @@ com.sweattrails.api.internal.DataSource.prototype.onError = function(errorinfo, 
  */
 
 com.sweattrails.api.JSONDataSource = function(url) {
-	this.id = url
-	this.type = "JSONDataSource"
-	$$.register(this)
+    this.id = url
+    this.type = "JSONDataSource"
+    $$.register(this)
     this.reset(null)
     this.async = true
     this.request = new com.sweattrails.api.JSONRequest(url)

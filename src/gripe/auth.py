@@ -33,6 +33,13 @@ class InvalidConfirmationCode(AuthException):
     def __str__(self):
         return "Invalid user confirmation code"
 
+class BadPassword(AuthException):
+    def __init__(self, uid):
+        self._uid = uid
+
+    def __str__(self):
+        return "Bad password for user with ID %s" % self._uid 
+
 class AbstractAuthObject(gripe.role.HasRoles):
     def role_objects(self, include_self = True):
         s = set()

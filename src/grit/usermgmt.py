@@ -85,9 +85,44 @@ class Logout(grit.ReqHandler):
     def post(self):
         self.get()
 
+
+class ChangePwd(grit.ReqHandler):
+    def get_context(self, ctx):
+        return ctx
+
+    def get(self):
+        logger.debug("main::login.get")
+        self.render()
+
+    def post(self):
+        if not self.user:
+            self.response.status_int = 500
+            return
+        json_request = False
+        params = self.request
+        if self.request.headers.get("ST-JSON-Request"):
+            params = json.loads(self.request.body)
+            json_request = True
+        oldpassword = params.get("oldpassword")
+        newpassword = params.get("newpassword")
+
+        um = grit.Session.get_usermanager()
+        try:
+            try:
+                um.changepwd(self.session.userid(), oldpassword, newpassword)
+            except gripe.auth.UserDoesntExists:
+                pass
+            if json_request:
+                self.json_dump({ "status": "OK" })
+            else:
+                self.render()
+        except gripe.auth.BadPassword:
+            self.response.status_int = 401
+
+
 #
 # ==========================================================================
-# S I G N U P  R E Q U E S T S
+#  S I G N U P  R E Q U E S T S
 # ==========================================================================
 #
 
@@ -201,6 +236,7 @@ class PasswordReset(grumble.Model):
 app = webapp2.WSGIApplication([
         webapp2.Route(r'/login', handler = Login, name = 'login'),
         webapp2.Route(r'/logout', handler = Logout, name = 'logout'),
+        webapp2.Route(r'/um/changepwd', handler = ChangePwd, name = 'changepwd'),
 
         webapp2.Route(
             r'/um/signup', 

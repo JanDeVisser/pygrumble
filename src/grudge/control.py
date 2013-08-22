@@ -15,14 +15,14 @@ logger = gripe.get_logger(__name__)
 
 class Startup(grit.ReqHandler):
     def get_template(self):
-        if self._wf:
-            return self._template or self._kind.replace('.', '/') + "/startup"
+        if hasattr(self, "_wf"):
+            return self._template or self._wf.kind().replace('.', '/') + "/startup"
         else:
             return self._template or "/grudge/startup_failed"
 
     def get_context(self, ctx):
-        ctx["wf"] = self._wf
-        ctx["process"] = self._process
+        ctx["wf"] = self._wf if hasattr(self, "_wf") else None
+        ctx["process"] = self._process if hasattr(self, "_process") else None
         return ctx
 
     def get(self, **kwargs):

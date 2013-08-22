@@ -1046,22 +1046,26 @@ class Model(object):
             _set_acl(self, v["_acl"] if "_acl" in v else None)
             for prop in self._properties.values():
                 prop._update_fromsql(self, v)
+            self._set_ancestors(ancestors, parent)
+            logger.debug("%s._populate: _key_name: %s", self.kind(), self._key_name)
+            logger.debug("%s._populate: hasattr(key_prop): %s", self.kind(), hasattr(self, "key_prop"))
             if (self._key_name is None) and hasattr(self, "key_prop"):
                 logger.debug("Assigning key from key property: %s", self.key_prop)
-                self._key_name = self.key_prop
+                self._key_name = getattr(self, self.key_prop)
             else:
                 logger.debug("No key prop. Using key_name %s", self._key_name)
-            self._set_ancestors(ancestors, parent)
-            self._exists = True
             self._id = self.key().id
+            self._exists = True
         else:
             self._exists = False
 
     def _load(self):
         #logger.debug("_load -> kind: %s, _id: %s, _key_name: %s", self.kind(), self._id, self._key_name)
-        if (not hasattr(self, "_values") or (self._values is None)) and (self._id or self._key_name):
+        if (not(hasattr(self, "_values")) or (self._values is None)) and (self._id or self._key_name):
             self._populate(ModelQuery.get(self.key()))
         else:
+            assert hasattr(self, "_values"), "Object of kind %s doesn't have _values" % self.kind()
+            assert self._values is not None, "Object of kind %s has _values == None" % self.kind()
             assert hasattr(self, "_ancestors"), "Object of kind %s doesn't have _ancestors" % self.kind()
             assert hasattr(self, "_parent"), "Object of kind %s doesn't have _parent" % self.kind()
 
@@ -1070,8 +1074,8 @@ class Model(object):
         logger.info("Storing model %s.%s", self.kind(), self.key())
         include_key_name = True
         if hasattr(self, "key_prop"):
-            scoped = getattr(self.__class__, "key_prop").scoped
-            key = self.key_prop
+            scoped = getattr(self.__class__, self.key_prop).scoped
+            key = getattr(self, self.key_prop)
             self._key_name = "%s/%s" % (self.parent(), key) if scoped else key
             include_key_name = scoped
         elif not self._key_name:
@@ -1305,7 +1309,7 @@ class Model(object):
         if hasattr(propdef, "is_key") and propdef.is_key:
             #assert not hasattr(cls, "key_prop") or cls.key_prop.inherited_from, "Can only assign one key property"
             assert not propdef.transient, "Key property cannot be transient"
-            cls.key_prop = propdef
+            cls.key_prop = propname
         cls._properties[propname] = propdef
         cls._allproperties[propname] = propdef
         if isinstance(propdef, CompoundProperty):
