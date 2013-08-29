@@ -284,13 +284,13 @@ com.sweattrails.api.JSONDataSource.prototype.parameter = function(param, value) 
 }
 
 com.sweattrails.api.JSONDataSource.prototype.onJSONData = function(data) {
-	$$.log(this, "onJSONData(data)")
+    $$.log(this, "onJSONData(data)")
     this.reset(data)
     this.processData()
 }
 
 com.sweattrails.api.JSONDataSource.prototype.execute = function() {
-	$$.log(this, "onJSONData(execute)")
+    $$.log(this, "onJSONData(execute)")
     this.data = null
     this.request.execute()
 }
@@ -311,9 +311,16 @@ com.sweattrails.api.JSONDataSource.prototype.addObject = function(obj, prefix) {
 }
 
 com.sweattrails.api.JSONDataSource.prototype.setParameters = function() {
-	$$.log(this, "setParameters - json: " + this.submitAsJSON + " object " + JSON.stringify(this.object))
+    $$.log(this, "setParameters - json: " + this.submitAsJSON + " object " + JSON.stringify(this.object))
     if (this.submitAsJSON) {
-        this.request.body = JSON.stringify(this.object)
+        var o = {}
+        for (a in this.object) {
+            o[a] = this.object[a]
+        }
+        for (p in this.request.params) {
+            o[p] = this.request.params[p]
+        }
+        this.request.body = JSON.stringify(o)
     } else {
         this.addObject(this.object)
     }
@@ -321,7 +328,7 @@ com.sweattrails.api.JSONDataSource.prototype.setParameters = function() {
 
 
 com.sweattrails.api.JSONDataSource.prototype.submit = function() {
-	$$.log(this, "submit()")
+    $$.log(this, "submit()")
     this.data = null
     this.request.post = true
     this.setParameters()
@@ -347,12 +354,12 @@ com.sweattrails.api.JSONDataSourceBuilder.prototype.build = function(elem) {
     var params = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "parameter")
     for (var ix = 0; ix < params.length; ix++) {
     	var p = params[ix]
-		ds.parameter(p.getAttribute("name"), p.getAttribute("value"))
+        ds.parameter(p.getAttribute("name"), p.getAttribute("value"))
     }
     params = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "submitparameter")
     for (ix = 0; ix < params.length; ix++) {
     	p = params[ix]
-		ds.submitParameter(p.getAttribute("name"), p.getAttribute("value"))
+        ds.submitParameter(p.getAttribute("name"), p.getAttribute("value"))
     }
     return ds
 }
@@ -362,9 +369,9 @@ com.sweattrails.api.JSONDataSourceBuilder.prototype.build = function(elem) {
  */
 
 com.sweattrails.api.CustomDataSource = function(func, submitfnc) {
-	this.id = func
-	this.type = "CustomDataSource"
-	$$.register(this)
+    this.id = func
+    this.type = "CustomDataSource"
+    $$.register(this)
     this.data = null
     this.view = []
     this.func = (typeof(func) == 'function') ? func : getfunc(func)
@@ -426,9 +433,9 @@ com.sweattrails.api.StaticDataSource = function() {
 com.sweattrails.api.StaticDataSource.prototype = new com.sweattrails.api.internal.DataSource()
 
 com.sweattrails.api.StaticDataSource.prototype.value = function(key, value) {
-	var obj = {}
-	obj[this.keyname] = key
-	obj[this.valname] = value
+    var obj = {}
+    obj[this.keyname] = key
+    obj[this.valname] = value
     this.data.push(obj)
 }
 
@@ -449,9 +456,9 @@ com.sweattrails.api.StaticDataSourceBuilder.prototype.build = function(elem, val
     }
     for (var ix = 0; ix < values.length; ix++) {
     	var v = values[ix]
-		var val = v.getAttribute("text")
-		var key = v.getAttribute("key")
-		ds.value(key, val)
+        var val = v.getAttribute("text")
+        var key = v.getAttribute("key")
+        ds.value(key, val)
     }
     return ds
 }
@@ -530,9 +537,9 @@ com.sweattrails.api.DataSourceBuilder.prototype.build = function(elem) {
     } else {
         var values = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "value")
         if (values.length > 0) {
-        	ret = this.staticbuilder.build(elem, values)
+            ret = this.staticbuilder.build(elem, values)
         } else {
-        	ret = this.nullbuilder.build(elem)
+            ret = this.nullbuilder.build(elem)
         }
     }
     if (ret != null) {

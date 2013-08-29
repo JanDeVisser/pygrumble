@@ -4,6 +4,9 @@ Created on 2013-03-12
 @author: jan
 '''
 
+import sys
+print >> sys.stderr, "Import %s" % __name__
+
 import json
 import webapp2
 
@@ -155,7 +158,7 @@ class UserSignup(grumble.Model):
         except gripe.Error as e:
             logger.debug("Create user Error: %s" % e)
             raise
-        
+
     def prepare_message(self, msg, ctx):
         msg.set_header("X-ST-URL", "http://localhost/um/confirm/%s" % self.id())
         return ctx
@@ -239,34 +242,35 @@ app = webapp2.WSGIApplication([
         webapp2.Route(r'/um/changepwd', handler = ChangePwd, name = 'changepwd'),
 
         webapp2.Route(
-            r'/um/signup', 
-            handler = "grudge.control.Startup", name = 'signup', 
-            defaults = { 
+            r'/um/signup',
+            handler = "grudge.control.Startup", name = 'signup',
+            defaults = {
                 "process": gripe.Config.app.workflows.signup,
                 "mapping": ["userid", "password"]
             }
         ),
+
         webapp2.Route(
-            r'/um/confirm/<code>', 
-            handler = "grudge.control.AddStatus", name = 'confirm-signup', 
-            defaults = { 
-                "status": "confirmed" 
+            r'/um/confirm/<code>',
+            handler = "grudge.control.AddStatus", name = 'confirm-signup',
+            defaults = {
+                "status": "confirmed"
             }
         ),
 
         webapp2.Route(
-            r'/um/reset', 
-            handler = "grudge.control.Startup", name = 'reset', 
-            defaults = { 
+            r'/um/reset',
+            handler = "grudge.control.Startup", name = 'reset',
+            defaults = {
                 "process": gripe.Config.app.workflows.pwdreset,
                 "mapping": ["userid"]
             }
         ),
         webapp2.Route(
-            r'/um/confirmreset/<code>', 
-            handler = "grudge.control.AddStatus", name = 'confirm-reset', 
-            defaults = { 
-                "status": "confirmed" 
+            r'/um/confirmreset/<code>',
+            handler = "grudge.control.AddStatus", name = 'confirm-reset',
+            defaults = {
+                "status": "confirmed"
             }
         ),
     ], debug = True)

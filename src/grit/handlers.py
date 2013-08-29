@@ -4,10 +4,14 @@
 __author__ = "jan"
 __date__ = "$16-Nov-2012 10:01:52 PM$"
 
+import sys
+print >> sys.stderr, "Import %s" % __name__
+
 import json
 import logging
 import traceback
 import urllib
+
 import webapp2
 
 import gripe
@@ -17,8 +21,8 @@ import grumble
 logger = gripe.get_logger("grit")
 
 class ModelBridge(object):
-    def __init__(self, kind):
-        self.kind(kind)
+#    def __init__(self, kind):
+#        self.kind(kind)
 
     def _initialize_bridge(self, key = None, kind = None):
         if kind:
@@ -129,18 +133,14 @@ class ModelBridge(object):
     def can_query(self):
         return self.kind().can_query()
 
+class BridgedHandler(ModelBridge, grit.ReqHandler):
+    pass
 
-class BridgedHandler(grit.ReqHandler, ModelBridge):
-    def allow_access(self):
-        return True
+class PageHandler(BridgedHandler):
+    def get_template(self):
+        prefix = self.kind().kind().replace(".", "/") + "/"
+        return prefix + ("view" if self.key() else "list")
 
-    def must_redirect_to(self):
-        return None
-
-    def initialize_bridge(self):
-        pass
-
-class PageHandler(BridgedHandler, grit.ReqHandler):
     def get_context(self, ctx):
         objs = self.get_objects()
         obj = objs[0] if objs and len(objs) else None
@@ -149,13 +149,19 @@ class PageHandler(BridgedHandler, grit.ReqHandler):
 
     def get(self, key = None, kind = None):
         self._initialize_bridge(key, kind)
-        if self.allow_access():
-            self.initialize_bridge()
-            redir = self.must_redirect_to()
+        has_access = True
+        if hasattr(self, "allow_access") and callable(self.allow__access):
+            has_access = self.allow_access()
+        if has_access:
+            if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
+                self.initialize_bridge()
+            redir = None
+            if hasattr(self, "redirect_to_url") and callable(self.redirect_to_url):
+                redir = self.redirect_to_url()
             if not redir:
                 self.render()
             else:
-                if isinstance(redir, str):
+                if isinstance(redir, basestring):
                     self.redirect(redir)
                 else:
                     self.error(redir)
@@ -173,10 +179,16 @@ class JSHandler(BridgedHandler):
         ctx["object"] = obj
         return ctx
 
-    def get(self, key = None, kind = None):
+    def get(self, key = None, kind = None, **kwargs):
+        if "template" in kwargs:
+            self.template = kwargs["template"]
         self._initialize_bridge(key, kind)
-        if self.allow_access():
-            self.initialize_bridge()
+        has_access = True
+        if hasattr(self, "allow_access") and callable(self.allow__access):
+            has_access = self.allow_access()
+        if has_access:
+            if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
+                self.initialize_bridge()
             self.render()
         else:
             self.error(401)
@@ -205,8 +217,12 @@ class ImageHandler(PropertyBridgedHandler):
     def post(self, key = None, kind = None, prop = None):
         logging.debug("ImageHandler.post(%s.%s, %s)", kind, prop, key)
         self._initialize_bridge(key, kind, prop)
-        if self.allow_access():
-            self.initialize_bridge()
+        has_access = True
+        if hasattr(self, "allow_access") and callable(self.allow__access):
+            has_access = self.allow_access()
+        if has_access:
+            if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
+                self.initialize_bridge()
             if self.object() and self.can_update():
                 setattr(self.object(), self.property(), (self.request.get("image"), self.request.get("contentType")))
                 self.save()
@@ -219,8 +235,12 @@ class ImageHandler(PropertyBridgedHandler):
     def get(self, key = None, kind = None, prop = None):
         logging.debug("ImageHandler.get(%s.%s, %s)", kind, prop, key)
         self._initialize_bridge(key, kind, prop)
-        if self.allow_access() and self.key():
-            self.initialize_bridge()
+        has_access = True
+        if hasattr(self, "allow_access") and callable(self.allow__access):
+            has_access = self.allow_access()
+        if has_access and self.key():
+            if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
+                self.initialize_bridge()
             if self.object() and self.can_read():
                 if getattr(self.object(), self.property() + "_hash") in self.request.if_none_match:
                     logging.debug("Client has up-to-date image")
@@ -255,8 +275,12 @@ class JSONHandler(BridgedHandler):
     def post(self, kind = None):
         logging.debug("JSONHandler.post(%s)", kind)
         self._initialize_bridge(None, kind)
-        if self.allow_access():
-            self.initialize_bridge()
+        has_access = True
+        if hasattr(self, "allow_access") and callable(self.allow__access):
+            has_access = self.allow_access()
+        if has_access:
+            if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
+                self.initialize_bridge()
             descriptors = self.load()
             descriptors = descriptors if isinstance(descriptors, list) else [descriptors]
             ret = []
@@ -281,8 +305,12 @@ class JSONHandler(BridgedHandler):
     def get(self, key = None, kind = None):
         logging.debug("JSONHandler.get(%s, %s)", key, kind)
         self._initialize_bridge(key, kind)
-        if self.allow_access():
-            self.initialize_bridge()
+        has_access = True
+        if hasattr(self, "allow_access") and callable(self.allow__access):
+            has_access = self.allow_access()
+        if has_access:
+            if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
+                self.initialize_bridge()
             objs = self.get_objects()
             ret = [o.to_dict() for o in objs] if objs else None
             ret = ret if ret is None or len(ret) > 1 else ret[0]
@@ -293,8 +321,12 @@ class JSONHandler(BridgedHandler):
     def delete(self, key = None, kind = None):
         logging.debug("JSONHandler.delete(%s, %s)", key, kind)
         self._initialize_bridge(key, kind)
-        if self.allow_access():
-            self.initialize_bridge()
+        has_access = True
+        if hasattr(self, "allow_access") and callable(self.allow__access):
+            has_access = self.allow_access()
+        if has_access:
+            if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
+                self.initialize_bridge()
             objs = self.get_objects()
             for o in objs:
                 self.object(o)
@@ -307,8 +339,12 @@ class RedirectHandler(BridgedHandler):
     def get(self, key = None, kind = None):
         logging.info("RedirectHandler(%s): path: %s key: %s", self.__class__.__name__, self.request.path, str(key))
         self._initialize_bridge(kind)
-        if self.allow_access():
-            self.initialize_bridge()
+        has_access = True
+        if hasattr(self, "allow_access") and callable(self.allow__access):
+            has_access = self.allow_access()
+        if has_access:
+            if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
+                self.initialize_bridge()
             self.redirect(self.get_redirect_url())
         else:
             self.error(401)

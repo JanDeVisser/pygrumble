@@ -1,12 +1,14 @@
 __author__ = "jan"
 __date__ = "$18-Feb-2013 11:06:29 AM$"
 
+import sys
+print >> sys.stderr, "Import %s" % __name__
+
 import importlib
 import json
 import logging
 import os
 import os.path
-import sys
 
 import gripe.json_util
 

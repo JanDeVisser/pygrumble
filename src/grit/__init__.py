@@ -3,6 +3,10 @@
 # To change this template, choose Tools | Templates
 # and open the template in the editor.
 
+import sys
+print >> sys.stderr, "Import %s" % __name__
+
+
 import atexit
 import datetime
 import hashlib
@@ -16,7 +20,6 @@ import re
 import threading
 import uuid
 import webapp2
-import sys
 
 import gripe
 import gripe.json_util
@@ -506,7 +509,7 @@ class ReqHandler(webapp2.RequestHandler):
                 jinja2.FileSystemLoader("%s/%s" % (gripe.root_dir(), cls.template_dir)), \
                 jinja2.PackageLoader("grit", "template") \
             ])
-            env = jinja2.Environment(loader = loader, extensions=['jinja2.ext.do'])
+            env = jinja2.Environment(loader = loader, extensions = ['jinja2.ext.do'])
             if hasattr(cls, "get_env") and callable(cls.get_env):
                 env = cls.get_env(env)
             cls.env = env
@@ -581,15 +584,11 @@ class ReqHandler(webapp2.RequestHandler):
             ret = self.get_template() \
                 if hasattr(self, "get_template") and callable(self.get_template) \
                 else None
-        if not ret:
-            ret = self.get_kind().__name__.lower() \
-                if hasattr(self, "get_kind") and callable(self.get_kind) \
-                else None
         cname = self.__class__.__name__.lower()
-        module = self.__class__.__module__.lower()
         if not ret:
+            module = self.__class__.__module__.lower()
             ret = module + "." + cname if module != '__main__' else cname
-            ret = ret.replace(".", "/")        
+        ret = ret.replace(".", "/")
         ret = gripe.Config.app.get(cname, ret)
         logger.info("ReqHandler: using template %s", ret)
         return ret

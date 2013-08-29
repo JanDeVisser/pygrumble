@@ -2,8 +2,8 @@
 # To change this template file, choose Tools | Templates
 # and open the template in the editor.
 
-__author__="jan"
-__date__ ="$7-Aug-2013 2:21:58 PM$"
+__author__ = "jan"
+__date__ = "$7-Aug-2013 2:21:58 PM$"
 
 import json
 
@@ -25,8 +25,8 @@ class Startup(grit.ReqHandler):
         ctx["process"] = self._process if hasattr(self, "_process") else None
         return ctx
 
-    def get(self, **kwargs):
-        self._wf = gripe.resolve(kwargs.get("process"))
+    def get(self, process = None, **kwargs):
+        self._wf = gripe.resolve(process)
         logger.debug("%s --> grudge.control.Startup::get", self.request.path)
         self._template = kwargs.get("template")
         self.render()

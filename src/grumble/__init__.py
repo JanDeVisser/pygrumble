@@ -4,6 +4,9 @@
 __author__ = "jan"
 __date__ = "$19-Jan-2013 11:19:59 AM$"
 
+import sys
+print >> sys.stderr, "Import %s" % __name__
+
 import base64
 import datetime
 import json

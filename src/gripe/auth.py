@@ -1,6 +1,9 @@
 # To change this template, choose Tools | Templates
 # and open the template in the editor.
 
+import sys
+print >> sys.stderr, "Import %s" % __name__
+
 import uuid
 import random
 
