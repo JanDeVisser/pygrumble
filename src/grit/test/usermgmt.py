@@ -49,7 +49,13 @@ parts = cookie.split(";")
 cookie = parts[0]
 
 print "Doing signup request"
-request = webapp2.Request.blank("/um/signup", POST = '{ "userid": "runnr@de-visser.net", "password": "x" }')
+request = webapp2.Request.blank("/um/signup", POST = """
+    {
+        "userid": "runnr@de-visser.net",
+        "display_name": "Signup Test User",
+        "password": "x"
+    }
+""")
 request.headers['ST-JSON-Request'] = "True"
 request.method = "POST"
 request.content_type = "application/x-www-form-urlencoded"

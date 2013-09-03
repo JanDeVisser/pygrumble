@@ -524,7 +524,7 @@ com.sweattrails.api.DataSourceBuilder = function() {
     return this
 }
 
-com.sweattrails.api.DataSourceBuilder.prototype.build = function(elem) {
+com.sweattrails.api.DataSourceBuilder.prototype.build = function(elem, def_ds) {
     var ret = null
     var datasources = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "datasource")
     if (datasources && (datasources.length > 0)) {
@@ -539,33 +539,30 @@ com.sweattrails.api.DataSourceBuilder.prototype.build = function(elem) {
         if (values.length > 0) {
             ret = this.staticbuilder.build(elem, values)
         } else {
-            ret = this.nullbuilder.build(elem)
+            ret = (def_ds) ? def_ds : this.nullbuilder.build(elem)
         }
     }
     if (ret != null) {
     	if (elem.getAttribute("ondata")) {
-    		ret.onData = getfunc(elem.getAttribute("ondata"))
+            ret.onData = getfunc(elem.getAttribute("ondata"))
     	}
     	if (elem.getAttribute("nodata")) {
-    		ret.noData = getfunc(elem.getAttribute("nodata"))
+            ret.noData = getfunc(elem.getAttribute("nodata"))
     	}
     	if (elem.getAttribute("renderdata")) {
-    		ret.renderData = getfunc(elem.getAttribute("renderdata"))
+            ret.renderData = getfunc(elem.getAttribute("renderdata"))
     	}
     	if (elem.getAttribute("ondataend")) {
-    		ret.onDataEnd = getfunc(elem.getAttribute("ondataend"))
+            ret.onDataEnd = getfunc(elem.getAttribute("ondataend"))
     	}
     	if (elem.getAttribute("onerror")) {
-    		ret.onDataError = getfunc(elem.getAttribute("ondataerror"))
+            ret.onDataError = getfunc(elem.getAttribute("ondataerror"))
     	}
     	if (elem.getAttribute("onsubmitted")) {
-    		ret.onDataSubmitted = getfunc(elem.getAttribute("onsubmitted"))
+            ret.onDataSubmitted = getfunc(elem.getAttribute("onsubmitted"))
     	}
     }
     return ret
 }
 
 com.sweattrails.api.dataSourceBuilder = new com.sweattrails.api.DataSourceBuilder()
-
-
-console.log("HERE")

@@ -13,9 +13,9 @@
         </st:header>
         <st:column label="Email" type="link" property="email" url="/users/$key" width="25%"/>
         <st:column label="Name" type="link" property="display_name" url="/users/$key" width="75%"/>
-        <st:dataform>
+        <st:dataform url="/um/create">
             <st:field property="email" type="text" label="Email"/>
-            <st:field property="display_name" type="text" label="Email"/>
+            <st:field property="display_name" type="text" label="Name"/>
             <st:action mode="new;edit" label="Save" action="save"/>
             <st:action mode="view;new;edit" label="Cancel" action="cancel"/>
         </st:dataform>

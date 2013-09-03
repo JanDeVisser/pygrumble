@@ -143,9 +143,9 @@ com.sweattrails.api.Table = function(container, id) {
     return this
 }
 
-com.sweattrails.api.Table.prototype.initForm = function() {
-    this.form = new com.sweattrails.api.Form("table-" + this.id, this.container,
-        new com.sweattrails.api.ProxyDataSource(this), true)
+com.sweattrails.api.Table.prototype.initForm = function(ds) {
+    this.form = new com.sweattrails.api.Form("table-" + this.id, this.container, ds, true)
+//        new com.sweattrails.api.ProxyDataSource(this), true)
 }
 
 com.sweattrails.api.Table.prototype.setDataSource = function(ds) {
@@ -166,7 +166,7 @@ com.sweattrails.api.Table.prototype.render = function() {
 }
 
 com.sweattrails.api.Table.prototype.onData = function(data) {
-	$$.log(this, "Table.onData")
+    $$.log(this, "Table.onData")
     this.onrender && this.onrender(data)
     this.header.erase()
     this.footer.erase()
@@ -197,7 +197,7 @@ com.sweattrails.api.Table.prototype.onData = function(data) {
 }
 
 com.sweattrails.api.Table.prototype.noData = function() {
-	$$.log(this, "Table.noData")
+    $$.log(this, "Table.noData")
     var emptyrow = document.createElement("tr")
     emptyrow.id = this.id + "-emptyrow"
     this.table.appendChild(emptyrow)
@@ -210,7 +210,7 @@ com.sweattrails.api.Table.prototype.noData = function() {
 
 com.sweattrails.api.Table.prototype.renderData = function(obj) {
     if (obj == null) return
-	$$.log(this, "Table.renderData")
+    $$.log(this, "Table.renderData")
     var tr = document.createElement("tr")
     tr.style.backgroundColor = this.rowcolor
     if (this.rowcolor == 'white') {
@@ -253,13 +253,13 @@ com.sweattrails.api.Table.prototype.renderData = function(obj) {
 }
 
 com.sweattrails.api.Table.prototype.onDataEnd = function() {
-	$$.log(this, "Table.onDataEnd")
+    $$.log(this, "Table.onDataEnd")
     this.footer.render()
     this.onrendered && this.onrendered()
 }
 
 com.sweattrails.api.Table.prototype.openForm = function(object) {
-	$$.log(this, "Table.openForm")
+    $$.log(this, "Table.openForm")
     if (this.form && !this.form.ispopup) {
         this.data = object
         this.form.popup((object == null) ? com.sweattrails.api.MODE_NEW : com.sweattrails.api.MODE_VIEW)
@@ -267,7 +267,7 @@ com.sweattrails.api.Table.prototype.openForm = function(object) {
 }
 
 com.sweattrails.api.Table.prototype.reset = function(data) {
-	$$.log(this, "Table.reset")
+    $$.log(this, "Table.reset")
     this.datasource.reset(data)
     this.render()
 }
@@ -282,13 +282,13 @@ com.sweattrails.api.Table.prototype.submitProxyData = function(data) {
 }
 
 com.sweattrails.api.Table.prototype.onDataSubmitted = function() {
-	$$.log(this, "Table.onDataSubmitted")
+    $$.log(this, "Table.onDataSubmitted")
     this.form && this.form.ispopup && this.form.onDataSubmitted()
     this.onsubmitted && this.onsubmitted()
 }
 
 com.sweattrails.api.Table.prototype.onDataError = function(errorinfo) {
-	$$.log(this, "Table.onDataError")
+    $$.log(this, "Table.onDataError")
     this.form && this.form.ispopup && this.form.onDataError(errorinfo)
     this.onerror && this.onerror(errorinfo)
 }
@@ -325,7 +325,9 @@ com.sweattrails.api.TableBuilder.prototype.process = function(t) {
     var forms = getChildrenByTagNameNS(t, com.sweattrails.api.xmlns, "dataform")
     if (forms.length == 1) {
         var formelem = forms[0]
-        table.initForm()
+        var form_ds = com.sweattrails.api.dataSourceBuilder.build(formelem,
+            new com.sweattrails.api.ProxyDataSource(table))
+        table.initForm(form_ds)
         _.formbuilder.buildForm(table.form, formelem)
     }
     var columns = getChildrenByTagNameNS(t, com.sweattrails.api.xmlns, "column")

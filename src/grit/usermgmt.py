@@ -140,6 +140,7 @@ class ChangePwd(grit.ReqHandler):
 class UserSignup(grumble.Model):
     userid = grumble.TextProperty()
     password = grumble.PasswordProperty()
+    display_name = grumble.TextProperty()
 
     user_exists = grudge.Status()
     user_created = grudge.Status()
@@ -150,7 +151,7 @@ class UserSignup(grumble.Model):
     def create_user(self):
         try:
             um = grit.Session.get_usermanager()
-            um.add(self.userid, self.password)
+            um.add(self.userid, self.password, self.display_name)
             logger.debug("Create User OK")
             return self.user_created
         except gripe.auth.UserExists as e:
@@ -161,6 +162,58 @@ class UserSignup(grumble.Model):
 
     def prepare_message(self, msg, ctx):
         msg.set_header("X-ST-URL", "http://localhost/um/confirm/%s" % self.id())
+        return ctx
+
+    def activate_user(self):
+        um = grit.Session.get_usermanager()
+        try:
+            um.confirm(self.userid)
+            logger.debug("Activate User OK")
+            return self.user_activated
+        except gripe.Error as e:
+            logger.debug("Activate user Error: %s" % e)
+            raise
+
+#
+# ==========================================================================
+#  A D M I N  U S E R  C R E A T I O N
+# ==========================================================================
+#
+
+@grudge.OnStarted("create_user")
+@grudge.OnAdd("user_exists", grudge.Stop())
+@grudge.OnAdd("user_created", grudge.SendMail(recipients = "@.:userid",
+    subject = "Confirm your registration with %s" % gripe.Config.app.about.application_name,
+    text = "&confirm_creation", status = "mail_sent", context = ".:prepare_message"))
+@grudge.OnAdd("confirmed", "activate_user")
+@grudge.OnAdd("user_activated", grudge.Stop())
+@grudge.Process()
+class UserCreate(grumble.Model):
+    userid = grumble.TextProperty()
+    display_name = grumble.TextProperty()
+    password = grumble.TextProperty()
+
+    user_exists = grudge.Status()
+    user_created = grudge.Status()
+    mail_sent = grudge.Status()
+    confirmed = grudge.Status()
+    user_activated = grudge.Status()
+
+    def create_user(self):
+        try:
+            self.password = um.gen_password()
+            um = grit.Session.get_usermanager()
+            um.add(self.userid, self.password, self.display_name)
+            logger.debug("Create User OK")
+            return self.user_created
+        except gripe.auth.UserExists as e:
+            return self.user_exists
+        except gripe.Error as e:
+            logger.debug("Create user Error: %s" % e)
+            raise
+
+    def prepare_message(self, msg, ctx):
+        msg.set_header("X-ST-URL", "http://localhost/um/confirmcreate/%s" % self.id())
         return ctx
 
     def activate_user(self):
@@ -246,13 +299,30 @@ app = webapp2.WSGIApplication([
             handler = "grudge.control.Startup", name = 'signup',
             defaults = {
                 "process": gripe.Config.app.workflows.signup,
-                "mapping": ["userid", "password"]
+                "mapping": ["userid", "password", "display_name"]
             }
         ),
 
         webapp2.Route(
             r'/um/confirm/<code>',
             handler = "grudge.control.AddStatus", name = 'confirm-signup',
+            defaults = {
+                "status": "confirmed"
+            }
+        ),
+
+        webapp2.Route(
+            r'/um/create',
+            handler = "grudge.control.Startup", name = 'signup',
+            defaults = {
+                "process": gripe.Config.app.workflows.usercreate,
+                "mapping": ["userid", "display_name"]
+            }
+        ),
+
+        webapp2.Route(
+            r'/um/confirmcreate/<code>',
+            handler = "grudge.control.AddStatus", name = 'confirm-create',
             defaults = {
                 "status": "confirmed"
             }

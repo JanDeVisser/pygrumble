@@ -82,14 +82,14 @@ class UserManager(gripe.auth.AbstractUserManager):
             user = None
         return user
 
-    def add(self, userid, password):
+    def add(self, userid, password, display_name = None):
         logger.debug("UserManager.add(%s, %s)", userid, password)
         user = self.get(userid)
         if user and user.exists():
             logger.debug("UserManager.add(%s, %s) User exists", userid, password)
             raise gripe.auth.UserExists(userid)
         else:
-            user = User(email = userid, password = password)
+            user = User(email = userid, password = password, display_name = display_name)
             user.put()
             logger.debug("UserManager.add(%s, %s) OK", userid, password)
             return user.id()
