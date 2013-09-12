@@ -16,38 +16,42 @@ com.sweattrails.api.internal.format.date = format_date
 com.sweattrails.api.internal.format.distance = function(value) { return format_distance(value) }
 com.sweattrails.api.internal.format.weight = function(value) { return weight(value, native_unit, true) }
 com.sweattrails.api.internal.format.length = function(value) { return length(value, native_unit, true) }
+
+com.sweattrails.api.internal.build.icon = function(col, elem) {
+    col.align = "center";
+    col.icons = {};
+    var icons = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "icon");
+    for (var ix = 0; ix < icons.length; ix++) {
+	var i = icons[ix];
+        var value = i.getAttribute("value");
+        var icon = i.getAttribute("icon");
+	col.icons[value] = icon;
+    }
+};
+
 com.sweattrails.api.internal.format.icon = function(value, col) {
-    var url
+    var url;
     if (col.url) {
-        url = col.url.replace('$$', value)
+        // Replace occurences of $$ with column value:
+        url = col.url.replace('$$', value);
+        // Replace occurrences of $<attribute> with <attribute> value:
         url = url.replace(/\$([\w]+)/g, function() {
-            return object[arguments[1]]
-        })
-    } else if ((value.indexOf("/") == 0) || (value.indexOf("http://") == 0) || (value.indexOf("https://") == 0)) {
-        url = value
+            return object[arguments[1]];
+        });
+    } else if (value in col.icons) {
+        url = col.icons[value];
     } else {
-        url = "/images/" + value + ".png"
+        url = value;
+    }
+    // If the URL is not fully qualified assume it refers to a .png in /image:
+    if (!url.match(/^(\/.+)|(https?:\/\/.+)/)) {
+        url = "/image/" + url + ".png";
     }
     var ret = new com.sweattrails.api.Image(url);
     ret.height = col.imgheight || col.size || "24";
     ret.width = col.imgwidth || col.size || "24";
-    return ret
-}
-com.sweattrails.api.internal.format.link = function(value, col, object) {
-    url = col.url.replace('$$', value)
-    url = url.replace(/\$([\w]+)/g, function() {
-        return object[arguments[1]]
-    })
-    var ret = new com.sweattrails.api.Link(value, url)
-    for (p in col.parameters) {
-        ret.parameter(p, object[col.parameters[p]])
-    }
-    return ret
-}
-
-com.sweattrails.api.internal.build.icon = function(col, elem) {
-     col.align = "center"
-}
+    return ret;
+};
 
 com.sweattrails.api.internal.build.link = function(col, elem) {
     col.parameters = {}
@@ -63,6 +67,18 @@ com.sweattrails.api.internal.build.link = function(col, elem) {
 	col.parameters[n] = v
     }
 }
+
+com.sweattrails.api.internal.format.link = function(value, col, object) {
+    url = col.url.replace('$$', value);
+    url = url.replace(/\$([\w]+)/g, function() {
+        return object[arguments[1]];
+    });
+    var ret = new com.sweattrails.api.Link(value, url);
+    for (p in col.parameters) {
+        ret.parameter(p, object[col.parameters[p]]);
+    }
+    return ret;
+};
 
 com.sweattrails.api.Column = function(table, label) {
     this.bridge = new com.sweattrails.api.internal.DataBridge()

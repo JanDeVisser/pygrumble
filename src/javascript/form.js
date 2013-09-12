@@ -207,7 +207,7 @@ com.sweattrails.api.Form.prototype.applyData = function() {
 
 com.sweattrails.api.Form.prototype.submit = function() {
     this.errors = [];
-    if (this.validator != null) {
+    if (this.validator) {
         ST_int.buildErrors(this, this.validator());
     }
     var f = null;
@@ -220,7 +220,7 @@ com.sweattrails.api.Form.prototype.submit = function() {
         this.render(this.mode);
     } else {
         this.applyData();
-        this.progress("Saving ...");
+        this.progress(this.submitMessage);
         console.log("Submitting form " + this.id);
         if (this.form) {
             this.form.submit();
@@ -355,10 +355,11 @@ com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
     if (elem.getAttribute("class")) {
     	form.className = elem.getAttribute("class")
     }
-    if (elem.getAttribute("popup") && ("true" == elem.getAttribute("popup"))) {
-        form.makePopup()
-    } else if (elem.getAttribute("modal") && ("true" == elem.getAttribute("modal"))) {
-        form.makeModal()
+    form.submitMessage = (elem.getAttribute("submitmessage")) ? elem.getAttribute("submitmessage") : "Saving ...";
+    if (elem.getAttribute("popup") && ("true" === elem.getAttribute("popup"))) {
+        form.makePopup();
+    } else if (elem.getAttribute("modal") && ("true" === elem.getAttribute("modal"))) {
+        form.makeModal();
     }
     var fields = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "field")
     for (var j = 0; j < fields.length; j++) {

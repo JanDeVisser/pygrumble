@@ -428,6 +428,7 @@ class Dispatcher(object):
         return Dispatcher(reqctx)
 
     def __enter__(self):
+        logger.debug("Dispatcher: Handling %s %s with body\n%s", self.request.method, self.request.path_qs, self.request.body)
         if hasattr(self.reqctx, "app"):
             app_path = self.reqctx.app
             logger.info("Dispatcher: dispatching to app %s", app_path)

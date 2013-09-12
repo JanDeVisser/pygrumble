@@ -18,7 +18,7 @@ import gripe
 import grit
 import grumble
 
-logger = gripe.get_logger("grit")
+logger = gripe.get_logger(__name__)
 
 class ModelBridge(object):
 #    def __init__(self, kind):
@@ -89,17 +89,21 @@ class ModelBridge(object):
 
     def query(self, q):
         # FIXME adapt to Model.query
-        print "query(%s)" % q
+        q["keys_only"] = False
+        logger.info("ModelBridge::query(%s)", q)
         q = self.prepare_query(q)
         return [o for o in self.kind().query(**q)]
 
     def load(self):
-        data = self.request.body
-        data = urllib.unquote_plus(data)
-        if data.endswith("="):
-            (data, eq, empty) = data.rpartition("=")
-        logging.debug("data = %s", data)
-        return json.loads(data)
+        data = self.request.body if self.request.method == "POST" else self.request.headers.get("ST-JSON-Request")
+        if data and data != '':
+            data = urllib.unquote_plus(data)
+            if data.endswith("="):
+                (data, eq, empty) = data.rpartition("=")
+            logger.debug("load() - data = %s", data)
+            return json.loads(data)
+        else:
+            return {}
 
     def get_objects(self):
         ret = []
@@ -108,14 +112,10 @@ class ModelBridge(object):
         elif self.key() and self.object():
             ret = [ self.object() ]
         else:
-            body = self.request.body
-            q = {}
-            if body and body != '':
-                logging.info("query=%s", body)
-                q = self.load()
+            q = self.load()
             ret = self.query(q)
         ret = filter(lambda o: o.can_read(), ret)
-        logging.debug("get_objects: returning %s", [ o.id() for o in ret ])
+        logger.debug("get_objects: returning %s", [ o.id() for o in ret ])
         return ret
 
     def can_read(self):
@@ -144,6 +144,7 @@ class PageHandler(BridgedHandler):
     def get_context(self, ctx):
         objs = self.get_objects()
         obj = objs[0] if objs and len(objs) else None
+        ctx["key"] = self.key()
         ctx["object"] = obj
         return ctx
 
@@ -196,7 +197,7 @@ class JSHandler(BridgedHandler):
 class PropertyBridgedHandler(BridgedHandler):
     def _initialize_bridge(self, key, kind, prop):
         super(PropertyBridgedHandler, self)._initialize_bridge(key, kind)
-        logging.debug(self.kind())
+        logger.debug(self.kind())
         self.property(prop)
 
     def property(self, prop = None):
@@ -215,7 +216,7 @@ class PropertyBridgedHandler(BridgedHandler):
 
 class ImageHandler(PropertyBridgedHandler):
     def post(self, key = None, kind = None, prop = None):
-        logging.debug("ImageHandler.post(%s.%s, %s)", kind, prop, key)
+        logger.debug("ImageHandler.post(%s.%s, %s)", kind, prop, key)
         self._initialize_bridge(key, kind, prop)
         has_access = True
         if hasattr(self, "allow_access") and callable(self.allow__access):
@@ -233,7 +234,7 @@ class ImageHandler(PropertyBridgedHandler):
             self.error(401)
 
     def get(self, key = None, kind = None, prop = None):
-        logging.debug("ImageHandler.get(%s.%s, %s)", kind, prop, key)
+        logger.debug("ImageHandler.get(%s.%s, %s)", kind, prop, key)
         self._initialize_bridge(key, kind, prop)
         has_access = True
         if hasattr(self, "allow_access") and callable(self.allow__access):
@@ -243,7 +244,7 @@ class ImageHandler(PropertyBridgedHandler):
                 self.initialize_bridge()
             if self.object() and self.can_read():
                 if getattr(self.object(), self.property() + "_hash") in self.request.if_none_match:
-                    logging.debug("Client has up-to-date image")
+                    logger.debug("Client has up-to-date image")
                     self.response.status = "304"
                 else:
                     blob = getattr(self.object(), self.property());
@@ -272,9 +273,9 @@ class JSONHandler(BridgedHandler):
         logger.info("Invoking %s on %s using arguments *%s, **%s", method, self.__class__.__name__, args, kwargs)
         return getattr(self, method)(*args, **kwargs)
 
-    def post(self, kind = None):
-        logging.debug("JSONHandler.post(%s)", kind)
-        self._initialize_bridge(None, kind)
+    def post(self, key = None, kind = None):
+        logger.info("JSONHandler.post(%s,%s)\n%s", key, kind, self.request.body)
+        self._initialize_bridge(key, kind)
         has_access = True
         if hasattr(self, "allow_access") and callable(self.allow__access):
             has_access = self.allow_access()
@@ -285,7 +286,6 @@ class JSONHandler(BridgedHandler):
             descriptors = descriptors if isinstance(descriptors, list) else [descriptors]
             ret = []
             for d in descriptors:
-                self.key(None, True)
                 if "key" in d:
                     self.key(d["key"], True)
                 if "_invoke" in d and "name" in d["_method"]:
@@ -303,7 +303,7 @@ class JSONHandler(BridgedHandler):
         self.error(401)
 
     def get(self, key = None, kind = None):
-        logging.debug("JSONHandler.get(%s, %s)", key, kind)
+        logger.info("JSONHandler.get(%s,%s)\n%s", key, kind, self.request.headers.get("ST-JSON-Request"))
         self._initialize_bridge(key, kind)
         has_access = True
         if hasattr(self, "allow_access") and callable(self.allow__access):
@@ -319,7 +319,7 @@ class JSONHandler(BridgedHandler):
         self.error(401)
 
     def delete(self, key = None, kind = None):
-        logging.debug("JSONHandler.delete(%s, %s)", key, kind)
+        logger.debug("JSONHandler.delete(%s, %s)", key, kind)
         self._initialize_bridge(key, kind)
         has_access = True
         if hasattr(self, "allow_access") and callable(self.allow__access):
@@ -337,7 +337,7 @@ class JSONHandler(BridgedHandler):
 
 class RedirectHandler(BridgedHandler):
     def get(self, key = None, kind = None):
-        logging.info("RedirectHandler(%s): path: %s key: %s", self.__class__.__name__, self.request.path, str(key))
+        logger.info("RedirectHandler(%s): path: %s key: %s", self.__class__.__name__, self.request.path, str(key))
         self._initialize_bridge(kind)
         has_access = True
         if hasattr(self, "allow_access") and callable(self.allow__access):

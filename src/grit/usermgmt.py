@@ -201,9 +201,10 @@ class UserCreate(grumble.Model):
 
     def create_user(self):
         try:
-            self.password = um.gen_password()
             um = grit.Session.get_usermanager()
+            self.password = um.gen_password()
             um.add(self.userid, self.password, self.display_name)
+            self.put()
             logger.debug("Create User OK")
             return self.user_created
         except gripe.auth.UserExists as e:

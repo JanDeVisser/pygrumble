@@ -306,129 +306,144 @@ com.sweattrails.api.TabManager.prototype.selectTab = function(code) {
     return true
 }
 
-com.sweattrails.api.tabManager = new com.sweattrails.api.TabManager()
+com.sweattrails.api.tabManager = new com.sweattrails.api.TabManager();
 
 com.sweattrails.api.internal.DataBridge = function() {
-    this.get = null
-    this.set = null
-}
+    this.get = null;
+    this.set = null;
+};
 
 com.sweattrails.api.internal.DataBridge.prototype.setValue = function(object, value) {
-    var s = this.set || this.get
-    if (typeof(s) == "function") {
-    	s(object, value)
+    var s = this.set || this.get;
+    if (typeof(s) === "function") {
+    	s(object, value);
     } else if (s) {
-        var p = s
-        var o = object
+        var p = s;
+        var o = object;
         for (var dotix = p.indexOf("."); (dotix > 0) && (dotix < (p.length-1)); dotix = p.indexOf(".")) {
-            var subp = p.substring(0, dotix)
+            var subp = p.substring(0, dotix);
             if (o) {
-                if (!o[subp]) o[subp] = {}
-                o = o[subp]
+                if (!o[subp]) o[subp] = {};
+                o = o[subp];
             }
-            p = p.substring(dotix + 1)
+            p = p.substring(dotix + 1);
         }
-        if (o) o[p] = value
+        if (o) o[p] = value;
     }
-}
-
+};
 
 com.sweattrails.api.internal.DataBridge.prototype.getValue = function(object, context) {
-    var ret = null
-    if (typeof(this.get) == "function") {
-    	ret = this.get(object, context)
-    } else if (this.get != null) {
-        var p = this.get
-        var o = object
+    var ret = null;
+    if (typeof(this.get) === "function") {
+    	ret = this.get(object, context);
+    } else if (this.get !== null) {
+        var p = this.get;
+        var o = object;
         for (var dotix = p.indexOf("."); (dotix > 0) && (dotix < (p.length-1)); dotix = p.indexOf(".")) {
-            o = o && o[p.substring(0, dotix)]
-            p = p.substring(dotix + 1)
+            o = o && o[p.substring(0, dotix)];
+            p = p.substring(dotix + 1);
         }
-        ret = o && o[p]
+        ret = o && o[p];
     }
-    return ret
+    return ret;
+};
+
+function getvar(name) {
+    name = name || "";
+    var components = name.split(".");
+    var ns = this;
+    for (var ix = 0; ix < components.length; ix++) {
+        var component = components[ix].trim();
+        if (component in ns) {
+            ns = ns[component];
+        } else {
+            return undefined;
+        }
+    }
+    return ns;
 }
 
-
 function getfunc(func) {
-    if (typeof(func) == "function") {
-        return func
+    if (typeof(func) === "function") {
+        return func;
     } else {
-        return ((typeof(this[func]) == "function") && this[func]) ||
-               ((typeof(com.sweattrails.api[func]) == "function") && com.sweattrails.api[func])
+        var v = getvar(func)
+        return (typeof(v) === "function") && v;
     }
 }
 
 function getChildrenByTagNameNS(elem, ns, tagname) {
-    var ret = []
+    var ret = [];
     for (var ix = 0; ix < elem.childNodes.length; ix++) {
-        var c = elem.childNodes[ix]
-        if ((c.namespaceURI == ns) && (c.localName == tagname)) ret.push(c)
+        var c = elem.childNodes[ix];
+        if ((c.namespaceURI === ns) && (c.localName === tagname)) {
+            ret.push(c);
+        }
     }
-    return ret
-}
+    return ret;
+};
 
 com.sweattrails.api.renderObject = function(elem, content) {
-    if ((typeof(content) == "object") && (typeof(content.render) == "function")) {
-        content = content.render()
+    if ((typeof(content) === "object") && (typeof(content["render"]) === "function")) {
+        content = content.render();
     }
-    if (typeof(content) == "string") {
-        elem.innerHTML = content
-    } else if (content == null) {
-        elem.innerHTML = "&#160;"
+    if (typeof(content) === "string") {
+        elem.innerHTML = content;
+    } else if (!content) {
+        elem.innerHTML = "&#160;";
     } else {
-        elem.appendChild(content)
+        elem.appendChild(content);
     }
-}
+};
 
 
 com.sweattrails.api.internal.DOMElementLike = function(obj, ns, tagname) {
-    this._ns = ns
-    this._tagname = tagname
-    this.object = obj || {}
-}
+    this._ns = ns;
+    this._tagname = tagname;
+    this.object = obj || {};
+};
 
 com.sweattrails.api.internal.DOMElementLike.prototype.getAttribute = function(attr) {
-    ret = (attr in this.object) ? this.object[attr] : null
+    ret = (attr in this.object) ? this.object[attr] : null;
     if (["number", "string", "boolean"].indexOf(typeof(ret)) >= 0) {
-        ret = ret.toString()
+        ret = ret.toString();
     } else {
-        ret = null
+        ret = null;
     }
-    return ret
-}
+    return ret;
+};
 
 Object.defineProperty(com.sweattrails.api.internal.DOMElementLike.prototype, "childNodes", {
     get: function() {
-        ret = []
+        ret = [];
         for (var c in this.object) {
-            var o = this.object[c]
-            if (typeof(o) == "object") {
-                o = (Array.isArray(o)) ? o : [o]
+            var o = this.object[c];
+            if (typeof(o) === "object") {
+                o = (Array.isArray(o)) ? o : [o];
                 for (var ix in o) {
-                    ret.append(new com.sweattrails.api.internal.DOMElementLike(o[ix], this._ns, c))
+                    ret.append(new com.sweattrails.api.internal.DOMElementLike(o[ix], this._ns, c));
                 }
             }
         }
-        return ret
+        return ret;
     }
-})
+});
 
 Object.defineProperty(com.sweattrails.api.internal.DOMElementLike.prototype, "namespaceURI", {
     get: function() {
-        return this._ns
+        return this._ns;
     }
-})
+});
 
 Object.defineProperty(com.sweattrails.api.internal.DOMElementLike.prototype, "localName", {
     get: function() {
-        return this._tagname
+        return this._tagname;
     }
-})
+});
 
 getDOMElement = function(obj) {
-    return (obj && obj.getAttribute) ? obj : new com.sweattrails.api.internal.DOMElementLike(obj, ST.xmlns, "object")
-}
+    return (obj && obj.getAttribute) ? obj : new com.sweattrails.api.internal.DOMElementLike(obj, ST.xmlns, "object");
+};
 
 /*
  * MAYBE MOVE ME
@@ -557,7 +572,7 @@ function unit(which, metric_imperial) {
 function speed_ms_to_unit(spd, metric_imperial) {
     if (metric_imperial == null) metric_imperial = native_unit
     kmh = spd * 3.6
-    if (metric_imperial.toLowerCase().substr(0,1) = 'm') {
+    if (metric_imperial.toLowerCase().substr(0,1) == 'm') {
 	return kmh
     } else {
 	return kmh*0.6213712

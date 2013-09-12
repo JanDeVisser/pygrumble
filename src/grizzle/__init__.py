@@ -25,6 +25,14 @@ class UserGroup(grumble.Model, gripe.auth.AbstractUserGroup):
     def _explicit_roles(self):
         return set(self.has_roles)
 
+"""
+    Banned - User is still there, content is still there, user cannot log in.
+        Revertable.
+    Inactive - At user's request, User is "deleted", content deleted, user 
+        cannot log in. Not revertable.
+    Deleted - Admin "deleted" user, content deleted, user cannot log in. 
+        Not revertable.
+"""
 UserStatus = gripe.Enum(['Unconfirmed', 'Active', 'Admin', 'Banned', 'Inactive', 'Deleted'])
 GodList = ('jan@de-visser.net',)
 

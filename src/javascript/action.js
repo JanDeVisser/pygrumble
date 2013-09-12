@@ -34,7 +34,7 @@ com.sweattrails.api.internal.SaveAction.prototype.onClick = function() {
     if (this.onsubmitted) {
         this.action.owner.onsubmitted = this.onsubmitted.bind(this.action.owner);
     }
-	this.action.container.inprogress = this;
+    this.action.container.inprogress = this;
     this.action.owner.submit();
 };
 
@@ -44,6 +44,24 @@ com.sweattrails.api.internal.CancelAction = function() {
 
 com.sweattrails.api.internal.CancelAction.prototype.onClick = function() {
     this.action.owner.close();
+};
+
+com.sweattrails.api.internal.SubmitAction = function(elem) {
+    this.id = "submit";
+    this.ds = com.sweattrails.api.dataSourceBuilder.build(elem);
+    this.ds.addView(this)
+    if (elem.getAttribute("onsubmitted")) {
+        this.onsubmitted = getfunc(elem.getAttribute("onsubmitted"));
+    }
+    if (elem.getAttribute("redirect")) {
+        var destination = elem.getAttribute("redirect");
+        console.log("SubmitAction.redirect: " + destination);
+        this.onredirect = function(href) { return destination; };
+    }
+};
+
+com.sweattrails.api.internal.SubmitAction.prototype.onClick = function() {
+    this.ds.submit();
 };
 
 com.sweattrails.api.internal.LinkAction = function(elem) {
@@ -70,22 +88,23 @@ com.sweattrails.api.internal.HTMLAction.prototype.render = function(parent) {
 };
 
 com.sweattrails.api.internal.CustomAction = function(name, action) {
-    this.name = name || action
-    this.onclick = getfunc(action)
-    this.id = "custom"
-}
+    this.name = name || action;
+    this.onclick = getfunc(action);
+    this.id = "custom";
+};
 
 com.sweattrails.api.internal.CustomAction.prototype.onClick = function() {
-    this.onclick(this.action.owner, this.action)
-}
+    this.onclick(this.action.owner, this.action);
+};
 
-com.sweattrails.api.internal.actions = {}
-com.sweattrails.api.internal.actions.edit = com.sweattrails.api.internal.EditAction
-com.sweattrails.api.internal.actions.new = com.sweattrails.api.internal.NewAction
-com.sweattrails.api.internal.actions.save = com.sweattrails.api.internal.SaveAction
-com.sweattrails.api.internal.actions.cancel = com.sweattrails.api.internal.CancelAction
-com.sweattrails.api.internal.actions.link = com.sweattrails.api.internal.LinkAction
-com.sweattrails.api.internal.actions.html = com.sweattrails.api.internal.HTMLAction
+com.sweattrails.api.internal.actions = {};
+com.sweattrails.api.internal.actions.edit = com.sweattrails.api.internal.EditAction;
+com.sweattrails.api.internal.actions.new = com.sweattrails.api.internal.NewAction;
+com.sweattrails.api.internal.actions.save = com.sweattrails.api.internal.SaveAction;
+com.sweattrails.api.internal.actions.cancel = com.sweattrails.api.internal.CancelAction;
+com.sweattrails.api.internal.actions.submit = com.sweattrails.api.internal.SubmitAction;
+com.sweattrails.api.internal.actions.link = com.sweattrails.api.internal.LinkAction;
+com.sweattrails.api.internal.actions.html = com.sweattrails.api.internal.HTMLAction;
 
 com.sweattrails.api.ActionContainer = function(owner) {
     this.id = ((arguments.length > 1) && arguments[1]) || "actions"

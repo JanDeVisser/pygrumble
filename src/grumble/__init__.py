@@ -73,10 +73,19 @@ def get_sessionbridge():
 
 QueryType = gripe.Enum(['Columns', 'KeyName', 'Update', 'Insert', 'Delete', 'Count'])
 
+class Sort(object):
+    def __init__(self, colname, ascending):
+        self.colname = colname
+        self.ascending = ascending
+        
+    def order(self):
+        return "ASC" if self.ascending else "DESC"
+
 class ModelQuery(object):
     def __init__(self):
         self._owner = None
         self._filters = []
+        self._sortorder = []
 
     def _reset_state(self):
         pass
@@ -189,6 +198,14 @@ class ModelQuery(object):
     def filters(self):
         return self._filters
 
+    def add_sort(self, colname, ascending):
+        self._reset_state()
+        self._sortorder.append(Sort(colname, ascending))
+        return self
+
+    def sortorder(self):
+        return self._sortorder
+
     def execute(self, kind, type):
         if isinstance(type, bool):
             type = QueryType.KeyName if type else QueryType.Columns
@@ -300,6 +317,9 @@ class ModelQueryRenderer(object):
 
     def filters(self):
         return self._query.filters()
+    
+    def sortorder(self):
+        return self._query.sortorder()
 
     def _update_audit_info(self, new_values, insert):
         # Set update audit info:
@@ -382,6 +402,8 @@ class ModelQueryRenderer(object):
                     filtersql = " AND ".join(['%s %%s' % e for (e, v) in self.filters()])
                     sql += glue + filtersql
                     vals += [v for (e, v) in self.filters()]
+            if type == QueryType.Columns and self.sortorder():
+                sql += ' ORDER BY ' + ', '.join([('"' + c.colname + '" ' + c.order()) for c in self.sortorder()])
             cur = tx.get_cursor()
             cur.execute(sql, vals, columns = cols, key_index = key_ix)
             return cur
@@ -1434,6 +1456,9 @@ class Model(object):
             q.set_parent(kwargs["parent"])
         if "ownerid" in kwargs:
             q.owner(kwargs["ownerid"])
+        if "sortorder" in kwargs:
+            for s in kwargs["sortorder"]:
+                q.add_sort(s["column"], s.get("ascending", True))
         ix = 0
         while ix < len(args):
             q.add_filter(args[ix], args[ix + 1])
