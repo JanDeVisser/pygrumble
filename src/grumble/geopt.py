@@ -7,6 +7,7 @@ __date__ = "$11-Feb-2013 8:28:51 AM$"
 import re
 import psycopg2
 from psycopg2 import extensions
+import gripe.pgsql
 import grumble
 
 class GeoPt(object):
@@ -101,31 +102,30 @@ def cast_point(value, cur):
     else:
         raise psycopg2.InterfaceError("bad point representation: %r" % value)
 
-with grumble.Tx.begin() as tx:
+with gripe.pgsql.Tx.begin() as tx:
     cur = tx.get_cursor()
     cur.execute("SELECT NULL::point")
     point_oid = cur.description[0][1]
-    print point_oid
 
 POINT = extensions.new_type((point_oid,), "POINT", cast_point)
 extensions.register_type(POINT)
 
 if __name__ == "__main__":
-    with grumble.Tx.begin():
+    with gripe.pgsql.Tx.begin():
         class Test(grumble.Model):
             _flat = True
             label_prop = "loc_label"
             loc_label = grumble.TextProperty(required = True)
             loc = GeoPtProperty()
 
-    with grumble.Tx.begin():
+    with gripe.pgsql.Tx.begin():
         jan = Test(loc_label = "Jan", loc = GeoPt(23, -5))
         print "++", jan.loc_label, jan.loc
         jan.put()
         print "+++", jan.id(), jan.get_name(), jan.get_label()
         k = jan.key()
 
-    with grumble.Tx.begin():
+    with gripe.pgsql.Tx.begin():
         jan = Test.get(k)
         print "++", jan.loc_label, jan.loc
 

@@ -52,6 +52,13 @@ class ModelBridge(object):
     def key(self, key = None, override = False):
         self._key = None if not hasattr(self, "_key") else self._key
         self._obj = None if not hasattr(self, "_obj") else self._obj
+        if key and key.startswith("_$"):
+            key = self.request.get(key[2:])
+        elif self.user:
+            if key == "__uid":
+                key = self.user.uid()
+            elif key == "__userobjid":
+                key = self.user.id() if isinstance(self.user, grumble.Model) else None
         if (key and not self._key) or override:
             self._key = str(key) if key else None
             self._obj = None
@@ -148,8 +155,10 @@ class PageHandler(BridgedHandler):
         ctx["object"] = obj
         return ctx
 
-    def get(self, key = None, kind = None):
+    def get(self, key = None, kind = None, template = None):
         self._initialize_bridge(key, kind)
+        if template:
+            self.template = template
         has_access = True
         if hasattr(self, "allow_access") and callable(self.allow__access):
             has_access = self.allow_access()

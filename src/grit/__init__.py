@@ -225,11 +225,11 @@ class Session(object):
 
     @classmethod
     def get_usermanager(cls):
-        return Session._get_manager("user", "grit.auth.UserManager")
+        return Session._get_manager("user", "gripe.auth.UserManager")
 
     @classmethod
     def get_rolemanager(cls):
-        return Session._get_manager("role", "grit.role.RoleManager")
+        return Session._get_manager("role", "gripe.role.RoleManager")
 
     @classmethod
     def get_sessionmanager(cls):

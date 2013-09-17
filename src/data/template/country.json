@@ -1,0 +1,20 @@
+{
+    "_author": "Jan de Visser",
+    "_version": "1.0",
+    "_description": "...",
+    "data": [
+        {
+            "model": "country",
+            "data": [
+                { "name": "United States", "code": "US" },
+                { "name": "Canada", "code": "CA" },
+                { "name": "United Kingdom", "code": "GB" },
+                { "name": "Netherlands", "code": "NL" },
+                { "name": "Germany", "code": "DE" },
+                { "name": "Switzerland", "code": "CH" },
+                { "name": "Austria", "code": "AT" },
+                { "name": "Belgium", "code": "BE" }
+            ]
+        }
+    ]
+}

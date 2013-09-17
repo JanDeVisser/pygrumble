@@ -10,10 +10,10 @@ print >> sys.stderr, "Import %s" % __name__
 import base64
 import datetime
 import json
+import hashlib
 import logging
 import os
 import os.path
-import sha
 import sys
 import threading
 import traceback
@@ -124,7 +124,7 @@ class ModelQuery(object):
     def set_ancestor(self, ancestor):
         self._reset_state()
         assert not (self.has_parent() or self.has_keyname()), \
-            "Cannot query for ancestor or keyname and parent at the same time"
+            "Cannot query for ancestor and keyname or parent at the same time"
         assert ((ancestor is None) or
                 isinstance(ancestor, (basestring, Model, Key))), \
                 "Must specify an ancestor object or None in ModelQuery.set_ancestor"
@@ -186,6 +186,9 @@ class ModelQuery(object):
             self._owner = o
         return self._owner
 
+    def clear_filters(self):
+        self._filters = []
+
     def add_filter(self, expr, value):
         self._reset_state()
         if isinstance(value, Key):
@@ -197,6 +200,9 @@ class ModelQuery(object):
 
     def filters(self):
         return self._filters
+
+    def clear_sort(self):
+        self._sortorder = []
 
     def add_sort(self, colname, ascending):
         self._reset_state()
@@ -388,7 +394,7 @@ class ModelQueryRenderer(object):
                     assert not self.flat(), "Cannot perform ancestor queries on flat table '%s'" % self.name()
                     glue = ' AND '
                     sql += ' WHERE "_ancestors" LIKE %s'
-                    vals.append(str(self.ancestor()) + "%")
+                    vals.append(str(self.ancestor().get().path()) + "%")
                 if self.has_parent():
                     assert not self.flat(), "Cannot perform parent queries on flat table '%s'" % self.name()
                     sql += glue + '"_parent" = %s'
@@ -696,6 +702,8 @@ class ModelProperty(object):
             ret.default = prop.default
             ret.private = prop.private
             ret.transient = prop.transient
+            ret.getter = prop.getter
+            ret.setter = prop.setter
             ret.is_label = prop.is_label
             ret.is_key = prop.is_key
             ret.scoped = prop.scoped
@@ -714,6 +722,8 @@ class ModelProperty(object):
             ret.default = kwargs.get("default", None)
             ret.private = kwargs.get("private", False)
             ret.transient = kwargs.get("transient", False)
+            ret.getter = kwargs.get("getter", None)
+            ret.setter = kwargs.get("setter", None)
             ret.is_label = kwargs.get("is_label", False)
             ret.is_key = kwargs.get("is_key", False)
             ret.scoped = kwargs.get("scoped", False) if ret.is_key else False
@@ -757,6 +767,9 @@ class ModelProperty(object):
     def _on_store(self, value):
         pass
 
+    def _after_store(self, value):
+        pass
+
     def validate(self, value):
         if (value is None) and self.required:
             raise PropertyRequired(self.name)
@@ -774,14 +787,20 @@ class ModelProperty(object):
     def __get__(self, instance, owner = None):
         if not instance:
             return self
-        instance._load()
-        return instance._values[self.name] if self.name in instance._values else None
+        if self.transient and self.getter:
+            return self.getter(instance)
+        else:
+            instance._load()
+            return instance._values[self.name] if self.name in instance._values else None
 
     def __set__(self, instance, value):
         if self.is_key and not hasattr(instance, "_brandnew"):
             return
-        instance._load()
-        instance._values[self.name] = self.convert(value) if value is not None else None
+        if self.transient and self.setter:
+            self.setter(instance, value)
+        else:
+            instance._load()
+            instance._values[self.name] = self.convert(value) if value is not None else None
 
     def __delete__(self, instance):
         return NotImplemented
@@ -1109,11 +1128,13 @@ class Model(object):
         if hasattr(self, "_brandnew"):
             for prop in self._properties.values():
                 prop._on_insert(self)
-            self.initialize()
+            if hasattr(self, "initialize") and callable(self.initialize):
+                self.initialize()
         for prop in self._properties.values():
             prop._on_store(self)
-        self.on_store()
-        self.validate()
+        if hasattr(self, "on_store") and callable(self.on_store):
+            self.on_store()
+        self._validate()
 
         values = {}
         for prop in self._properties.values():
@@ -1129,25 +1150,20 @@ class Model(object):
         ModelQuery.set(hasattr(self, "_brandnew"), self.key(), values)
         if hasattr(self, "_brandnew"):
             del self._brandnew
+        for prop in self._properties.values():
+            prop._after_store(self)
+        if hasattr(self, "after_store") and callable(self.after_store):
+            self.after_store()
         gripe.pgsql.Tx.put_in_cache(self)
 
-    def initialize(self):
-        pass
+    def _on_delete(self):
+        return self.on_delete(self) if hasattr(self, "on_delete") and getattr(cls, "on_delete") else True
 
-    def on_store(self):
-        pass
-
-    def on_delete(self):
-        on_del = self.has_on_delete()
-        return on_del() if on_del else True
-
-    @classmethod
-    def has_on_delete(cls):
-        return hasattr(cls, "_on_delete") and getattr(cls, "_on_delete")
-
-    def validate(self):
-        for (name, prop) in self._properties.items():
+    def _validate(self):
+        for prop in self._properties.values():
             prop.validate(prop.__get__(self, None))
+        if hasattr(self, "validate") and callable(self.validate):
+            self.validate()
 
     def id(self):
         if not self._id and self._key_name:
@@ -1517,7 +1533,7 @@ class Model(object):
 
 def delete(model):
     if not hasattr(model, "_brandnew") and model.exists():
-        if model.on_delete():
+        if model._on_delete():
             logger.info("Deleting model %s.%s", model.kind(), model.key())
             ModelQuery.delete_one(model.key())
         else:
@@ -1591,18 +1607,19 @@ class Key(object):
 
 
 class Query(ModelQuery):
-    def __init__(self, kind, keys_only = True, **kwargs):
+    def __init__(self, kind, keys_only = True, include_subclasses = True, **kwargs):
         super(Query, self).__init__()
-        if isinstance(kind, (list, tuple)):
+        try:
             kinds = [k if isinstance(k, ModelMetaClass) else Model.for_name(k) for k in kind]
-        else:
+        except TypeError:
             assert isinstance(kind, basestring) or isinstance(kind, ModelMetaClass)
             kinds = [kind] if isinstance(kind, ModelMetaClass) else [Model.for_name(kind)]
         self.kind = []
         for k in kinds:
             self.kind.append(k.kind())
-            for sub in k.subclasses():
-                self.kind.append(sub.kind())
+            if include_subclasses:
+                for sub in k.subclasses():
+                    self.kind.append(sub.kind())
         ancestor = kwargs.get("ancestor")
         if ancestor:
             self.set_ancestor(ancestor)
@@ -1629,6 +1646,9 @@ class Query(ModelQuery):
                 logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
                 return
         return super(Query, self).set_parent(parent)
+    
+    def get_kind(self, ix = 0):
+        return Model.for_name(self.kind[ix]) if self.kind and ix < len(self.kind) else None
 
     def __iter__(self):
         self._iter = iter(self.kind)
@@ -1657,7 +1677,8 @@ class Query(ModelQuery):
     def delete(self):
         res = 0
         for k in self.kind:
-            if Model.for_name(k).has_on_delete():
+            cls = Model.for_name(k)
+            if hasattr(cls, "on_delete") and callable(cls.on_delete):
                 for m in self.execute(k, self.keys_only):
                     if m.on_delete():
                         res += self.delete_one(m)
@@ -1736,7 +1757,7 @@ class PasswordProperty(StringProperty):
     def hash(cls, password):
         return password \
             if password and password.startswith("sha://") \
-            else "sha://%s" % sha.sha(password if password else "").hexdigest()
+            else "sha://%s" % hashlib.sha1(password if password else "").hexdigest()
 
 class JSONProperty(ModelProperty):
     datatype = dict

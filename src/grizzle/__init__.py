@@ -25,6 +25,9 @@ class UserGroup(grumble.Model, gripe.auth.AbstractUserGroup):
     def _explicit_roles(self):
         return set(self.has_roles)
 
+class UserComponent(grumble.Model):
+    pass
+
 """
     Banned - User is still there, content is still there, user cannot log in.
         Revertable.
@@ -38,11 +41,23 @@ GodList = ('jan@de-visser.net',)
 
 class User(grumble.Model, gripe.auth.AbstractUser):
     _flat = True
+    _resolved_parts = set()
     email = grumble.TextProperty(is_key = True)
     password = grumble.PasswordProperty()
     status = grumble.TextProperty(choices = UserStatus, default = 'Unconfirmed')
     display_name = grumble.TextProperty(is_label = True)
     has_roles = grumble.ListProperty()
+    
+    def after_store(self):
+        for m in gripe.Config.app.grizzle.userparts:
+            if m not in self._resolved_parts:
+                logger.debug("grizzle.User.after_store(%s): Resolving user part %s", self.email, m)
+                gripe.resolve(m)
+                self._resolved_parts.add(m)
+            logger.debug("grizzle.User.after_store(%s): Creating user part %s", self.email, m)
+            k = grumble.Model.for_name(m)
+            component = k(parent = self)
+            component.put()
 
     def is_active(self):
         """
@@ -64,10 +79,7 @@ class User(grumble.Model, gripe.auth.AbstractUser):
 
     def _explicit_roles(self):
         return set(self.has_roles)
-
-class UserComponent(grumble.Model):
-    pass
-
+    
 class GroupsForUser(grumble.Model):
     _flat = True
     user = grumble.ReferenceProperty(reference_class = User)

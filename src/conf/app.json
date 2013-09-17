@@ -55,5 +55,5 @@
         { "path": "/image/.+|/css/.+|/javascript/.+", "roles": [] },
         { "path": "/json/.+|/img/.+", "app": "grit.handlers.app", "roles": [ "admin" ]}
     ],
-    "components": [ "grizzle" ]
+    "components": [ "grizzle", "sweattrails" ]
 }

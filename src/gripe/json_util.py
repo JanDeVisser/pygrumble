@@ -75,6 +75,12 @@ def dict_to_time(d):
     return datetime.time(d['hour'], d['minute'], d['second']) if d else None
 
 class JSON(object):
+    def json_str(self):
+        return json.dumps(self._convert_out(self))
+        
+    def file_write(self, fname):
+        gripe.write_file(fname, self.json_str())
+        
     def _convert(self, obj):
         if isinstance(obj, dict):
             keys = set(obj.keys())
@@ -194,9 +200,6 @@ class JSONObject(dict, JSON):
             else:
                 # Overwrite current value with value from other:
                 self[k] = v
-        
-    def json_str(self):
-        return json.dumps(self._convert_out(self))
         
     def db_put(self, db = None, id = None):
         self._db = db if db is not None else self._db

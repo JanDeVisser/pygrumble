@@ -48,7 +48,7 @@ def read_file(fname):
         with fp:
             return fp.read()
 
-def write_file(fname, data, mode):
+def write_file(fname, data, mode = "w+"):
     filename = os.path.join(root_dir(), fname)
     with open(filename, mode) as fp:
         return fp.write(data)
@@ -132,6 +132,13 @@ class Config(object):
         value = cls.get_key(path)
         logger.debug("Config.resolve(get_key(%s) --> %s)", path, value)
         return resolve(value, default)
+    
+    def set(self, section, config):
+        config = gripe.json.json_util.JSONObject(config) \
+            if not isinstance(config, gripe.json.json_util.JSONObject) \
+            else config
+        config.file_write("conf/%s.json" % section)
+        setattr(cls, section, config)
 
     @classmethod
     def _load(cls):

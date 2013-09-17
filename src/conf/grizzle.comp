@@ -4,5 +4,8 @@
     "usermanager": "grizzle.UserManager",
     "mounts": [
         { "path": "/users/?|/users/.+", "app": "grizzle.app", "roles": [ "admin" ]}
-    ]
+    ],
+    "grizzle": {
+        "userparts": [ "sweattrails.Profile" ]
+    }
 }
