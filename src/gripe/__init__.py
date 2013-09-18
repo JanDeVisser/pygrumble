@@ -1,14 +1,13 @@
 __author__ = "jan"
 __date__ = "$18-Feb-2013 11:06:29 AM$"
 
-import sys
-print >> sys.stderr, "Import %s" % __name__
-
 import importlib
 import json
 import logging
 import os
 import os.path
+import sys
+import threading
 
 import gripe.json_util
 
@@ -65,6 +64,26 @@ def resolve(funcname, default = None):
 def abstract(obj, method):
     assert 0, "Class '%s' does not implement method '%s'" % (self.__class__.__name__, method)
 
+class LoopDetector(set):
+    _tl = threading.local()
+
+    def __init__(self):
+        self.count = 0
+        LoopDetector._tl.detector = self
+
+    def __enter__(self):
+        self.count += 1
+        return self
+
+    def __exit__(self, *args):
+        self.count -= 1
+        if not self.count:
+            del LoopDetector._tl.detector
+
+    @classmethod
+    def begin(cls):
+        return LoopDetector._tl.detector if hasattr(LoopDetector._tl, "detector") else LoopDetector()
+
 class ContentType(object):
     Binary, Text = range(2)
     _by_ext = {}
@@ -89,7 +108,7 @@ class ContentType(object):
 
     @classmethod
     def for_path(cls, path, default = None):
-        (fname, ext) = os.path.splitext(path)
+        (_, ext) = os.path.splitext(path)
         return cls.for_extension(ext, default)
 
     @classmethod
@@ -181,9 +200,9 @@ class Enum(tuple):
 
 _loggers = {}
 _log_defaults = None
-_log_date_fmt = '%Y-%m-%d %H:%M:%S'
-_log_root_fmt = '%(name)-12s:%(asctime)s:%(levelname)-7s:%(message)s'
-_log_sub_fmt = '%(name)-12s:%(asctime)s:%(levelname)-7s:%(message)s'
+_log_date_fmt = '%y%m%d %H:%M:%S'
+_log_root_fmt = '%(name)-15s:%(asctime)s:%(levelname)-7s:%(message)s'
+_log_sub_fmt = '%(name)-15s:%(asctime)s:%(levelname)-7s:%(message)s'
 
 class LogConfig(object):
     def __init__(self, conf = None, defaults = None):
@@ -193,7 +212,7 @@ class LogConfig(object):
         self.destination = defaults.destination if defaults else "stderr"
         self.destination = conf.destination.lower() if hasattr(conf, "destination") and conf.destination else self.destination
         assert self.destination in ("stderr", "file"), "Invalid logging destination %s" % self.destination
-        self.flat = defaults.log_level if defaults else False
+        self.flat = defaults.flat if defaults else False
         self.flat = conf.flat if hasattr(conf, "flat") else self.flat
         self.append = defaults.append if defaults else False
         self.append = conf.append if hasattr(conf, "append") else self.append
@@ -220,7 +239,7 @@ def get_logger(name):
         append = conf.append if conf.append is not None else False
         mode = "a" if append else "w"
         if conf.flat:
-            (fname, dot, junk) = name.partition(".")
+            (fname, _, _) = name.partition(".")
         else:
             fname = name
         # fh = logging.FileHandler("%s/logs/%s.log" % (root_dir(), name), mode)

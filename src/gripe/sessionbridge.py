@@ -4,6 +4,8 @@
 __author__="jan"
 __date__ ="$16-Feb-2013 10:00:26 PM$"
 
+import gripe
+
 class SessionBridge(object):
     def __init__(self, userid, roles):
         self._userid = userid
@@ -15,8 +17,15 @@ class SessionBridge(object):
     def roles(self):
         return self._roles
 
-def login(userid, roles):
-    global sessionbridge
-    sessionbridge = SessionBridge(userid, roles)
+_sessionbridge = None
 
-login("test@grumble.net", ["admin", "user"])
+def set_sessionbridge(bridge):
+    global _sessionbridge
+    _sessionbridge = bridge
+
+def get_sessionbridge():
+    global _sessionbridge
+    if not _sessionbridge:
+        _sessionbridge = SessionBridge(gripe.Config.gripe.defaultuser, gripe.Config.gripe.defaultroles)
+    return _sessionbridge
+

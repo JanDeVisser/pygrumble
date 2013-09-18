@@ -3,10 +3,6 @@
 # To change this template, choose Tools | Templates
 # and open the template in the editor.
 
-import sys
-print >> sys.stderr, "Import %s" % __name__
-
-
 import atexit
 import datetime
 import hashlib
@@ -17,6 +13,7 @@ import logging
 import os.path
 import Queue
 import re
+import sys
 import threading
 import uuid
 import webapp2
@@ -714,7 +711,7 @@ class WSGIApplication(webapp2.WSGIApplication):
     def __init__(self, *args, **kwargs):
         self.apps = {}
         super(WSGIApplication, self).__init__(*args, **kwargs)
-        grumble.set_sessionbridge(SessionBridge())
+        gripe.sessionbridge.set_sessionbridge(SessionBridge())
         self.pipeline = []
 
         config = gripe.Config.app

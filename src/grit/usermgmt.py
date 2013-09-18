@@ -4,10 +4,8 @@ Created on 2013-03-12
 @author: jan
 '''
 
-import sys
-print >> sys.stderr, "Import %s" % __name__
-
 import json
+import sys
 import webapp2
 
 import gripe
@@ -94,10 +92,11 @@ class ChangePwd(grit.ReqHandler):
         return ctx
 
     def get(self):
-        logger.debug("main::login.get")
+        logger.debug("usermgmt::ChangePwd.get")
         self.render()
 
     def post(self):
+        logger.debug("usermgmt::ChangePwd.put")
         if not self.user:
             self.response.status_int = 500
             return
@@ -345,11 +344,4 @@ app = webapp2.WSGIApplication([
             }
         ),
     ], debug = True)
-
-#        self.router.add(webapp2.Route("/changepwd", handler = handle_request, name = "change-password",
-#                                      defaults = { "root": self, "handler": "grit.usermgmt.ChangePassword", "roles": [] }))
-#        self.router.add(webapp2.Route("/resetpwd", handler = handle_request, name = "reset-password",
-#                                      defaults = { "root": self, "handler": "grit.usermgmt.ResetPassword", "roles": [] }))
-# #        self.router.add(webapp2.Route("/confirmreset", handler = handle_request, name = "confirm-reset",
-#                                      defaults = { "root": self, "handler": "grit.usermgmt.ConfirmReset", "roles": [] }))
 

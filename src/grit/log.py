@@ -1,5 +1,4 @@
 import sys
-print >> sys.stderr, "Import %s" % __name__
 
 import gripe.pgsql
 import grumble

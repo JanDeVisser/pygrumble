@@ -2,8 +2,6 @@ __author__="jan"
 __date__ ="$29-Jan-2013 11:00:39 AM$"
 
 import sys
-print >> sys.stderr, "Import %s" % __name__
-
 import threading
 import psycopg2
 import gripe

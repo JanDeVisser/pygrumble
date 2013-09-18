@@ -2,8 +2,6 @@ __author__ = "jan"
 __date__ = "$24-Feb-2013 11:13:48 AM$"
 
 import sys
-print >> sys.stderr, "Import %s" % __name__
-
 import webapp2
 
 import gripe

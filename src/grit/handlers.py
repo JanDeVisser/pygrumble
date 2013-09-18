@@ -4,11 +4,9 @@
 __author__ = "jan"
 __date__ = "$16-Nov-2012 10:01:52 PM$"
 
-import sys
-print >> sys.stderr, "Import %s" % __name__
-
 import json
 import logging
+import sys
 import traceback
 import urllib
 

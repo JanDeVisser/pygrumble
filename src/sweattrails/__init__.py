@@ -7,11 +7,13 @@ __author__="jan"
 __date__ ="$15-Sep-2013 10:58:20 AM$"
 
 def get_flag(country):
-    return "http://flagspot.net/images/{0}/{1}.gif".format(country.code[0:1].lower(), country.code.lower())
+    return "http://flagspot.net/images/{0}/{1}.gif".format(country.countrycode[0:1].lower(), country.countrycode.lower()) \
+        if country.countrycode \
+        else None
 
 class Country(grumble.Model):
-    name = grumble.StringProperty(verbose_name = "Country name", is_label = True)
-    code = grumble.StringProperty(verbose_name = "ISO 3166-1 code", is_key = True)
+    countryname = grumble.StringProperty(verbose_name = "Country name", is_label = True)
+    countrycode = grumble.StringProperty(verbose_name = "ISO 3166-1 code", is_key = True)
     flag_url = grumble.StringProperty(transient = True, getter = get_flag)
 
 class Profile(grizzle.UserComponent):
