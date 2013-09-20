@@ -14,7 +14,8 @@
     <st:form name="user" url="/json/user/$key">
         <st:field id="email" type="text" property="email" label="Email" readonly="true"/>
         <st:field id="display_name" type="text" property="display_name" label="Name" required="true"/>
-        <st:field id="country" type="lookup" property="country" label="Country" url="/json/country" text="name"/>
+        <st:field id="country" type="lookup" property="country" label="Country" 
+                  url="/json/country" text="countryname" key="countrycode"/>
         <st:footer>
             <st:action mode="view" label="Edit" action="edit"/>
             <st:action mode="edit" label="Save" action="save"/>

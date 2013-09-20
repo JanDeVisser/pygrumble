@@ -11,11 +11,11 @@ import webapp2
 import gripe
 import grumble
 import grudge
-import grit
+import grit.requesthandler
 
 logger = gripe.get_logger(__name__)
 
-class Login(grit.ReqHandler):
+class Login(grit.requesthandler.ReqHandler):
     def get_context(self, ctx):
         return ctx
 
@@ -57,7 +57,7 @@ class Login(grit.ReqHandler):
             logger.debug("Login FAILED")
             self.response.status_int = 401
 
-class Logout(grit.ReqHandler):
+class Logout(grit.requesthandler.ReqHandler):
     def get_template(self):
         if gripe.Config.app and gripe.Config.app.logout and gripe.Config.app.logout.template:
             return gripe.Config.app.logout.template
@@ -87,7 +87,7 @@ class Logout(grit.ReqHandler):
         self.get()
 
 
-class ChangePwd(grit.ReqHandler):
+class ChangePwd(grit.requesthandler.ReqHandler):
     def get_context(self, ctx):
         return ctx
 

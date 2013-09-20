@@ -122,7 +122,7 @@ class Model():
             self._key_name = v["_key_name"] if "_key_name" in v else None
             self._ownerid = v["_ownerid"] if "_ownerid" in v else None
             self._acl = gripe.acl.ACL(v["_acl"] if "_acl" in v else None)
-            for prop in self._properties.values():
+            for prop in [p for p in self._properties.values() if not p.transient]:
                 prop._update_fromsql(self, v)
             self._set_ancestors(ancestors, parent)
             logger.debug("%s._populate: _key_name: %s", self.kind(), self._key_name)

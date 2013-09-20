@@ -8,12 +8,12 @@ __date__ = "$7-Aug-2013 2:21:58 PM$"
 import json
 
 import gripe
-import grit
+import grit.requesthandler
 import grumble
 
 logger = gripe.get_logger(__name__)
 
-class Startup(grit.ReqHandler):
+class Startup(grit.requesthandler.ReqHandler):
     def get_template(self):
         if hasattr(self, "_wf"):
             return self._template or self._wf.kind().replace('.', '/') + "/startup"
@@ -65,7 +65,7 @@ class Startup(grit.ReqHandler):
             logger.error("No process defined")
             self.response_status_int = 500
 
-class AddStatus(grit.ReqHandler):
+class AddStatus(grit.requesthandler.ReqHandler):
     def get_template(self):
         if self._process is not None and self._process.exists() and self._process.has_status(self._status):
             return self._template or self._kind.replace('.', '/') + '/' + self._status

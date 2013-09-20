@@ -5,16 +5,16 @@ __author__ = "jan"
 __date__ = "$16-Nov-2012 10:01:52 PM$"
 
 import json
-import logging
-import sys
 import traceback
 import urllib
 
 import webapp2
 
 import gripe
-import grit
 import grumble
+
+from grit.requesthandler import ReqHandler
+from grit.statichandler import StaticHandler
 
 logger = gripe.get_logger(__name__)
 
@@ -138,7 +138,7 @@ class ModelBridge(object):
     def can_query(self):
         return self.kind().can_query()
 
-class BridgedHandler(ModelBridge, grit.ReqHandler):
+class BridgedHandler(ModelBridge, ReqHandler):
     pass
 
 class PageHandler(BridgedHandler):

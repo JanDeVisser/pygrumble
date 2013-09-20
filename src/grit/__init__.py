@@ -5,23 +5,13 @@
 
 import atexit
 import datetime
-import hashlib
-import importlib
-import jinja2
-import json
-import logging
-import os.path
 import Queue
-import re
-import sys
 import threading
 import uuid
 import webapp2
 
 import gripe
-import gripe.json_util
-import gripe.pgsql
-import gripe.url
+import gripe.sessionbridge
 import grumble
 
 logger = gripe.get_logger(__name__)
@@ -29,9 +19,10 @@ logger = gripe.get_logger(__name__)
 class Error(gripe.Error):
     pass
 
-import gripe.role
-import gripe.auth
 import grit.log
+import grit.pipeline
+import grit.requesthandler
+import grit.statichandler
 
 class UserData(grumble.Model):
     _flat = True
@@ -332,6 +323,7 @@ class Session(object):
     def roles(self):
         return self.user().roles() if self.user() else ()
 
+
 class SessionBridge(object):
     """
         Bridge between a grit session and the sessions required by grumble.
@@ -340,6 +332,7 @@ class SessionBridge(object):
         sets the instance as the bridge between the grit session associated with
         the running thread and grumble.
     """
+    
     def userid(self):
         session = Session.get()
         return session.userid() if session is not None else None
@@ -348,336 +341,36 @@ class SessionBridge(object):
         session = Session.get()
         return session.roles() if session is not None else None
 
-class TxWrapper(object):
-    def __init__(self, tx, request):
-        if not hasattr(tx, "request"):
-            tx.request = request
-        self._tx = tx
-
-    @classmethod
-    def begin(cls, reqctx):
-        return TxWrapper(gripe.pgsql.Tx.begin(), reqctx.request)
-
-    def __enter__(self):
-        return self._tx.__enter__()
-
-    def __exit__(self, exception_type, exception_value, trace):
-        return self._tx.__exit__(exception_type, exception_value, trace)
-
-class Auth(object):
-    def __init__(self, reqctx):
-        self.reqctx = reqctx
-        self.request = reqctx.request
-        self.response = reqctx.response
-
-    def auth_needed(self):
-        if not hasattr(self.reqctx, "session"):
-            logger.debug("Auth.needs_auth: no session")
-            return False
-        self.session = self.reqctx.session
-        if self.session.user():
-            self.request.user = self.session.user()
-            self.reqctx.user = self.session.user()
-        if not (hasattr(self.reqctx, "roles") and self.reqctx.roles):
-            logger.debug("Auth.needs_auth: no specific role needed")
-            return False
-        self.roles = self.reqctx.roles
-        return True
-
-    def logged_in(self):
-        if self.session.user():
-            logger.debug("Auth.logged_in: User present: %s", self.session.userid())
-            return True
-        logger.debug("Auth.logged_in: no user. Redirecting to /login")
-        self.session["redirecturl"] = self.request.path_qs
-        self.response.status = "302 Moved Temporarily"
-        self.response.headers["Location"] = "/login"
-        return False
-
-    def confirm_role(self):
-        logger.debug("Auth.confirm_role(%s)", self.reqctx.roles)
-        if not self.session.user().has_role(self.reqctx.roles):
-            logger.warn("Auth.confirm_role: user %s doesn't have any role in %s",
-                        Session.get_usermanager().id(self.user), self.reqctx.roles)
-            self.response.status = "401 Unauthorized"
-
-    @classmethod
-    def begin(cls, reqctx):
-        return Auth(reqctx)
-
-    def __enter__(self):
-        self.auth_needed() and self.logged_in() and self.confirm_role()
-        return self
-
-    def __exit__(self, exception_type, exception_value, trace):
-        return False
-
-class Dispatcher(object):
-    apps = {}
-
-    def __init__(self, reqctx):
-        self.reqctx = reqctx
-        self.request = reqctx.request
-        self.response = reqctx.response
-
-    @classmethod
-    def begin(cls, reqctx):
-        return Dispatcher(reqctx)
-
-    def __enter__(self):
-        logger.debug("Dispatcher: Handling %s %s with body\n%s", self.request.method, self.request.path_qs, self.request.body)
-        if hasattr(self.reqctx, "app"):
-            app_path = self.reqctx.app
-            logger.info("Dispatcher: dispatching to app %s", app_path)
-            app = self.apps.get(app_path)
-            if not app:
-                app = gripe.resolve(app_path, None)
-                assert app, "WSGI app %s not found" % app_path
-                self.apps[app_path] = app
-            app.router.dispatch(self.request, self.response)
-        elif hasattr(self.reqctx, "handler"):
-            handler = self.reqctx.handler
-            if isinstance(handler, basestring):
-                h = gripe.resolve(handler, None)
-                assert h, "WSGI handler %s not found" % handler
-                handler = h
-            logger.info("Dispatcher: dispatching to handler %s", handler)
-            self.request.route_kwargs = {}
-            h = handler(self.request, self.response)
-            if hasattr(h, "set_request_context") and callable(h.set_request_context):
-                h.set_request_context(self.reqctx)
-            h.dispatch()
-        return self
-
-    def __exit__(self, exception_type, exception_value, trace):
-        # TODO: Do fancy HTTP error code stuffs maybe
-        return False
-
-class RequestLogger(object):
-    """
-        Pipeline entry logger requests and their results to a grumble model.
-        This entry uses the __exit__ handler. It should come in the pipeline
-        before (so it's __exit__ comes after) TxWrapper, so the request can be
-        logged even in the case of an exception and the resulting rollback.
-    """
-
-    _requestlogger = None
-
-    @classmethod
-    def get_requestlogger(cls):
-        if cls._requestlogger is None:
-            cls._requestlogger = gripe.Config.resolve("app.requestlogger", "grit.log.HttpAccessLogger")()
-        return cls._requestlogger
-
-    def __init__(self, reqctx):
-        self.reqctx = reqctx
-        self.request = reqctx.request
-        self.response = reqctx.response
-
-    @classmethod
-    def begin(cls, reqctx):
-        return RequestLogger(reqctx)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exception_type, exception_value, trace):
-        self.reqctx.time_elapsed = datetime.datetime.now() - self.reqctx._created
-        if RequestLogger.get_requestlogger():
-            logger.debug("Logging request")
-            RequestLogger.get_requestlogger().log(self.reqctx)
-        return False
-
-class ReqHandler(webapp2.RequestHandler):
-    content_type = "application/xhtml+xml"
-    template_dir = "template"
-    file_suffix = "html"
-
-    def __init__(self, request = None, response = None):
-        super(ReqHandler, self).__init__(request, response)
-        logger.info("Creating request handler for %s", request.path)
-        self.session = request.session if hasattr(request, "session") else None
-        self.user = request.user if hasattr(request, "user") else None
-        self.errors = []
-
-    @classmethod
-    def _get_env(cls):
-        if not hasattr(cls, "env"):
-            loader = jinja2.ChoiceLoader([ \
-                jinja2.FileSystemLoader("%s/%s" % (gripe.root_dir(), cls.template_dir)), \
-                jinja2.PackageLoader("grit", "template") \
-            ])
-            env = jinja2.Environment(loader = loader, extensions = ['jinja2.ext.do'])
-            if hasattr(cls, "get_env") and callable(cls.get_env):
-                env = cls.get_env(env)
-            cls.env = env
-        return cls.env
-
-# Move to --sweattrails specific mixin
-#    @classmethod
-#    def get_env(cls, env):
-#        env.filters['formatdistance'] = Util.format_distance
-#        env.filters['datetime'] = Util.format_datetime
-#        env.filters['prettytime'] = Util.prettytime
-#        env.filters['avgspeed'] = Util.avgspeed
-#        env.filters['speed'] = Util.speed
-#        env.filters['pace'] = Util.pace
-#        env.filters['avgpace'] = Util.avgpace
-#        env.filters['weight'] = Util.weight
-#        env.filters['height'] = Util.height
-#        env.filters['length'] = Util.length
-#        return env
-
-# Move to sweattrails specific mixin
-#    def get_context(self, ctx):
-#        ctx['units'] = Util.units
-#        ctx['units_table'] = Util.units_table
-#        ctx['tab'] = self.request.get('tab', None)
-#        return ctx
-#
-    def add_error(self, error):
-        self.errors.append(error)
-
-    def _get_context(self, ctx = None):
-        logger.debug("_get_context %s", ctx)
-        if ctx is None:
-            logger.debug("_get_context: ctx is None. Building new one")
-            ctx = {}
-        ctx['app'] = gripe.Config.app.get("about", {})
-        ctx['user'] = self.user
-        ctx['session'] = self.session
-        ctx['request'] = self.request
-        ctx['response'] = self.response
-        ctx['params'] = self.request.params
-        ctx['errors'] = self.errors
-        urls = ctx.get("urls")
-        if urls is None:
-            logger.debug("_get_context: urls is None. Building new collection")
-            urls = gripe.url.UrlCollection("root")
-        else:
-            logger.debug("_get_context: urls already present in context")
-        assert urls is not None, "Hrm. urls is still None"
-        urls.uri_factory(self)
-        if self.user is not None and hasattr(self.user, "urls"):
-            u = self.user.urls()
-            logger.debug("user urls: %s", u)
-            urls.copy(u)
-        elif self.user is not None:
-            logger.debug("User %s (of type %s) has no urls() method", self.user, self.user.__class__.__name__)
-        else:
-            logger.debug("self.user is None.")
-        if hasattr(self, "urls"):
-            urls.copy(self.urls())
-        logger.debug("urls: %s", urls)
-        ctx["urls"] = urls
-        if hasattr(self, "get_context") and callable(self.get_context):
-            ctx = self.get_context(ctx)
-        return ctx
-
-    def _get_template(self):
-        ret = self.template \
-            if hasattr(self, "template") \
-            else None
-        if not ret:
-            ret = self.get_template() \
-                if hasattr(self, "get_template") and callable(self.get_template) \
-                else None
-        cname = self.__class__.__name__.lower()
-        if not ret:
-            module = self.__class__.__module__.lower()
-            ret = module + "." + cname if module != '__main__' else cname
-        ret = ret.replace(".", "/")
-        ret = gripe.Config.app.get(cname, ret)
-        logger.info("ReqHandler: using template %s", ret)
-        return ret
-
-    def _get_content_type(self):
-        if hasattr(self, "get_content_type") and callable(self.get_content_type):
-            return self.get_content_type()
-        elif hasattr(self, "content_type"):
-            return self.content_type
-        else:
-            content_type = gripe.ContentType.for_path(self.request.path)
-            return content_type.content_type if content_type else "text/plain"
-
-    def json_dump(self, obj):
-        if obj:
-            logging.info("retstr=%s", json.dumps(obj))
-            self.response.content_type = "application/json"
-            self.response.json = obj
-        else:
-            self.status = "204 No Content"
-
-    def render(self):
-        ctx = self._get_context()
-        self.response.content_type = self._get_content_type()
-        if hasattr(self, "get_headers") and callable(self.get_headers):
-            headers = self.get_headers(ctx)
-            if headers:
-                for header in headers:
-                    self.response.headers[header] = headers[header]
-        self.response.out.write(self._get_env().get_template(self._get_template() + "." + self.file_suffix).render(ctx))
-
-
-class StaticHandler(ReqHandler):
-    etags = {}
-
-    def get(self, **kwargs):
-        logger.info("StaticHandler.get(%s)", self.request.path)
-        path = ''
-        if "abspath" in kwargs:
-            path = kwargs["abspath"]
-        else:
-            path = gripe.root_dir()
-            if "relpath" in kwargs:
-                path = os.path.join(path, kwargs["relpath"])
-        path += self.request.path if not kwargs.get('alias') else kwargs.get("alias")
-        if not os.path.exists(path):
-            logger.info("Static file %s does not exist", path)
-            self.request.response.status = "404 Not Found"
-        else:
-            if_none_match = self.request.if_none_match
-            hashvalue = self.etags.get(path)
-            if if_none_match and hashvalue and hashvalue in if_none_match:
-                logger.debug("Client has up-to-date resource %s", path)
-                self.response.status = "304 Not Modified"
-            else:
-                self.response.content_length = str(os.path.getsize(path))
-                content_type = gripe.ContentType.for_path(path)
-                self.response.content_type = content_type.content_type
-                if content_type.is_text():
-                    self.response.charset = "utf-8"
-                    mode = "r"
-                else:
-                    mode = "rb"
-                with open(path, mode) as fh:
-                    buf = fh.read()
-                if path not in self.etags:
-                    hashvalue = hashlib.md5(buf).hexdigest()
-                    self.etags[path] = hashvalue
-                    if if_none_match and hashvalue in if_none_match:
-                        logger.debug("Client has up-to-date resource %s. I had to hash it though", path)
-                        self.response.status = "304 Not Modified"
-                        return
-                self.response.etag = hashvalue
-                self.response.body = str(buf)
-
-class ErrorPage(ReqHandler):
-    content_type = "text/html"
-
-    def __init__(self, status, request, response, exception):
-        self.status = status
-        self.exception = exception
-        super(ErrorPage, self).initialize(request, response)
-
-    def get_template(self):
-        return "error_%s" % self.response.status_int
-
-    def get(self):
-        logger.info("main::ErrorPage_%s.get", self.status)
-        self.render({ "request": self.request, "response": self.response})
-
 def handle_request(request, *args, **kwargs):
+    """
+        Handles a request to a grit application by feeding it through the 
+        pipeline set up in the application config. The final element of the
+        pipeline is typically the Dispatcher, which dispatches the request either
+        to a sub-application or a request handler. Other pipeline elements
+        are
+            . TxWrapper, which initializes the database transaction in which the
+              request runs,
+            . Auth, which ensures that the requesting user has appropriate
+              permissions to execute the request
+            . Session, which associates a Session object with the request.
+            
+        Pipeline entries use the 'with' protocol, with the added extension that
+        the 'begin' method is assumed to act as a factory for the element, i.e.
+        the pattern is
+        
+          with pipeline_element_class.begin(reqctx):
+                ...
+                
+        The 'begin' classmethod should return a pipeline element, initialized 
+        with the request context object which holds a reference to the request
+        and response objects. The 'with' protocol will then call the __enter__
+        and __exit__ methods. The elements are stacked, which means that first
+        all the __enter__ methods will be called, end then all the __exit__
+        methods, but in reverse order. Also, when any begin() or __enter__
+        method sets the response's status to an error-like number (>= 300), the 
+        rest of the pipeline is skipped. The __exit__ methods of the entries
+        whose __enter__ methods were executed are still executed in that case.
+    """
     root = kwargs["root"]
     logger.info("WSGIApplication::handle_request path: %s method: %s", request.path_qs, request.method)
 
@@ -700,12 +393,6 @@ def handle_request(request, *args, **kwargs):
     request.response = rv
     logger.debug("Pipeline completed with response status %s", rv.status)
 
-def handle_404(request, response, exception):
-    # logger.exception(exception)
-    logger.info("404 for %s", request.path_qs)
-    # handler = ErrorPage(404, request, response, exception)
-    # handler.get()
-    response.set_status(404)
 
 class WSGIApplication(webapp2.WSGIApplication):
     def __init__(self, *args, **kwargs):
@@ -717,7 +404,7 @@ class WSGIApplication(webapp2.WSGIApplication):
         config = gripe.Config.app
         self.icon = config.get("icon", "/icon.png")
         logger.info("Application icon: %s", self.icon)
-        self.router.add(webapp2.Route("/favicon.ico", handler = StaticHandler, defaults = { "root": self, "roles": [], "alias": self.icon }))
+        self.router.add(webapp2.Route("/favicon.ico", handler = grit.statichandler.StaticHandler, defaults = { "root": self, "roles": [], "alias": self.icon }))
 
         container = config.get("container")
         if container:
@@ -730,7 +417,7 @@ class WSGIApplication(webapp2.WSGIApplication):
                     assert pipeline_class, "Invalid entry %s in pipeline config" % p
                     assert hasattr(pipeline_class, "begin"), "Pipeline entry %s has no 'begin' method" % p
                     self.pipeline.append(pipeline_class)
-        self.pipeline.append(Dispatcher)
+        self.pipeline.append(grit.pipeline.Dispatcher)
 
         for mp in config["mounts"]:
             raw_path = mp.get("path")
@@ -738,25 +425,23 @@ class WSGIApplication(webapp2.WSGIApplication):
             path = "<:^%s$>" % raw_path
             roles = mp.get("roles", [])
             roles = roles.split() if isinstance(roles, basestring) else roles
-            handler = None
             defaults = { "root": self, "roles": roles }
 
             app_path = mp.get("app")
             if app_path:
                 wsgi_sub_app = gripe.resolve(app_path, None)
                 assert wsgi_sub_app, "WSGI app %s not found" % app_path
-                handler = handle_request
                 defaults["app"] = app_path
                 logger.info("WSGIApplication(): Adding handler app %s for path %s", app_path, raw_path)
             else:
-                handler = StaticHandler
+                defaults["handler"] = grit.statichandler.StaticHandler
                 if "abspath" in mp:
                     defaults["abspath"] = mp["abspath"]
                 if "relpath" in mp:
                     defaults["relpath"] = mp["relpath"]
                 logger.info("WSGIApplication(): Adding static handler for path %s", raw_path)
-            self.router.add(webapp2.Route(path, handler = handler, defaults = defaults))
-        self.error_handlers[404] = handle_404
+            self.router.add(webapp2.Route(path, handler = handle_request, defaults = defaults))
+        self.error_handlers[404] = grit.requesthandler.handle_404
 
 
 app = WSGIApplication(debug = True)

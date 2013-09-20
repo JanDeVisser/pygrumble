@@ -87,7 +87,9 @@ com.sweattrails.api.LookupField.prototype.populateSpan = function() {
             img.width = img.height = 24;
             this.span.appendChild(img);
         }
+        console.log(" -->>> this.value: " + this.value)
         var obj = this.valuesByKey[this.value];
+        console.log(" -->>> obj: " + obj)
         this.span.appendChild(document.createTextNode(obj[this.text]));
     }
 };

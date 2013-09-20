@@ -12,7 +12,7 @@
     },
     "icon": "/ceilingcat.jpg",
     "container": {
-        "pipeline": [ "grit.RequestLogger", "grit.TxWrapper", "grit.Session", "grit.Auth" ]
+        "pipeline": [ "grit.pipeline.RequestLogger", "grit.pipeline.TxWrapper", "grit.Session", "grit.pipeline.Auth" ]
     },
     "logout": { "redirect": "/" },
     "roles": [
