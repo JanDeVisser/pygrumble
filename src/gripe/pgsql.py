@@ -23,7 +23,7 @@ class Cursor(psycopg2.extensions.cursor):
             super(Cursor, self).execute(sql, args)
             logger.debug("Rowcount: %d", self.rowcount)
         except Exception, exc:
-            print exc.__class__.__name__, exc
+            logger.error("Cursor execute: %s %s", exc.__class__.__name__, exc)
             raise
 
     def columns(self):

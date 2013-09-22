@@ -92,23 +92,16 @@ class ModelBridge(object):
     def prepare_query(self, q):
         return q
 
-    def query(self, q):
+    def query(self):
         # FIXME adapt to Model.query
+        q = self._load()
         q["keys_only"] = False
         logger.info("ModelBridge::query(%s)", q)
         q = self.prepare_query(q)
         return [o for o in self.kind().query(**q)]
 
-    def load(self):
-        data = self.request.body if self.request.method == "POST" else self.request.headers.get("ST-JSON-Request")
-        if data and data != '':
-            data = urllib.unquote_plus(data)
-            if data.endswith("="):
-                (data, eq, empty) = data.rpartition("=")
-            logger.debug("load() - data = %s", data)
-            return json.loads(data)
-        else:
-            return {}
+    def _load(self):
+        pass
 
     def get_objects(self):
         ret = []
@@ -117,8 +110,7 @@ class ModelBridge(object):
         elif self.key() and self.object():
             ret = [ self.object() ]
         else:
-            q = self.load()
-            ret = self.query(q)
+            ret = self.query()
         ret = filter(lambda o: o.can_read(), ret)
         logger.debug("get_objects: returning %s", [ o.id() for o in ret ])
         return ret
@@ -280,6 +272,26 @@ class JSONHandler(BridgedHandler):
         logger.info("Invoking %s on %s using arguments *%s, **%s", method, self.__class__.__name__, args, kwargs)
         return getattr(self, method)(*args, **kwargs)
 
+    def initialize_bridge(self):
+        data = self.request.body if self.request.method == "POST" else self.request.headers.get("ST-JSON-Request")
+        if data and data != '':
+            data = urllib.unquote_plus(data)
+            if data.endswith("="):
+                (data, eq, empty) = data.rpartition("=")
+            logger.debug("load() - data = %s", data)
+            self._query = json.loads(data)
+            if "serialization_flags" in self._query:
+                self._flags = self._query["serialization_flags"]
+                del self._query["serialization_flags"]
+            else:
+                self._flags = {}
+        else:
+            self._flags = {}
+            self._query = {}
+            
+    def _load(self):
+        return self._query
+
     def post(self, key = None, kind = None):
         logger.info("JSONHandler.post(%s,%s)\n%s", key, kind, self.request.body)
         self._initialize_bridge(key, kind)
@@ -289,7 +301,7 @@ class JSONHandler(BridgedHandler):
         if has_access:
             if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
                 self.initialize_bridge()
-            descriptors = self.load()
+            descriptors = self._query
             descriptors = descriptors if isinstance(descriptors, list) else [descriptors]
             ret = []
             for d in descriptors:
@@ -310,7 +322,7 @@ class JSONHandler(BridgedHandler):
         self.error(401)
 
     def get(self, key = None, kind = None):
-        logger.info("JSONHandler.get(%s,%s)\n%s", key, kind, self.request.headers.get("ST-JSON-Request"))
+        logger.info("JSONHandler.get(%s,%s) - JSON request: %s", key, kind, self.request.headers.get("ST-JSON-Request"))
         self._initialize_bridge(key, kind)
         has_access = True
         if hasattr(self, "allow_access") and callable(self.allow__access):
@@ -319,7 +331,7 @@ class JSONHandler(BridgedHandler):
             if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
                 self.initialize_bridge()
             objs = self.get_objects()
-            ret = [o.to_dict() for o in objs] if objs else None
+            ret = [o.to_dict(**self._flags) for o in objs] if objs else None
             ret = ret if ret is None or len(ret) > 1 else ret[0]
             self.json_dump(ret)
             return

@@ -265,10 +265,10 @@ class Model():
             self._load()
             return self._exists
 
-    def _to_dict(self, d):
+    def _to_dict(self, d, **flags):
         pass
 
-    def to_dict(self):
+    def to_dict(self, **flags):
         with gripe.LoopDetector.begin() as detector:
             p = self.parent()
             ret = { "key": self.id(), 'parent': p.id if p else None }
@@ -279,7 +279,7 @@ class Model():
             logger.debug("to_dict: Added %s to loop detector", self)
             for b in self.__class__.__bases__:
                 if hasattr(b, "_to_dict") and callable(b._to_dict):
-                    b._to_dict(self, ret)
+                    b._to_dict(self, ret, **flags)
 
             def serialize(ret, (name, prop)):
                 if prop.private:
@@ -294,7 +294,7 @@ class Model():
 
             ret = reduce(serialize, self.properties().items(), ret)
             ret = reduce(serialize, self._query_properties.items(), ret)
-            hasattr(self, "sub_to_dict") and callable(self.sub_to_dict) and self.sub_to_dict(ret)
+            hasattr(self, "sub_to_dict") and callable(self.sub_to_dict) and self.sub_to_dict(ret, **flags)
             return ret
 
     def _update(self, d):

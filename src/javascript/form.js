@@ -431,69 +431,69 @@ com.sweattrails.api.FormField.prototype.setType = function(type, elem) {
 
 com.sweattrails.api.FormField.prototype.render = function(mode, object) {
     if (this.modes && (this.modes.length > 0) && (this.modes.indexOf(mode) < 0)) {
-	return false
+	return false;
     }
-    this.mode = mode
-    var val = this.getValue(object)
-    var elem = null
-    if ((this.mode != com.sweattrails.api.MODE_VIEW) && !this.readonly) {
-        elem = this.impl.renderEdit(val)
-    } else if ((this.mode == com.sweattrails.api.MODE_VIEW) || this.readonly) {
-        elem = this.impl.renderView(val)
+    this.mode = mode;
+    var val = this.getValue(object);
+    var elem = null;
+    if ((this.mode !== com.sweattrails.api.MODE_VIEW) && !this.readonly) {
+        elem = this.impl.renderEdit(val);
+    } else if ((this.mode === com.sweattrails.api.MODE_VIEW) || this.readonly) {
+        elem = this.impl.renderView(val);
     }
     if (this.parent) {
         if (this.element) {
-            this.parent.removeChild(this.element)
+            this.parent.removeChild(this.element);
         }
-        this.element = elem
-        this.parent.appendChild(this.element)
+        this.element = elem;
+        this.parent.appendChild(this.element);
     } else {
         if (this.element && this.form.table) {
-            this.form.table.removeChild(this.element)
+            this.form.table.removeChild(this.element);
         }
-        var tr = null
-        var td = null
+        var tr = null;
+        var td = null;
         if (this.errors) {
-            tr = this.form.newTR()        	
-            td = document.createElement("td")
-            td.colspan = 2
-        	td.className = "validationerrors"
-            tr.appendChild(td)
-            var ul = document.createElement("ul")
-            ul.appendChild(td)
+            tr = this.form.newTR();        	
+            td = document.createElement("td");
+            td.colspan = 2;
+            td.className = "validationerrors";
+            tr.appendChild(td);
+            var ul = document.createElement("ul");
+            ul.appendChild(td);
             for (eix in this.errors) {
-            	var li = document.createElement("li")
-            	li.className = "validationerror"
-            	li.innerHTML = this.errors[eix].message
-            	ul.appendChild(li)
+            	var li = document.createElement("li");
+            	li.className = "validationerror";
+            	li.innerHTML = this.errors[eix].message;
+            	ul.appendChild(li);
             }
         }
-        tr = this.form.newTR()
-        var lbl = this.label || this.id
+        tr = this.form.newTR();
+        var lbl = this.label || this.id;
         if (lbl) {
-            lbl = (this.required) ? "(*) " + lbl + ":" : lbl + ":"
-            td = document.createElement("td")
-            td.style.textAlign = "right"
-            td.width = this.width || "auto"
-            var label = document.createElement("label")
-            label.htmlFor = this.id
-            label.innerHTML = lbl
-            td.appendChild(label)
-            tr.appendChild(td)
+            lbl = (this.required) ? "(*) " + lbl + ":" : lbl + ":";
+            td = document.createElement("td");
+            td.style.textAlign = "right";
+            td.width = this.width || "auto";
+            var label = document.createElement("label");
+            label.htmlFor = this.id;
+            label.innerHTML = lbl;
+            td.appendChild(label);
+            tr.appendChild(td);
         }
-        td = document.createElement("td")
-        td.style.textAlign = "left"
+        td = document.createElement("td");
+        td.style.textAlign = "left";
         if (!lbl) {
-            td.colspan = 2
+            td.colspan = 2;
         }
-        td.appendChild(elem)
-        tr.appendChild(td)
-        this.element = tr
-        this.element.id = this.id + "-fld-container"
+        td.appendChild(elem);
+        tr.appendChild(td);
+        this.element = tr;
+        this.element.id = this.id + "-fld-container";
     }
-    this.element.hidden = this.hidden
-    return true
-}
+    this.element.hidden = this.hidden;
+    return true;
+};
 
 Object.defineProperty(com.sweattrails.api.FormField.prototype, "hidden", {
     get: function() { return this._hidden },
@@ -522,20 +522,20 @@ com.sweattrails.api.FormField.prototype.onValueChange = function() {
 }
 
 com.sweattrails.api.FormField.prototype.setValue = function(object) {
-    this.bridge.setValue(object, this.impl.getValueFromControl())
+    this.bridge.setValue(object, this.impl.getValueFromControl());
 }
 
 com.sweattrails.api.FormField.prototype.getValue = function(object) {
-    var ret = this.bridge.getValue(object)
+    var ret = this.bridge.getValue(object);
     if (!ret && this.defval) {
-        if (typeof(this.defval) == 'function') {
-            ret = this.defval(object)
+        if (typeof(this.defval) === 'function') {
+            ret = this.defval(object);
         } else {
-            ret = this.defval
+            ret = this.defval;
         }
     }
-    return ret
-}
+    return ret;
+};
 
 /**
  * TextField -

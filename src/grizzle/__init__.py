@@ -56,6 +56,13 @@ class User(grumble.Model, gripe.auth.AbstractUser):
             k = grumble.Model.for_name(m)
             component = k(parent = self)
             component.put()
+            
+    def sub_to_dict(self, d, **flags):
+        if flags.get("include_components"):
+            for component in grumble.Query(UserComponent, False, True).set_parent(self):
+                (_, _, k) = component.kind().rpartition(".")
+                d[k] = component.to_dict()
+        return d
 
     def is_active(self):
         """

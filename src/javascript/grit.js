@@ -315,43 +315,34 @@ com.sweattrails.api.internal.DataBridge = function() {
 
 com.sweattrails.api.internal.DataBridge.prototype.setValue = function(object, value) {
     var s = this.set || this.get;
+    if (s && (typeof(s) === "string") && s.endsWith("()")) {
+        s = getfunc(s.substring(0, s.length() - 2));
+    }
     if (typeof(s) === "function") {
     	s(object, value);
     } else if (s) {
-        var p = s;
-        var o = object;
-        for (var dotix = p.indexOf("."); (dotix > 0) && (dotix < (p.length-1)); dotix = p.indexOf(".")) {
-            var subp = p.substring(0, dotix);
-            if (o) {
-                if (!o[subp]) o[subp] = {};
-                o = o[subp];
-            }
-            p = p.substring(dotix + 1);
-        }
-        if (o) o[p] = value;
+        setvar(s, value, object);
     }
 };
 
 com.sweattrails.api.internal.DataBridge.prototype.getValue = function(object, context) {
     var ret = null;
+    var g = this.get;
+    if (g && (typeof(g) === "string") && g.endsWith("()")) {
+        g = getfunc(g.substring(0, s.length() - 2));
+    }
     if (typeof(this.get) === "function") {
     	ret = this.get(object, context);
     } else if (this.get !== null) {
-        var p = this.get;
-        var o = object;
-        for (var dotix = p.indexOf("."); (dotix > 0) && (dotix < (p.length-1)); dotix = p.indexOf(".")) {
-            o = o && o[p.substring(0, dotix)];
-            p = p.substring(dotix + 1);
-        }
-        ret = o && o[p];
+        return getvar(this.get, object);
     }
     return ret;
 };
 
-function getvar(name) {
+function getvar(name, ns) {
+    ns = ns || this;
     name = name || "";
     var components = name.split(".");
-    var ns = this;
     for (var ix = 0; ix < components.length; ix++) {
         var component = components[ix].trim();
         if (component in ns) {
@@ -363,11 +354,27 @@ function getvar(name) {
     return ns;
 }
 
-function getfunc(func) {
+function setvar(name, value, ns) {
+    ns = ns || this;
+    name = name || "";
+    var components = name.split(".");
+    var component = null;
+    for (var ix = 0; ix < (components.length - 1); ix++) {
+        component = components[ix].trim();
+        if (!(component in ns)) {
+            ns[component] = {};
+        }
+        ns = ns[component];
+    }
+    component = components[ix].trim();
+    ns[component] = value;
+}
+
+function getfunc(func, ns) {
     if (typeof(func) === "function") {
         return func;
     } else {
-        var v = getvar(func)
+        var v = getvar(func, ns);
         return (typeof(v) === "function") && v;
     }
 }

@@ -421,13 +421,14 @@ class WSGIApplication(webapp2.WSGIApplication):
 
         for mp in config["mounts"]:
             raw_path = mp.get("path")
+            app_path = mp.get("app")
+            logger.debug("WSGIApplication(): Mounting app %s at path %s", app_path, raw_path)
             assert raw_path, "Must specify a path for each mount in app.conf"
             path = "<:^%s$>" % raw_path
             roles = mp.get("roles", [])
             roles = roles.split() if isinstance(roles, basestring) else roles
             defaults = { "root": self, "roles": roles }
 
-            app_path = mp.get("app")
             if app_path:
                 wsgi_sub_app = gripe.resolve(app_path, None)
                 assert wsgi_sub_app, "WSGI app %s not found" % app_path

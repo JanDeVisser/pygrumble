@@ -12,6 +12,7 @@
 
 <st:tab code="profile" label="Profile">
     <st:form name="user" url="/json/user/$key">
+        <st:parameter name="serialization_flags.include_components" value="true"/>
         <st:field id="email" type="text" property="email" label="Email" readonly="true"/>
         <st:field id="display_name" type="text" property="display_name" label="Name" required="true"/>
         <st:field id="country" type="lookup" property="country" label="Country" 

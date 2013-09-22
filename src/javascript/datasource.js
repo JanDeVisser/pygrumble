@@ -357,7 +357,7 @@ com.sweattrails.api.JSONDataSource.prototype.setJSONParameters = function(obj) {
         } else if (v.indexOf("$") === 0) {
             v = getvar(v.substr(1));
         }
-        o[p] = v;
+        setvar(p, v, o);
     }
     console.log(" --> " + this.sortorder().length);
     if (this.sortorder().length) {
