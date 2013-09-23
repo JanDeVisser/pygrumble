@@ -161,6 +161,21 @@ com.sweattrails.api.internal.DataSource.prototype.sortorder = function() {
     return this._sort;
 };
     
+com.sweattrails.api.internal.DataSource.prototype.addFlag = function(name, value) {
+    if (typeof(this._flags) === "undefined") {
+    	this._flags = {};
+    }
+    console.log("addFlag(" + name + ", " + value + ")");
+    this._flags[name] = value;
+};
+
+com.sweattrails.api.internal.DataSource.prototype.flags = function() {
+    if (typeof(this._flags) === "undefined") {
+    	this._flags = null;
+    }
+    return this._flags;
+};
+    
 com.sweattrails.api.internal.DataSource.prototype.submitParameter = function(p, v) {
     if (!this.submitparams) {
         this.submitparams = {};
@@ -193,6 +208,9 @@ com.sweattrails.api.internal.DataSource.prototype.next = function() {
             }
         } else {
             this.object = (!this.object) ? this.data : null;
+            if (this.object && ("key" in this.object)) {
+                this.key = this.object.key;
+            }
             return this.object;
         }
     } else {
@@ -318,7 +336,7 @@ com.sweattrails.api.JSONDataSource.prototype.onJSONData = function(data) {
 com.sweattrails.api.JSONDataSource.prototype.execute = function() {
     $$.log(this, "onJSONData(execute)");
     this.data = null;
-    this.setJSONParameters();
+    this.setJSONParameters(false);
     this.request.execute();
 };
 
@@ -331,47 +349,55 @@ com.sweattrails.api.JSONDataSource.prototype.addObject = function(obj, prefix) {
         } else if (typeof(v) === "function") {
             continue;
         } else {
-            $$.log(this, "addObject: " + prefix + p + "=" + v);
             this.parameter(prefix + p, v);
         }
     }
 };
 
-com.sweattrails.api.JSONDataSource.prototype.setJSONParameters = function(obj) {
+com.sweattrails.api.JSONDataSource.prototype.setJSONParameters = function(obj, submit) {
     obj = obj || {}
     var o = {};
     for (a in obj) {
         o[a] = obj[a];
     }
-    for (p in this.request.params) {
-        var v = this.request.params[p];
-        var f = null;
-        if (typeof(v) === "function") {
-            f = v;
-        } else if (v.indexOf("()") === (v.length() - 2)) {
-            f = getfunc(v.substring(0, v.length() - 2));
-            this.request.params[p] = f;
+    function build_param_obj(src, target) {
+        for (var p in src) {
+            var v = src[p];
+            var f = null;
+            if (typeof(v) === "function") {
+                f = v;
+            } else if ((typeof(v) === "string") && v.endsWith("()")) {
+                f = getfunc(v.substring(0, v.length() - 2));
+                this.request.params[p] = f;
+            }
+            if (f) {
+                v = f();
+            } else if (v.indexOf("$") === 0) {
+                v = getvar(v.substr(1));
+            }
+            setvar(p, v, target);
         }
-        if (f) {
-            v = f();
-        } else if (v.indexOf("$") === 0) {
-            v = getvar(v.substr(1));
-        }
-        setvar(p, v, o);
     }
-    console.log(" --> " + this.sortorder().length);
-    if (this.sortorder().length) {
-        o["sortorder"] = this.sortorder();
-        console.log('["sortorder"] -> ' + o["sortorder"]);
+    if (!submit) {
+        build_param_obj(this.request.params, o);
+        if (this.sortorder().length) {
+            o["_sortorder"] = this.sortorder();
+        }
+    } else {
+        if (this.key) o.key = this.key;
+        build_param_obj(this.request.submitparams, o);
+    }
+    if (this.flags()) {
+        o["_flags"] = this.flags();
     }
     this.request.body = JSON.stringify(o);    
 }
 
-com.sweattrails.api.JSONDataSource.prototype.setParameters = function() {
+com.sweattrails.api.JSONDataSource.prototype.setParameters = function(submit) {
     var obj = this.object || {};
     $$.log(this, "setParameters - json: " + this.submitAsJSON + " object " + JSON.stringify(obj));
     if (this.submitAsJSON) {
-        this.setJSONParameters(obj);
+        this.setJSONParameters(obj, submit);
     } else {
         this.addObject(obj);
     }
@@ -382,7 +408,7 @@ com.sweattrails.api.JSONDataSource.prototype.submit = function() {
     $$.log(this, "submit()");
     this.data = null;
     this.request.post = true;
-    this.setParameters();
+    this.setParameters(true);
     this.request.json = this.submitAsJSON;
     this.request.execute();
 };
@@ -411,9 +437,14 @@ com.sweattrails.api.JSONDataSourceBuilder.prototype.build = function(elem) {
     var sort = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "sort");
     for (ix = 0; ix < sort.length; ix++) {
     	var s = sort[ix];
-        console.log("sort: " + ix + " -> " + s.getAttribute("name"))
         var o = s.getAttribute("order");
         ds.addSort(s.getAttribute("name"), o ? o.startsWith("asc") : true);
+    }
+    var flags = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "flag");
+    for (ix = 0; ix < flags.length; ix++) {
+    	var f = flags[ix];
+        var v = f.getAttribute("value") || true;
+        ds.addFlag(f.getAttribute("name"), v);
     }
     params = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "submitparameter");
     for (ix = 0; ix < params.length; ix++) {

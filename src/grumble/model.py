@@ -300,7 +300,7 @@ class Model():
     def _update(self, d):
         pass
 
-    def update(self, descriptor):
+    def update(self, descriptor, **flags):
         self._load()
         logger.info("Updating model %s.%s using descriptor %s", self.kind(), self.name(), descriptor)
         for b in self.__class__.__bases__:
@@ -318,8 +318,8 @@ class Model():
                     pass
         self.put()
         if hasattr(self, "on_update") and callable(self.on_update):
-            self.on_update(descriptor) and self.put()
-        return self.to_dict()
+            self.on_update(descriptor, **flags)
+        return self.to_dict(**flags)
 
     def invoke(self, method, args, kwargs):
         self._load()
@@ -477,8 +477,8 @@ class Model():
             q.set_parent(kwargs["parent"])
         if "ownerid" in kwargs:
             q.owner(kwargs["ownerid"])
-        if "sortorder" in kwargs:
-            for s in kwargs["sortorder"]:
+        if "_sortorder" in kwargs:
+            for s in kwargs["_sortorder"]:
                 q.add_sort(s["column"], s.get("ascending", True))
         ix = 0
         while ix < len(args):
@@ -487,7 +487,7 @@ class Model():
         return q
 
     @classmethod
-    def create(cls, descriptor = None, parent = None):
+    def create(cls, descriptor = None, parent = None, **flags):
         if descriptor is None:
             descriptor = {}
         logger.info("Creating new %s model from descriptor %s", cls.__name__, descriptor)

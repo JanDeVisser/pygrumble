@@ -1,26 +1,33 @@
-if (typeof(com) !== 'object') {
-    var com = {}
+if (typeof String.prototype.endsWith !== 'function') {
+    String.prototype.endsWith = function(suffix) {
+        return this.indexOf(suffix, this.length - suffix.length) !== -1;
+    };
 }
-com.sweattrails = {}
-com.sweattrails.api = {}
-com.sweattrails.api.internal = {}
-com.sweattrails.api.prototypes = {}
 
-com.sweattrails.author = "Jan de Visser"
-com.sweattrails.copyright = "(c) Jan de Visser 2012 under the BSD License"
-com.sweattrails.api.xmlns = "http://www.sweattrails.com/html"
+if (typeof(com) !== 'object') {
+    var com = {};
+}
+
+com.sweattrails = {};
+com.sweattrails.api = {};
+com.sweattrails.api.internal = {};
+com.sweattrails.api.prototypes = {};
+
+com.sweattrails.author = "Jan de Visser";
+com.sweattrails.copyright = "(c) Jan de Visser 2012-2013 under the BSD License";
+com.sweattrails.api.xmlns = "http://www.sweattrails.com/html";
 
 if (typeof(ST) !== 'object') {
-    var ST = com.sweattrails.api
-    var ST_int = com.sweattrails.api.internal
+    var ST = com.sweattrails.api;
+    var ST_int = com.sweattrails.api.internal;
 }
 
 if (typeof(Object.create) !== 'function') {
     Object.create = function (o) {
         function F() {}
-        F.prototype = o
-        return new F()
-    }
+        F.prototype = o;
+        return new F();
+    };
 }
 
 com.sweattrails.api.Manager = function() {
@@ -331,10 +338,10 @@ com.sweattrails.api.internal.DataBridge.prototype.getValue = function(object, co
     if (g && (typeof(g) === "string") && g.endsWith("()")) {
         g = getfunc(g.substring(0, s.length() - 2));
     }
-    if (typeof(this.get) === "function") {
+    if (typeof(g) === "function") {
     	ret = this.get(object, context);
-    } else if (this.get !== null) {
-        return getvar(this.get, object);
+    } else if (g !== null) {
+        return getvar(g, object);
     }
     return ret;
 };
@@ -343,12 +350,12 @@ function getvar(name, ns) {
     ns = ns || this;
     name = name || "";
     var components = name.split(".");
-    for (var ix = 0; ix < components.length; ix++) {
+    for (var ix = 0; ns && (ix < components.length); ix++) {
         var component = components[ix].trim();
         if (component in ns) {
             ns = ns[component];
         } else {
-            return undefined;
+            ns = null;
         }
     }
     return ns;

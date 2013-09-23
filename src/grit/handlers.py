@@ -83,25 +83,16 @@ class ModelBridge(object):
     def get_parent(self):
         return None
 
-    def create(self, descriptor):
-        if self.can_create():
-            self._obj = self.kind().create(descriptor, self.get_parent())
-            self._key = self._obj and self._obj.id()
-        return self._obj
-
     def prepare_query(self, q):
         return q
 
     def query(self):
         # FIXME adapt to Model.query
-        q = self._load()
+        q = self._load() if hasattr(self, "_load") and callable(self._load) else {}
         q["keys_only"] = False
         logger.info("ModelBridge::query(%s)", q)
         q = self.prepare_query(q)
         return [o for o in self.kind().query(**q)]
-
-    def _load(self):
-        pass
 
     def get_objects(self):
         ret = []
@@ -257,8 +248,14 @@ class ImageHandler(PropertyBridgedHandler):
             self.error(401)
 
 class JSONHandler(BridgedHandler):
-    def update(self, d):
-        self.object() and self.can_update() and self.object().update(d)
+    def update(self, d, **flags):
+        self.object() and self.can_update() and self.object().update(d, **flags)
+
+    def create(self, descriptor, **flags):
+        if self.can_create():
+            self._obj = self.kind().create(descriptor, self.get_parent(), **flags)
+            self._key = self._obj and self._obj.id()
+        return self._obj
 
     def delete_obj(self):
         self.object() and self.can_delete() and grumble.delete(self.object())
@@ -277,12 +274,12 @@ class JSONHandler(BridgedHandler):
         if data and data != '':
             data = urllib.unquote_plus(data)
             if data.endswith("="):
-                (data, eq, empty) = data.rpartition("=")
+                (data, _, _) = data.rpartition("=")
             logger.debug("load() - data = %s", data)
             self._query = json.loads(data)
-            if "serialization_flags" in self._query:
-                self._flags = self._query["serialization_flags"]
-                del self._query["serialization_flags"]
+            if "_flags" in self._query:
+                self._flags = self._query["_flags"]
+                del self._query["_flags"]
             else:
                 self._flags = {}
         else:
@@ -291,7 +288,7 @@ class JSONHandler(BridgedHandler):
             
     def _load(self):
         return self._query
-
+    
     def post(self, key = None, kind = None):
         logger.info("JSONHandler.post(%s,%s)\n%s", key, kind, self.request.body)
         self._initialize_bridge(key, kind)
@@ -311,11 +308,11 @@ class JSONHandler(BridgedHandler):
                     ret.append(self.invoke(d["_invoke"]))
                 else:
                     if self.key():
-                        self.update(d)
+                        self.update(d, **self._flags)
                     else:
-                        self.create(d)
+                        self.create(d, **self._flags)
                     if self.object():
-                        ret.append(self.object().to_dict())
+                        ret.append(self.object().to_dict(**self._flags))
             ret = ret[0] if len(ret) == 1 else ret
             self.json_dump(ret)
             return

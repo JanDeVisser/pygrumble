@@ -64,6 +64,13 @@ class User(grumble.Model, gripe.auth.AbstractUser):
                 d[k] = component.to_dict()
         return d
 
+    def on_update(self, d, **flags):
+        for component in grumble.Query(UserComponent, False, True).set_parent(self):
+            (_, _, k) = component.kind().rpartition(".")
+            if k in d:
+                comp = d[k]
+                component.update(comp, **flags)
+
     def is_active(self):
         """
           An active user is a user currently in good standing.

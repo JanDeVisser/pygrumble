@@ -398,7 +398,7 @@ com.sweattrails.api.FormField = function(form, f) {
 	    this.bridge.get = p
 	} else if (f.getAttribute("get")) {
 	    this.bridge.get = getfunc(f.getAttribute("get"))
-	    this.bridge.set = f.getAttribute("set") && getfunc(s)
+	    this.bridge.set = f.getAttribute("set")
 	} else {
 	    this.bridge.get = this.id
 	}
@@ -410,7 +410,7 @@ com.sweattrails.api.FormField = function(form, f) {
 	    this.validator = getfunc(f.getAttribute("validate"))
 	}
 	this.label = f.getAttribute("label")
-	this.required = f.getAttribute("required") == "true"
+	this.required = f.getAttribute("required") === "true";
 	this.setType(f.getAttribute("type"), f)
 	if (f.getAttribute("value")) {
             var v = f.getAttribute("value")

@@ -39,6 +39,7 @@ com.sweattrails.api.LookupField.prototype.renderData = function(obj) {
     this.values.push(obj);
     var key = obj[this.key];
     var text = obj[this.text];
+    console.log(" adding xx[" + key + "] = " + text + "--");
     this.valuesByKey[key] = obj;
 };
 
@@ -87,10 +88,13 @@ com.sweattrails.api.LookupField.prototype.populateSpan = function() {
             img.width = img.height = 24;
             this.span.appendChild(img);
         }
-        console.log(" -->>> this.value: " + this.value)
-        var obj = this.valuesByKey[this.value];
-        console.log(" -->>> obj: " + obj)
-        this.span.appendChild(document.createTextNode(obj[this.text]));
+        console.log(" -->>> this.value: " + this.value);
+        if (this.value && (this.value in this.valuesByKey)) {
+            var obj = this.valuesByKey[this.value];
+            console.log(" -->>> obj: " + obj);
+            var txt = obj[this.text];
+            this.span.innerHTML = txt;
+        }
     }
 };
 
