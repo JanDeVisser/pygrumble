@@ -41,7 +41,7 @@ class PropertyConverter(object):
         try:
             return self.datatype(value) if not isinstance(value, self.datatype) else value
         except:
-            logger.debug("converter: %s - value %s - datatype %s", self.__class__.__name__, value, self.datatype)
+            logger.exception("PropertyConverter<%s>.convert(%s [%s])", self.datatype, value, type(value))
             raise
 
     def to_sqlvalue(self, value):
@@ -123,10 +123,10 @@ class DateConverter(PropertyConverter):
     
     def to_jsonvalue(self, value):
         assert (value is None) or isinstance(value, datetime.date), "DateConverter.to_jsonvalue: value must be date"
-        return gripe.json_util.datetime_to_dict(value)
+        return gripe.json_util.date_to_dict(value)
 
     def from_jsonvalue(self, value):
-        return gripe.json_util.dict_to_datetime(value) if isinstance(value, dict) else value
+        return gripe.json_util.dict_to_date(value) if isinstance(value, dict) else value
 
 class TimeConverter(PropertyConverter):
     datatype = datetime.time

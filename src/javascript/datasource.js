@@ -211,6 +211,20 @@ com.sweattrails.api.internal.DataSource.prototype.next = function() {
             if (this.object && ("key" in this.object)) {
                 this.key = this.object.key;
             }
+            if (this.debug && this.object) {
+                $$.log(this, "next(): " + this.object);
+                var dump = function(indent, o) {
+                    for (var k in o) {
+                        if (typeof(o[k]) === "object") {
+                            console.log(indent + k + ":");
+                            dump(indent + "  ", o[k]);
+                        } else {
+                            console.log(indent + k + ": " + o[k]);
+                        }
+                    }                    
+                };
+                dump("  ", this.object);
+            }
             return this.object;
         }
     } else {
@@ -640,6 +654,7 @@ com.sweattrails.api.DataSourceBuilder.prototype.build = function(elem, def_ds) {
         }
     }
     if (ret) {
+        ret.debug = elem.getAttribute("debug");
     	if (elem.getAttribute("ondata")) {
             ret.onData = getfunc(elem.getAttribute("ondata"));
     	}

@@ -13,6 +13,7 @@
         <st:field id="display_name" type="text" property="display_name" label="Name" required="true"/>
         <st:field id="country" type="lookup" property="profile.country" label="Country" 
                   url="/json/country" text="countryname" key="countrycode"/>
+        <st:field id="location" type="geocode" property="profile.location" label="Location"/>
         <st:field id="dob" type="date" property="profile.dob" label="Birthdate"/>
         <st:field id="gender" type="lookup" property="profile.gender" label="Gender" presentationtype="radio">
             <st:value text="Female" key="female"/>

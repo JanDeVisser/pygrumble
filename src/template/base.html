@@ -27,6 +27,9 @@
         {% block css %}
 	{% endblock css %}
     </style>
+    <script>
+        var google_api_key = "{{config.google_api_key}}";
+    </script>
     <script src="/javascript/grit.js" type="text/javascript"></script>
     <script src="/javascript/action.js" type="text/javascript"></script>
     <script src="/javascript/datasource.js" type="text/javascript"></script>
@@ -35,13 +38,8 @@
     <script src="/javascript/table.js" type="text/javascript"></script>
     <script src="/javascript/treeview.js" type="text/javascript"></script>
     <script src="/javascript/lookup.js" type="text/javascript"></script>
+    <script src="/javascript/geocode.js" type="text/javascript"></script>
     <script>
-        function signup_submitted() {
-            st_alert("Your signup request is being processed. Check your email for further instructions.")
-        }
-        function password_changed() {
-            st_alert("Your password is changed. Remember to use your new password the next time you check in.")
-        }
         {% block javascript %}
         {% endblock javascript %}
     </script>
@@ -49,7 +47,7 @@
     {% endblock %}
     <title>
         {% block title %}
-        SweatTrails
+        {{app.application_name}}
         {% endblock %}
     </title>
   </head>

@@ -8,8 +8,12 @@ __date__ ="$17-Sep-2013 1:24:18 PM$"
 import datetime
 import hashlib
 
+import gripe
 import grumble.converter
+import grumble.errors
 import grumble.schema
+
+logger = gripe.get_logger(__name__)
 
 class ModelProperty(object):
     def __new__(cls, *args, **kwargs):
@@ -93,9 +97,9 @@ class ModelProperty(object):
 
     def validate(self, value):
         if (value is None) and self.required:
-            raise PropertyRequired(self.name)
+            raise grumble.errors.PropertyRequired(self.name)
         if self.choices and value not in self.choices:
-            raise InvalidChoice(self.name, value)
+            raise grumble.errors.InvalidChoice(self.name, value)
         if self.validator:
             self.validator(value)
 
@@ -144,6 +148,7 @@ class ModelProperty(object):
             try:
                 v = self.converter.from_jsonvalue(v)
             except:
+                logger.exception("ModelProperty<%s>.from_json_value(%s [%s])", self.__class__.__name__, v, type(v))
                 pass
         setattr(instance, self.name, v)
 

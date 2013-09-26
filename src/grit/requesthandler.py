@@ -71,6 +71,7 @@ class ReqHandler(webapp2.RequestHandler):
             logger.debug("_get_context: ctx is None. Building new one")
             ctx = {}
         ctx['app'] = gripe.Config.app.get("about", {})
+        ctx['config'] = gripe.Config.app.get("config", {})
         ctx['user'] = self.user
         ctx['session'] = self.session
         ctx['request'] = self.request

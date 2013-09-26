@@ -7,8 +7,11 @@
         "copyright": "(c) 2012-2013 finiandarcy.com",
         "contact": "info@finiandarcy.com",
         "contacturl": "http://www.finiandarcy.com",
-        "application_name": "Grumble test app",
-        "application_url": "http://localhost:8080/"
+        "application_name": "Grumble test app"
+    },
+    "config": {
+        "google_api_key": "AIzaSyAGBJnvM6-HY8S_-5miEUR-uKetPVOYMRU",
+        "application_url": "http://localhost/"
     },
     "icon": "/ceilingcat.jpg",
     "container": {
