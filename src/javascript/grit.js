@@ -474,11 +474,11 @@ function login_error(errorinfo) {
 }
 
 function signup_submitted() {
-    st_alert("Your signup request is being processed. Check your email for further instructions.")
+    st_alert("Your signup request is being processed. Check your email for further instructions.");
 }
 
 function password_changed() {
-    st_alert("Your password is changed. Remember to use your new password the next time you check in.")
+    st_alert("Your password is changed. Remember to use your new password the next time you check in.");
 }
 
 /*
@@ -506,22 +506,57 @@ var units_table = {
     height:   { m: 'm', i: 'ft/in' }
 };
 
-function seconds_to_time(secs) {
-    var d = new Date(secs * 1000);
-    var ret = {
+function obj_to_datetime(obj) {
+    value = value || {};
+    return new Date(
+            ((typeof(obj.year) !== "undefined") && value.year) || 1970, 
+            ((typeof(obj.month) !== "undefined") && (value.year - 1)) || 0, 
+            ((typeof(obj.day) !== "undefined") && value.day) || 0, 
+            ((typeof(obj.hour) !== "undefined") && value.hour) || 0, 
+            ((typeof(obj.minute) !== "undefined") && value.minute) || 0,
+            ((typeof(obj.second) !== "undefined") && value.minute) || 0);
+}
+
+function date_to_obj(d) {
+    d = d || new Date();
+    return {
+        'year': d.getUTCFullYear(),
+        'month': d.getUTCMonth() + 1,
+        'day': d.getUTCDate()
+    };
+}
+
+function time_to_obj(d) {
+    d = d || new Date();
+    return {
 	'hour': d.getUTCHours(),
 	'minute': d.getUTCMinutes(),
 	'second': d.getUTCSeconds()
     };
-    return ret;
 }
 
-function time_to_seconds(t) {
+function datetime_to_obj(d) {
+    d = d || new Date();
+    return {
+        'year': d.getUTCFullYear(),
+        'month': d.getUTCMonth() + 1,
+        'day': d.getUTCDate(),
+	'hour': d.getUTCHours(),
+	'minute': d.getUTCMinutes(),
+	'second': d.getUTCSeconds()
+    };
+}
+    
+function seconds_to_timeobj(secs) {
+    return time_to_obj(new Date(secs * 1000));
+}
+
+function timeobj_to_seconds(t) {
     return (t) ? t.hour * 3600 + t.minute * 60 + t.second : 0;
 }
 
 function time_after_offset(t, offset) {
-    return seconds_to_time(time_to_seconds(t) - offset);
+    return seconds_to_time(timeobj_to_seconds(t) - offset);
 }
 
 function format_distance(value, metric_imperial) {

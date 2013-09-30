@@ -34,176 +34,176 @@ com.sweattrails.api.internal.buildErrors = function(obj, e) {
 };
 
 com.sweattrails.api.Form = function(id, container, ds, popup) {
-    this.id = id
-    this.type = "form"
-    if (container != null) {
-        this.setContainer(container)
+    this.id = id;
+    this.type = "form";
+    if (container) {
+        this.setContainer(container);
     }
-    if (ds != null) {
-        this.setDataSource(ds)
+    if (ds) {
+        this.setDataSource(ds);
     }
     if (popup) {
-        this.makePopup()
+        this.makePopup();
     }
-    this.fields = []
-    this.$ = {}
-    this.footer = new com.sweattrails.api.ActionContainer(this, "footer")
-    this.header = new com.sweattrails.api.ActionContainer(this, "header")
-    this.mode = com.sweattrails.api.MODE_VIEW
-    com.sweattrails.api.STManager.register(this)
-    return this
-}
+    this.fields = [];
+    this.$ = {};
+    this.footer = new com.sweattrails.api.ActionContainer(this, "footer");
+    this.header = new com.sweattrails.api.ActionContainer(this, "header");
+    this.mode = com.sweattrails.api.MODE_VIEW;
+    com.sweattrails.api.STManager.register(this);
+    return this;
+};
 
 com.sweattrails.api.Form.prototype.setContainer = function(c) {
-    if (typeof(c) == "string") {
-    	this.container = document.getElementById(this.id)
+    if (typeof(c) === "string") {
+    	this.container = document.getElementById(this.id);
     } else {
-    	this.container = c
+    	this.container = c;
     }
-    this.table = null
-}
+    this.table = null;
+};
 
 com.sweattrails.api.Form.prototype.makePopup = function() {
-    var container = document.createElement("div")
-    container.id = this.id + "-popup"
-    container.className = this.className || "popup"
-    container.hidden = true
-    this.container.appendChild(container)
-    this.container = container
-}
+    var container = document.createElement("div");
+    container.id = this.id + "-popup";
+    container.className = this.className || "popup";
+    container.hidden = true;
+    this.container.appendChild(container);
+    this.container = container;
+};
 
 com.sweattrails.api.Form.prototype.makeModal = function() {
-	var body = document.getElementsByTagName("body")[0]
-    this.overlay = document.getElementById("overlay")
+	var body = document.getElementsByTagName("body")[0];
+    this.overlay = document.getElementById("overlay");
     if (!this.overlay) {
-    	this.overlay = document.createElement("div")
-        this.overlay.id = "overlay"
-        this.overlay.className = "overlay"
-        this.overlay.hidden = true
-        body.appendChild(this.overlay)
+    	this.overlay = document.createElement("div");
+        this.overlay.id = "overlay";
+        this.overlay.className = "overlay";
+        this.overlay.hidden = true;
+        body.appendChild(this.overlay);
     }
-    var container = document.createElement("div")
-    container.id = this.id + "-modal"
-    container.className = "modal"
-    container.hidden = true
-    body.appendChild(container)
-    this.container = container
-    this.modal = true
-}
+    var container = document.createElement("div");
+    container.id = this.id + "-modal";
+    container.className = "modal";
+    container.hidden = true;
+    body.appendChild(container);
+    this.container = container;
+    this.modal = true;
+};
 
 com.sweattrails.api.Form.prototype.setTable = function(tableid) {
-    this.id = tableid
-    this.table = document.getElementById(this.id)
-    this.container = null
-}
+    this.id = tableid;
+    this.table = document.getElementById(this.id);
+    this.container = null;
+};
 
 com.sweattrails.api.Form.prototype.setDataSource = function(ds) {
-    this.datasource = ds
-    ds.addView(this)
-}
+    this.datasource = ds;
+    ds.addView(this);
+};
 
 com.sweattrails.api.Form.prototype.addField = function(fld) {
-    this.fields.push(fld)
-    fld.form = this
-    this.$[fld.id] = fld
-}
+    this.fields.push(fld);
+    fld.form = this;
+    this.$[fld.id] = fld;
+};
 
 com.sweattrails.api.Form.prototype.addAction = function(action) {
-    this.actions.add(action)
-}
+    this.actions.add(action);
+};
 
 com.sweattrails.api.Form.field = function(fld) {
     for (var fix in this.fields) {
-        var f = this.fields[fix]
-        if (f.id == fld) return f
+        var f = this.fields[fix];
+        if (f.id === fld) return f;
     }
-    return null
-}
+    return null;
+};
 
 com.sweattrails.api.Form.prototype.newTR = function() {
     if (!this.table) {
-        this.table = document.createElement("table")
-        this.table.width = "100%"
-        p = (this.form) ? this.form : this.container
-        p.appendChild(this.table)
+        this.table = document.createElement("table");
+        this.table.width = "100%";
+        p = (this.form) ? this.form : this.container;
+        p.appendChild(this.table);
     }
-    var tr = document.createElement("tr")
-    this.table.appendChild(tr)
-    return tr
-}
+    var tr = document.createElement("tr");
+    this.table.appendChild(tr);
+    return tr;
+};
 
 com.sweattrails.api.Form.prototype.render = function() {
-    console.log("Form[" + this.id + "].render() " + this.container.className)
-    if (!this.container || !this.container.hidden || (this.container.className == "tabpage")) {
-        console.log("Container visible")
+    console.log("Form[" + this.id + "].render() " + this.container.className);
+    if (!this.container || !this.container.hidden || (this.container.className === "tabpage")) {
+        console.log("Container visible");
         if ((arguments.length > 0) && arguments[0]) {
-            this.mode = arguments[0]
+            this.mode = arguments[0];
         } else if (this.init_mode) {
-            this.mode = this.init_mode
-            this.init_mode = null
+            this.mode = this.init_mode;
+            this.init_mode = null;
         } else {
-            this.mode = com.sweattrails.api.MODE_VIEW
+            this.mode = com.sweattrails.api.MODE_VIEW;
         }
-        var obj = null
-        if (this.mode != com.sweattrails.api.MODE_NEW) {
-            this.datasource.execute()
+        var obj = null;
+        if (this.mode !== com.sweattrails.api.MODE_NEW) {
+            this.datasource.execute();
         } else {
-            if (typeof(this.initialize) == "function") {
-                obj = this.initialize()
+            if (typeof(this.initialize) === "function") {
+                obj = this.initialize();
             }
-            this.datasource.setObject(obj)
-            this.renderData(this.datasource.object)
+            this.datasource.setObject(obj);
+            this.renderData(this.datasource.object);
         }
     }
-}
+};
 
 
 com.sweattrails.api.Form.prototype.renderData = function(obj) {
-    this.header.erase()
-    this.footer.erase()
+    this.header.erase();
+    this.footer.erase();
     if (this.form) {
-    	this.container.removeChild(this.form)
-    	this.form = null
-    	this.table = null
+    	this.container.removeChild(this.form);
+    	this.form = null;
+    	this.table = null;
     }
     if (this.table) {
-        this.container.removeChild(this.table)
-        this.table = null
+        this.container.removeChild(this.table);
+        this.table = null;
     }
-    this.header.render()
-    this.renderedFields = []
-    if (this.type == "form") {
-        this.form = document.createElement("form")
-        this.form.name = "form-" + this.id
-        this.form.method = this.method
-        this.form.action = this.action
-        this.container.appendChild(this.form)    	
+    this.header.render();
+    this.renderedFields = [];
+    if (this.type === "form") {
+        this.form = document.createElement("form");
+        this.form.name = "form-" + this.id;
+        this.form.method = this.method;
+        this.form.action = this.action;
+        this.container.appendChild(this.form);
     }
     for (var ix in this.fields) {
-    	var f = this.fields[ix]
-        f.element = null
+    	var f = this.fields[ix];
+        f.element = null;
         if (f.render(this.mode, obj)) {
-            this.renderedFields.push(f)
+            this.renderedFields.push(f);
         }
     }
-    this.footer.render()
-}
+    this.footer.render();
+};
 
 com.sweattrails.api.Form.prototype.applyData = function() {
-    if (this.mode != com.sweattrails.api.MODE_NEW) {
-        this.datasource.reset()
-        this.datasource.next()
+    if (this.mode !== com.sweattrails.api.MODE_NEW) {
+        this.datasource.reset();
+        this.datasource.next();
     }
-    for (fix in this.renderedFields) {
-        f = this.renderedFields[fix]
+    for (var fix in this.renderedFields) {
+        var f = this.renderedFields[fix];
         if (!f.readonly) {
-            f.setValue(this.datasource.object)
+            f.setValue(this.datasource.object);
         }
     }
     if (typeof(this.prepare) === "function") {
         this.prepare(this.datasource.object);
     }
-}
+};
 
 com.sweattrails.api.Form.prototype.submit = function() {
     this.errors = [];
@@ -228,7 +228,7 @@ com.sweattrails.api.Form.prototype.submit = function() {
             this.datasource.submit();
         }
     }
-;}
+};
 
 com.sweattrails.api.Form.prototype.progressOff = function() {
     this.footer.progressOff();
@@ -301,59 +301,59 @@ com.sweattrails.api.Form.prototype.onRedirect = function(href) {
  */
 
 com.sweattrails.api.FormBuilder = function() {
-    this.type = "builder"
-    this.name = "formbuilder"
-    com.sweattrails.api.STManager.processor("form", this)
-}
+    this.type = "builder";
+    this.name = "formbuilder";
+    com.sweattrails.api.STManager.processor("form", this);
+};
 
 com.sweattrails.api.FormBuilder.prototype.process = function(f) {
-    var id = f.getAttribute("name")
-    console.log("formBuilder: found form " + id)
-    var ds = com.sweattrails.api.dataSourceBuilder.build(f)
-    var form = new com.sweattrails.api.Form(id, f.parentNode, ds)
-    this.buildForm(form, f)
-}
+    var id = f.getAttribute("name");
+    $$.log(this, "Found form " + id);
+    var ds = com.sweattrails.api.dataSourceBuilder.build(f);
+    var form = new com.sweattrails.api.Form(id, f.parentNode, ds);
+    this.buildForm(form, f);
+};
 
 com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
-    form.type = 'json'
+    form.type = 'json';
     if (elem.getAttribute("type")) {
-        form.type = elem.getAttribute("type")
+        form.type = elem.getAttribute("type");
         if ("json;form".indexOf(form.type) < 0) {
-            console.log("Invalid form type " + form.type + " for form " + form.id)
-            form.type = "json"
+            console.log("Invalid form type " + form.type + " for form " + form.id);
+            form.type = "json";
         }
-        if (form.type == "form") {
-            form.action = elem.getAttribute("action")
+        if (form.type === "form") {
+            form.action = elem.getAttribute("action");
             if (!form.action) {
-                console.log("Missing form action for form " + form.id)
-                form.type = "json"
+                console.log("Missing form action for form " + form.id);
+                form.type = "json";
             }
-            form.method = "POST"
+            form.method = "POST";
             if (elem.getAttribute("method")) {
-                form.method = elem.getAttribute("method")
+                form.method = elem.getAttribute("method");
             }
         }
     }
     if (elem.getAttribute("mode")) {
-        form.init_mode = elem.getAttribute("mode")
+        form.init_mode = elem.getAttribute("mode");
     }
     if (elem.getAttribute("initialize")) {
-        form.initialize = getfunc(elem.getAttribute("initialize"))
+        form.initialize = getfunc(elem.getAttribute("initialize"));
     }
     if (elem.getAttribute("onsubmitted")) {
-        form.onsubmitted = getfunc(elem.getAttribute("onsubmitted"))
+        form.onsubmitted = getfunc(elem.getAttribute("onsubmitted"));
     }
     if (elem.getAttribute("validate")) {
-        this.validator = getfunc(elem.getAttribute("validate"))
+        this.validator = getfunc(elem.getAttribute("validate"));
     }
     if (elem.getAttribute("onerror")) {
-        form.onerror = getfunc(elem.getAttribute("onerror"))
+        form.onerror = getfunc(elem.getAttribute("onerror"));
     }
     if (elem.getAttribute("onredirect")) {
-        form.onredirect = getfunc(elem.getAttribute("onredirect"))
+        form.onredirect = getfunc(elem.getAttribute("onredirect"));
     }
     if (elem.getAttribute("class")) {
-    	form.className = elem.getAttribute("class")
+    	form.className = elem.getAttribute("class");
     }
     form.submitMessage = (elem.getAttribute("submitmessage")) ? elem.getAttribute("submitmessage") : "Saving ...";
     if (elem.getAttribute("popup") && ("true" === elem.getAttribute("popup"))) {
@@ -361,28 +361,28 @@ com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
     } else if (elem.getAttribute("modal") && ("true" === elem.getAttribute("modal"))) {
         form.makeModal();
     }
-    var fields = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "field")
+    var fields = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "field");
     for (var j = 0; j < fields.length; j++) {
-        new com.sweattrails.api.FormField(form, fields[j])
+        new com.sweattrails.api.FormField(form, fields[j]);
     }
-    form.footer.build(elem)
-    var footer = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "footer")
-    if (footer.length == 1) {
-        form.footer.build(footer[0])
+    form.footer.build(elem);
+    var footer = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "footer");
+    if (footer.length) {
+        form.footer.build(footer[0]);
     }
-    var header = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "header")
-    if (header.length == 1) {
-        form.header.build(header[0])
+    var header = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "header");
+    if (header.length) {
+        form.header.build(header[0]);
     }
-}
+};
 
-new com.sweattrails.api.FormBuilder()
+new com.sweattrails.api.FormBuilder();
 
 /**
  * FormField - Abstract base class for form elements
  */
 
-com.sweattrails.api.internal.fieldtypes = {}
+com.sweattrails.api.internal.fieldtypes = {};
 
 com.sweattrails.api.FormField = function(form, f) {
     this.hidden = false;
@@ -425,8 +425,8 @@ com.sweattrails.api.FormField.prototype.setType = function(type, elem) {
     type = type || "text";
     var factory = com.sweattrails.api.internal.fieldtypes[type];
     if (!factory) {
-        $$.log(this, "TYPE " + type + " NOT REGISTERED!")
-        $$.log(this, "REGISTRY:")
+        $$.log(this, "TYPE " + type + " NOT REGISTERED!");
+        $$.log(this, "REGISTRY:");
         for (t in com.sweattrails.api.internal.fieldtypes) {
             $$.log(this, "  " + t + "==" ? (type === t) : "!=");
         }
@@ -505,23 +505,23 @@ com.sweattrails.api.FormField.prototype.render = function(mode, object) {
 };
 
 Object.defineProperty(com.sweattrails.api.FormField.prototype, "hidden", {
-    get: function() { return this._hidden },
+    get: function() { return this._hidden; },
     set: function(h) {
-        this._hidden = h
-        if (this.element) this.element.hidden = h
+        this._hidden = h;
+        if (this.element) this.element.hidden = h;
     }
-})
+});
 
 com.sweattrails.api.FormField.prototype.validate = function() {
-    this.errors = null
-    if (this.impl.validator != null) {
-    	ST_int.buildErrors(this, this.impl.validator())
+    this.errors = null;
+    if (this.impl.validator) {
+    	ST_int.buildErrors(this, this.impl.validator());
     }
-    if (this.validator != null) {
-        ST_int.buildErrors(this, this.validator())
+    if (this.validator) {
+        ST_int.buildErrors(this, this.validator());
     }
-    return this.errors
-}
+    return this.errors;
+};
 
 com.sweattrails.api.FormField.prototype.onValueChange = function() {
     if (this.onchange) {
@@ -546,76 +546,80 @@ com.sweattrails.api.FormField.prototype.getValue = function(object) {
     return ret;
 };
 
-/**
+/*
  * TextField -
  */
 
 com.sweattrails.api.TextField = function(fld, elem) {
-    this.field = fld
-    this.size = elem.getAttribute("size")
-    this.maxlength = elem.getAttribute("maxlength")
-}
+    this.field = fld;
+    this.size = elem.getAttribute("size");
+    this.maxlength = elem.getAttribute("maxlength");
+};
 
 com.sweattrails.api.TextField.prototype.renderEdit = function(value) {
-    this.control = document.createElement("input")
-    this.control.value = value || ""
-    this.control.name = this.field.id
-    this.control.id = this.field.id
-    this.control.type = "text"
-    if (this.size) this.control.size = this.size
-    if (this.maxlength) this.control.maxLength = this.maxlength
-    this.control.onchange = this.field.onValueChange.bind(this.field)
+    this.control = document.createElement("input");
+    this.control.value = value || "";
+    this.control.name = this.field.id;
+    this.control.id = this.field.id;
+    this.control.type = "text";
+    if (this.size) {
+        this.control.size = this.size;
+    }
+    if (this.maxlength) {
+        this.control.maxLength = this.maxlength;
+    }
+    this.control.onchange = this.field.onValueChange.bind(this.field);
     return this.control;
-}
+};
 
 com.sweattrails.api.TextField.prototype.setValueFromControl = function(bridge, object) {
     bridge.setValue(object, this.control.value);
 };
 
 com.sweattrails.api.TextField.prototype.renderView = function(value) {
-    var ret = document.createElement("span")
-    ret.innerHTML = value || ""
-    return ret
-}
+    var ret = document.createElement("span");
+    ret.innerHTML = value || "";
+    return ret;
+};
 
-/**
+/*
  * PasswordField -
  */
 
 com.sweattrails.api.PasswordField = function(fld, elem) {
-    this.field = fld
-    this.confirm = elem.getAttribute("confirm") && (elem.getAttribute("confirm") == "true")
-}
+    this.field = fld;
+    this.confirm = elem.getAttribute("confirm") && (elem.getAttribute("confirm") === "true");
+};
 
 com.sweattrails.api.PasswordField.prototype.renderEdit = function(value) {
-    this.div = document.createElement("div")
-    this.control = document.createElement("input")
-    this.control.value =  ""
-    this.control.name = this.field.id
-    this.control.id = this.field.id
-    this.control.type = "password"
-    if (this.size) this.control.size = this.size
-    if (this.maxlength) this.control.maxLength = this.maxlength
-    this.control.onchange = this.field.onValueChange.bind(this.field)
-    this.div.appendChild(this.control)
+    this.div = document.createElement("div");
+    this.control = document.createElement("input");
+    this.control.value =  "";
+    this.control.name = this.field.id;
+    this.control.id = this.field.id;
+    this.control.type = "password";
+    if (this.size) this.control.size = this.size;
+    if (this.maxlength) this.control.maxLength = this.maxlength;
+    this.control.onchange = this.field.onValueChange.bind(this.field);
+    this.div.appendChild(this.control);
     if (this.confirm) {
-	this.check = document.createElement("input")
-	this.check.value =  ""
-	this.check.name = this.field.id + "-check"
-	this.check.id = this.field.id + "-check"
-	this.check.type = "password"
-	this.div.appendChild(this.check)
+	this.check = document.createElement("input");
+	this.check.value =  "";
+	this.check.name = this.field.id + "-check";
+	this.check.id = this.field.id + "-check";
+	this.check.type = "password";
+	this.div.appendChild(this.check);
     }
-    return this.div
-}
+    return this.div;
+};
 
 com.sweattrails.api.PasswordField.prototype.validate = function() {
-    if (this.confirm && (this.control.value != this.check.value)) {
-	return "Password values do not match"
+    if (this.confirm && (this.control.value !== this.check.value)) {
+	return "Password values do not match";
     } else {
-	return null
+	return null;
     }
-}
+};
 
 com.sweattrails.api.PasswordField.prototype.setValueFromControl = function(bridge, object) {
     this.value = this.control.value;
@@ -623,105 +627,108 @@ com.sweattrails.api.PasswordField.prototype.setValueFromControl = function(bridg
 };
 
 com.sweattrails.api.PasswordField.prototype.renderView = function(value) {
-    var ret = document.createElement("span")
-    ret.innerHTML = "*******"
-    return ret
-}
+    var ret = document.createElement("span");
+    ret.innerHTML = "*******";
+    return ret;
+};
 
-/**
+/*
  * WeightField -
  */
 
 com.sweattrails.api.WeightField = function(fld, elem) {
-    this.field = fld
-}
+    this.field = fld;
+};
 
 com.sweattrails.api.WeightField.prototype.renderEdit = function(value) {
-    this.span = document.createElement("span")
-    this.control = document.createElement("input")
-    var w = null
-    if (value)
-        w = weight(parseFloat(value), native_unit, false)
-    this.control.value = w || ""
-    this.control.value = value || ""
-    this.control.name = this.field.id
-    this.control.id = this.field.id
-    this.control.type = "text"
-    this.control.maxLength = 6
-    this.control.size = 4 // WAG
-    this.control.onchange = this.field.onValueChange.bind(this.field)
-    this.span.appendChild(this.control)
-    this.unitSelector = document.createElement("select")
-    this.unitSelector.name = this.field.id + "-units"
-    this.unitSelector.id = this.unitSelector.name
-    var option = document.createElement("option")
-    option.selected = native_unit == "m"
-    option.value = "1.0"
-    option.text = "kg"
-    this.unitSelector.appendChild(option)
-    option = document.createElement("option")
-    option.selected = native_unit == "i"
-    option.value = "2.20462262"
-    option.text = "lbs"
-    this.unitSelector.onchange = this.field.onValueChange.bind(this.field)
-    this.unitSelector.appendChild(option)
-    this.span.appendChild(this.unitSelector)
-    return this.span
-}
+    this.span = document.createElement("span");
+    this.control = document.createElement("input");
+    var w = null;
+    if (value) {
+        w = weight(parseFloat(value), native_unit, false);
+    }
+    this.control.value = w || "";
+    this.control.value = value || "";
+    this.control.name = this.field.id;
+    this.control.id = this.field.id;
+    this.control.type = "text";
+    this.control.maxLength = 6;
+    this.control.size = 4; // WAG
+    this.control.onchange = this.field.onValueChange.bind(this.field);
+    this.span.appendChild(this.control);
+    this.unitSelector = document.createElement("select");
+    this.unitSelector.name = this.field.id + "-units";
+    this.unitSelector.id = this.unitSelector.name;
+    var option = document.createElement("option");
+    option.selected = (native_unit === "m");
+    option.value = "1.0";
+    option.text = "kg";
+    this.unitSelector.appendChild(option);
+    option = document.createElement("option");
+    option.selected = (native_unit === "i");
+    option.value = "2.20462262";
+    option.text = "lbs";
+    this.unitSelector.onchange = this.field.onValueChange.bind(this.field);
+    this.unitSelector.appendChild(option);
+    this.span.appendChild(this.unitSelector);
+    return this.span;
+};
 
 com.sweattrails.api.WeightField.prototype.setValueFromControl = function(bridge, object) {
-    this.value = parseFloat(this.control.value) / parseFloat(this.unitSelector.value)
+    this.value = parseFloat(this.control.value) / parseFloat(this.unitSelector.value);
     bridge.setValue(object, this.value);
 };
 
 com.sweattrails.api.WeightField.prototype.renderView = function(value) {
-    var ret = document.createElement("span")
-    var w = null
-    if (value)
-        w = weight(parseFloat(value), native_unit, true)
-    ret.innerHTML = w || ""
-    return ret
-}
+    var ret = document.createElement("span");
+    var w = null;
+    if (value) {
+        w = weight(parseFloat(value), native_unit, true);
+    }
+    ret.innerHTML = w || "";
+    return ret;
+};
 
-/**
+/*
  * LengthField -
  */
 
 com.sweattrails.api.LengthField = function(fld, elem) {
-    this.field = fld
-}
+    this.field = fld;
+};
 
 com.sweattrails.api.LengthField.prototype.renderEdit = function(value) {
-    this.span = document.createElement("span")
-    this.control = document.createElement("input")
-    var l = null
-    if (value)
-        l = length(parseFloat(value), native_unit, false)
-    this.control.value = l || ""
-    this.control.name = this.field.id
-    this.control.id = this.field.id
-    this.control.type = "text"
-    this.control.maxLength = 6
-    this.control.size = 4 // WAG
-    this.control.onchange = this.field.onValueChange.bind(this.field)
-    this.span.appendChild(this.control)
-    this.unitSelector = document.createElement("select")
-    this.unitSelector.name = this.field.id + "-units"
-    this.unitSelector.id = this.unitSelector.name
-    var option = document.createElement("option")
-    option.selected = native_unit == "m"
-    option.value = "1.0"
-    option.text = "cm"
-    this.unitSelector.appendChild(option)
-    option = document.createElement("option")
-    option.selected = native_unit == "i"
-    option.value = "0.393700787"
-    option.text = "in"
-    this.unitSelector.appendChild(option)
-    this.unitSelector.onchange = this.field.onValueChange.bind(this.field)
-    this.span.appendChild(this.unitSelector)
-    return this.span
-}
+    this.span = document.createElement("span");
+    this.control = document.createElement("input");
+    var l = null;
+    if (value) {
+        l = length(parseFloat(value), native_unit, false);
+    }
+    this.control.value = l || "";
+    this.control.name = this.field.id;
+    this.control.id = this.field.id;
+    this.control.type = "text";
+    this.control.maxLength = 6;
+    this.control.size = 4; // WAG
+    this.control.onchange = this.field.onValueChange.bind(this.field);
+    this.span.appendChild(this.control);
+    this.unitSelector = document.createElement("select");
+    this.unitSelector.name = this.field.id + "-units";
+    this.unitSelector.id = this.unitSelector.name;
+    var option = document.createElement("option");
+    option.selected = (native_unit === "m");
+    option.value = "1.0";
+    option.text = "cm";
+    this.unitSelector.appendChild(option);
+    option = document.createElement("option");
+    option.selected = (native_unit === "i");
+    option.value = "0.393700787";
+    option.text = "in";
+    this.unitSelector.appendChild(option);
+    this.unitSelector.onchange = this.field.onValueChange.bind(this.field);
+    this.span.appendChild(this.unitSelector);
+    return this.span;
+};
 
 com.sweattrails.api.LengthField.prototype.setValueFromControl = function(bridge, object) {
     this.value = parseFloat(this.control.value) / parseFloat(this.unitSelector.value);
@@ -742,32 +749,33 @@ com.sweattrails.api.LengthField.prototype.setValueFromControl = function(bridge,
 };
 
 com.sweattrails.api.LengthField.prototype.renderView = function(value) {
-    var ret = document.createElement("span")
-    var l = null
-    if (value)
-        l = length(parseFloat(value), native_unit, true)
-    ret.innerHTML = l || ""
-    return ret
-}
+    var ret = document.createElement("span");
+    var l = null;
+    if (value) {
+        l = length(parseFloat(value), native_unit, true);
+    }
+    ret.innerHTML = l || "";
+    return ret;
+};
 
-/**
+/*
  * CheckBoxField -
  */
 
 com.sweattrails.api.CheckBoxField = function(fld, elem) {
-    this.field = fld
-}
+    this.field = fld;
+};
 
 com.sweattrails.api.CheckBoxField.prototype.renderEdit = function(value) {
-    this.control = document.createElement("input")
-    this.control.value = true
-    this.control.checked = value
-    this.control.name = this.field.id
-    this.control.id = this.field.id
-    this.control.type = "checkbox"
-    this.control.onchange = this.field.onValueChange.bind(this.field)
-    return this.control
-}
+    this.control = document.createElement("input");
+    this.control.value = true;
+    this.control.checked = value;
+    this.control.name = this.field.id;
+    this.control.id = this.field.id;
+    this.control.type = "checkbox";
+    this.control.onchange = this.field.onValueChange.bind(this.field);
+    return this.control;
+};
 
 com.sweattrails.api.CheckBoxField.prototype.setValueFromControl = function(bridge, object) {
     this.value = this.control.checked;
@@ -786,60 +794,44 @@ com.sweattrails.api.CheckBoxField.prototype.renderView = function(value) {
 	ret.innerHTML = "&#160;";
     }
     return ret;
-}
+};
 
-/**
+/*
  * DateTimeField -
  */
 
 com.sweattrails.api.DateTimeField = function(fld, elem) {
-    this.field = fld
-    this.date = this.time = true
-}
+    this.field = fld;
+    this.date = this.time = true;
+};
 
 com.sweattrails.api.DateTimeField.prototype.renderEdit = function(value) {
-    var span = document.createElement("span")
-    var d = value && new Date(value.year, (value.month - 1), value.day)
-    if (this.date) {
-        this.datecontrol = document.createElement("input")
-        this.datecontrol.name = this.field.id + "-date"
-        this.datecontrol.id = this.datecontrol.name
-        this.datecontrol.type = "date"
-        d && (this.datecontrol.valueAsDate = d)
-        this.datecontrol.onchange = this.field.onValueChange.bind(this.field)
-        span.appendChild(this.datecontrol)
+    var span = document.createElement("span");
+    var d = null;
+    if (this.date && !this.time) {
+        d = value && new Date(value.year, (value.month - 1), value.day);
+        this.datecontrol = document.createElement("input");
+        this.datecontrol.name = this.field.id + "-date";
+        this.datecontrol.id = this.datecontrol.name;
+        this.datecontrol.type = "date";
+        d && (this.datecontrol.valueAsDate = d);
+        this.datecontrol.onchange = this.field.onValueChange.bind(this.field);
+        span.appendChild(this.datecontrol);
     }
 
-    if (this.time) {
-        this.hrcontrol = document.createElement("select")
-        this.hrcontrol.name = this.field.id + "-hour"
-        this.hrcontrol.id = this.hrcontrol.name
-        for (var h = 0; h < 24; h++) {
-            var option = document.createElement("option")
-            option.selected = value && (value.hour == h)
-            option.value = h
-            option.text = h
-            this.hrcontrol.appendChild(option)
-        }
-        this.hrcontrol.onchange = this.field.onValueChange.bind(this.field)
-        span.appendChild(this.hrcontrol)
-
-        this.mincontrol = document.createElement("select")
-        this.mincontrol.name = this.field.id + "-min"
-        this.mincontrol.id = this.mincontrol.name
-        for (var m = 0; m < 24; m++) {
-            option = document.createElement("option")
-            option.selected = value && (value.minute == m)
-            option.value = m
-            option.text = m
-            this.mincontrol.appendChild(option)
-        }
-        this.mincontrol.onchange = this.field.onValueChange.bind(this.field)
-        span.appendChild(this.mincontrol)
+    if (this.time && !this.date) {
+        d = value && new Date(1970, 0, 1, value.hour, value.minute);
+        this.timecontrol = document.createElement("input");
+        this.timecontrol.name = this.field.id + "-time";
+        this.timecontrol.id = this.timecontrol.name;
+        this.timecontrol.type = "time";
+        d && (this.timecontrol.valueAsDate = d);
+        this.timecontrol.onchange = this.field.onValueChange.bind(this.field);
+        span.appendChild(this.timecontrol);
     }
 
-    return span
-}
+    return span;
+};
 
 com.sweattrails.api.DateTimeField.prototype.setValueFromControl = function(bridge, object) {
     this.value = {};
