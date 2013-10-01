@@ -1,0 +1,139 @@
+<!--
+To change this template, choose Tools | Templates
+and open the template in the editor.
+-->
+<!DOCTYPE html>
+<html>
+  <head>
+    <title></title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <style>
+        table, td {
+            border: 1px solid black;
+            border-collapse: collapse;
+        }
+        
+        td {
+            vertical-align: top;
+        }
+    </style>
+    <script>
+        function what(t) {
+            console.log("what(" + t + ")");
+            var span_t = document.getElementById(t + "-debug-t");
+            var span_n = document.getElementById(t + "-debug-n");
+            var span_d = document.getElementById(t + "-debug-d");
+            var span_type = document.getElementById(t + "-debug-type");
+            span_t.innerHTML = ((typeof(this.value) !== "undefined") && this.value) || "&nbsp;";
+            span_n.innerHTML = ((typeof(this.valueAsNumber) !== "undefined") && this.valueAsNumber) || "&nbsp;";
+            span_d.innerHTML = ((typeof(this.valueAsDate) !== "undefined") && this.valueAsDate) || "&nbsp;";
+            span_type.innerHTML = typeof((t === "file") ? this.files[0] : this.value);
+        }
+
+        function setvalue(t) {
+            console.log("setvalue(" + t + ")");
+            var input = document.getElementById(t + "-input");
+            this.value = input.value;
+            console.log(t + ": typeof(input.value) = " + typeof(input.value));
+        }
+
+        function enumerate(t) {
+            console.log("enumerate(" + t + ")");
+            var s = "";
+            for (var p in this) {
+                console.log(p);
+                s = s + p + " ";
+            }
+            var div = document.getElementById(t + "-enum");
+            div.innerHTML = s;
+        }
+;
+        var configure = {};
+
+        configure.range = function(c) {
+            c.min = 0;
+            c.max = 10;
+        };
+
+        td = function(elem, rowspan) {
+            if (!rowspan) rowspan = 3;
+            var tdelem = document.createElement("td");
+            tdelem.appendChild(elem);
+            tdelem.rowspan = rowspan;
+            return tdelem;
+        };
+
+        generateType = function(t) {
+            var tr = document.createElement("tr");
+            tr.id = t + "-row";
+
+            tr.appendChild(td(document.createTextNode(t)));
+
+            var input = document.createElement("input");
+            input.id = t + "-control";
+            input.type = t;
+            this.configure[t] && this.configure[t](input);
+            var w = what.bind(input, t);
+            input.onchange = w;
+            tr.appendChild(td(input));
+
+            var d = document.createElement("div");
+            var a = document.createElement("a");
+            a.href = "#";
+            a.onclick = w;
+            a.innerHTML = "What?";
+            d.appendChild(a);
+            var div_debug = document.createElement("div");
+            div_debug.id = t + "-debug";
+            div_debug.innerHTML =
+            "<table><tr><td>Value:</td><td><span id='" + t + "-debug-t'>&nbsp;</span></td></tr>" +
+                "<tr><td>Numeric value:</td><td><span id='" + t + "-debug-n'>&nbsp;</span></td></tr>" +
+                "<tr><td>Date value:</td><td><span id='" + t + "-debug-d'>&nbsp;</span></td></tr>" +
+                "<tr><td>Value type:</td><td><span id='" + t + "-debug-type'>&nbsp;</span></td></tr>" +
+            "</table>";
+            d.appendChild(div_debug);
+            tr.appendChild(td(d));
+
+            d = document.createElement("div");
+            a = document.createElement("a");
+            a.href = "#";
+            a.onclick = enumerate.bind(input, t);
+            a.innerHTML = "Enum";
+            d.appendChild(a);
+            div_debug = document.createElement("div");
+            div_debug.id = t + "-enum";
+            d.appendChild(div_debug);
+            tr.appendChild(td(d));
+
+            var inputbox = document.createElement("input");
+            inputbox.type = "text";
+            inputbox.id = t + "-input";
+            tr.appendChild(td(inputbox));
+
+            a = document.createElement("a");
+            a.href = "#";
+            a.onclick = setvalue.bind(input, t);
+            a.innerHTML = "Set";
+            tr.appendChild(td(a));
+
+            return tr;
+        }
+
+        var types = [ "checkbox", "color", "date", "datetime",
+            "datetime-local", "email", "file", "hidden", "month",
+            "number", "password", "radio", "range", "search", "tel", "text", "time",
+            "url", "week" ];
+
+        function generate() {
+            var container = document.getElementById("container");
+            for (var tix in types) {
+                container.appendChild(generateType(types[tix]));
+            }
+        }
+
+    </script>
+  </head>
+  <body onload="generate();">
+      <table id="container" border="1"></table>
+  </body>
+</html>

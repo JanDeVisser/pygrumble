@@ -123,7 +123,7 @@ com.sweattrails.api.LookupField.prototype._getValueForKey = function(key) {
     this.value = this.prj(obj);
 };
 
-com.sweattrails.api.LookupField.prototype.getValueFromControl = function() {
+com.sweattrails.api.LookupField.prototype.setValueFromControl = function(bridge, object) {
     this.value = null;
     if (this.type === "dropdown") {
         this.value = this.control.value;
@@ -135,7 +135,7 @@ com.sweattrails.api.LookupField.prototype.getValueFromControl = function() {
 	    }
 	}
     }
-    return this.value;
+    bridge.setValue(object, this.value);
 };
 
 com.sweattrails.api.LookupField.prototype.renderView = function(value) {

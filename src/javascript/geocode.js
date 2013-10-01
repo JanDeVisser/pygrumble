@@ -1,12 +1,11 @@
 function obj_to_latlng(obj) {
-    console.log("------> obj_to_latlng: " + obj + " <" + typeof(obj) + ">");
     return new google.maps.LatLng(obj.lat, obj.lon);
 }
 
 function latlng_to_obj(latlng) {
     var ret = {
         "lat": latlng.lat(),
-        "lon": latlng.lon()
+        "lon": latlng.lng()
     }
     return ret;
 }
@@ -58,7 +57,6 @@ function flush_queue(name) {
 }
 
 function loadGMapsCallback() {
-    console.log("Gmaps loaded");
     flush_queue("gmaps");
 }
 
@@ -68,7 +66,6 @@ function loadGMaps(job) {
         var script = document.createElement("script");
         script.type = "text/javascript";
         script.src = "http://maps.googleapis.com/maps/api/js?key=" + google_api_key + "&sensor=false&callback=loadGMapsCallback";
-        console.log("About to load gmaps");
         document.body.appendChild(script);
     } else {
         execute_job(job);
@@ -77,70 +74,100 @@ function loadGMaps(job) {
 
 com.sweattrails.api.GeocodeField = function(fld, elem) {
     this.field = fld;
+    this.latlng = null;
+    this.geopt = null;
+    this.width = elem.getAttribute("width") || "200px";
+    this.height = elem.getAttribute("height") || "200px";
+    this.size = elem.getAttribute("size") || 20;
+};
+
+com.sweattrails.api.GeocodeField.prototype.renderMap = function(value) {
+    loadGMaps({
+        field: this,
+        value: value,
+        run: function() {
+            if (this.value) {
+                this.geopt = this.value;
+                this.field.latlng = obj_to_latlng(this.value);
+                if (this.field.map) {
+                    this.field.map.setCenter(this.field.latlng);
+                } else {
+                    this.field.mapdiv.style.width = this.field.width;
+                    this.field.mapdiv.style.height = this.field.height;
+                    var mapOptions = {
+                        zoom: 16,
+                        center: this.field.latlng,
+                        mapTypeId: google.maps.MapTypeId.ROADMAP
+                    };
+                    this.field.map = new google.maps.Map(this.field.mapdiv, mapOptions);
+                }
+                var marker = new google.maps.Marker({ map: this.field.map, position: this.field.latlng });
+            }
+        }
+    });    
+};
+
+com.sweattrails.api.GeocodeField.prototype.lookup = function(value) {
+    loadGMaps({
+        field: this,
+        value: value,
+        handleResult: function(results, status) {
+            if (status === google.maps.GeocoderStatus.OK) {
+                var latlng = results[0].geometry.location;
+                var obj = latlng_to_obj(latlng);
+                this.field.renderMap(obj);
+            }            
+        },        
+        run: function() {
+            new google.maps.Geocoder().geocode({'address': this.value}, this.handleResult.bind(this));
+        }
+    });
 };
 
 com.sweattrails.api.GeocodeField.prototype.renderEdit = function(value) {
-    this.div 
-    this.control = document.createElement("input");
-    this.control.value = value || "";
-    this.control.name = this.field.id;
-    this.control.id = this.field.id;
-    this.control.type = "text";
-    if (this.size) this.control.size = this.size;
-    if (this.maxlength) this.control.maxLength = this.maxlength;
-    this.control.onchange = this.field.onValueChange.bind(this.field);
     var ret = document.createElement("div");
-    ret.id = "mapview-" + this.field.id;
-    return this.control;
+    ret.id = "edit-geocode-" + this.field.id;
+    this.map = null;
+    var span = document.createElement("span");
+    ret.appendChild(span);
+    this.search = document.createElement("input");
+    this.search.id = "search-" + this.field.id;
+    this.search.type = "search";
+    this.search.size = this.size;
+    span.appendChild(this.search);
+    this.button = document.createElement("input");
+    this.button.field = this;
+    this.button.id = "button-" + this.field.id;
+    this.button.type = "button";
+    this.button.value = "Look up";
+    this.button.onclick = function() {
+        this.field.lookup(this.field.search.value);
+    };
+    span.appendChild(this.button);
+    this.mapdiv = document.createElement("div");
+    this.mapdiv.id = "mapview-" + this.field.id;
+    ret.appendChild(this.mapdiv);
+    if (value) {
+        this.renderMap(value);
+    }
+    return ret;
 };
 
 com.sweattrails.api.GeocodeField.prototype.setValueFromControl = function(bridge, object) {
-    var address = this.control.value;
-    var geocoder = new google.maps.Geocode();
-    this.latlng = null;
-    this.status = null;
-    console.log("Geocoding '" + address + "'");
-    var field = this;
-    geocoder.geocode( { 'address': address}, function(results, status) {
-        field.status = status;
-        if (status === google.maps.GeocoderStatus.OK) {
-            field.latlng = results[0].geometry.location;
-            field.geopt = latlng_to_obj(field.latlng);
-            console.log("Geocode done: " + this.latlng.toString() + " => " + this.geopt);
-            bridge.setValue(object, this.value);
-        }
-    });
-    bridge.setValue(object, this.value);
+    bridge.setValue(object, this.geopt || null);
 };
 
 
 com.sweattrails.api.GeocodeField.prototype.renderView = function(value) {
-    var ret = document.createElement("div");
-    ret.id = "mapview-" + this.field.id;
+    this.map = null;
+    this.mapdiv = document.createElement("div");
+    this.mapdiv.id = "mapview-" + this.field.id;
     if (value) {
-        var job = {
-            mapdiv: ret,
-            field: this,
-            value: value,
-            run: function() {
-                var latlng = obj_to_latlng(this.value);
-                console.log("Rendering geopt: " + this.value + " => " + latlng.toString());
-                this.mapdiv.style.width = "160px";
-                this.mapdiv.style.height = "160px";
-                var mapOptions = {
-                    zoom: 8,
-                    center: latlng,
-                    mapTypeId: google.maps.MapTypeId.ROADMAP
-                };
-                field.map = new google.maps.Map(this.mapdiv, mapOptions);
-                var marker = new google.maps.Marker({ map: field.map, position: latlng });                
-            }
-        };
-        loadGMaps(job);
+        this.renderMap(value);
     } else {
-        ret.innerHTML = "&#160;";        
+        this.mapdiv.innerHTML = /* "&#160;"; */ "<i><small>... Location not set ...</small></i>";
     }
-    return ret;
+    return this.mapdiv;
 };
 
 com.sweattrails.api.internal.fieldtypes.geocode = com.sweattrails.api.GeocodeField;
