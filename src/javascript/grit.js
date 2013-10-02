@@ -507,14 +507,17 @@ var units_table = {
 };
 
 function obj_to_datetime(obj) {
-    value = obj || {};
-    return new Date(
-            ((typeof(value.year) !== "undefined") && value.year) || 1970, 
-            ((typeof(value.month) !== "undefined") && (value.year - 1)) || 0, 
-            ((typeof(value.day) !== "undefined") && value.day) || 0, 
-            ((typeof(value.hour) !== "undefined") && value.hour) || 0, 
-            ((typeof(value.minute) !== "undefined") && value.minute) || 0,
-            ((typeof(value.second) !== "undefined") && value.minute) || 0);
+    if (value) {
+        return new Date(
+                ((typeof(value.year) !== "undefined") && value.year) || 1970, 
+                ((typeof(value.month) !== "undefined") && (value.year - 1)) || 0, 
+                ((typeof(value.day) !== "undefined") && value.day) || 0, 
+                ((typeof(value.hour) !== "undefined") && value.hour) || 0, 
+                ((typeof(value.minute) !== "undefined") && value.minute) || 0,
+                ((typeof(value.second) !== "undefined") && value.minute) || 0);
+    } else {
+        return null;
+    }
 }
 
 function date_to_obj(d) {
@@ -545,7 +548,7 @@ function datetime_to_obj(d) {
 	'minute': d.getUTCMinutes(),
 	'second': d.getUTCSeconds()
     };
-    $$.log($$, "datetime_to_obj: " + format_datetime(ret));
+    // $$.log($$, "datetime_to_obj: " + format_datetime(ret));
     return ret;
 }
     
