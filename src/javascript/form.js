@@ -827,6 +827,7 @@ com.sweattrails.api.DateTimeField.prototype.renderEdit = function(value) {
 };
 
 com.sweattrails.api.DateTimeField.prototype.setValueFromControl = function(bridge, object) {
+    v = this.control.valueAsDate;
     this.value = (v) ? datetime_to_obj(v) : null;
     bridge.setValue(object, this.value);
 };

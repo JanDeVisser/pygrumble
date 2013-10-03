@@ -507,14 +507,14 @@ var units_table = {
 };
 
 function obj_to_datetime(obj) {
-    if (value) {
+    if (obj) {
         return new Date(
-                ((typeof(value.year) !== "undefined") && value.year) || 1970, 
-                ((typeof(value.month) !== "undefined") && (value.year - 1)) || 0, 
-                ((typeof(value.day) !== "undefined") && value.day) || 0, 
-                ((typeof(value.hour) !== "undefined") && value.hour) || 0, 
-                ((typeof(value.minute) !== "undefined") && value.minute) || 0,
-                ((typeof(value.second) !== "undefined") && value.minute) || 0);
+                ((typeof(obj.year) !== "undefined") && obj.year) || 1970, 
+                ((typeof(obj.month) !== "undefined") && (obj.month - 1)) || 0, 
+                ((typeof(obj.day) !== "undefined") && obj.day) || 0, 
+                ((typeof(obj.hour) !== "undefined") && obj.hour) || 0, 
+                ((typeof(obj.minute) !== "undefined") && obj.minute) || 0,
+                ((typeof(obj.second) !== "undefined") && obj.minute) || 0);
     } else {
         return null;
     }

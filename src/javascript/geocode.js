@@ -87,7 +87,7 @@ com.sweattrails.api.GeocodeField.prototype.renderMap = function(value) {
         value: value,
         run: function() {
             if (this.value) {
-                this.geopt = this.value;
+                this.field.geopt = this.value;
                 this.field.latlng = obj_to_latlng(this.value);
                 if (this.field.map) {
                     this.field.map.setCenter(this.field.latlng);
