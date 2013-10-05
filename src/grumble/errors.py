@@ -47,4 +47,11 @@ class KeyPropertyRequired(gripe.Error):
     def __str__(self):
         return "Key property '%s' not set when storing model '%s'" % (self.propname, self.cls)
 
+class PatternNotMatched(gripe.Error):
+    """Raised when an object stored but the key property is not set (None)"""
+    def __init__(self, propname, value):
+        self.propname = propname
+        self.value = value
 
+    def __str__(self):
+        return "String '%s' does match required pattern for property '%s'" % (self.value, self.propname)

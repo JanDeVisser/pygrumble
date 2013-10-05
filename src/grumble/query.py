@@ -330,26 +330,38 @@ class ModelQueryRenderer(object):
                 glue = ' WHERE '
                 if self.has_keyname():
                     glue = ' AND '
-                    sql += ' WHERE "%s" = %%s' % self.key_column().name
+                    sql += ' WHERE ("%s" = %%s)' % self.key_column().name
                     vals.append(str(self.keyname().name))
                 if self.has_ancestor():
                     assert not self.flat(), "Cannot perform ancestor queries on flat table '%s'" % self.name()
                     glue = ' AND '
-                    sql += ' WHERE "_ancestors" LIKE %s'
+                    sql += ' WHERE ("_ancestors" LIKE %s)'
                     vals.append(str(self.ancestor().get().path()) + "%")
                 if self.has_parent():
                     assert not self.flat(), "Cannot perform parent queries on flat table '%s'" % self.name()
-                    sql += glue + '"_parent" = %s'
+                    sql += glue + '"(_parent" = %s)'
                     glue = ' AND '
                     vals.append(str(self.parent()))
                 if self.owner():
-                    sql += glue + '"_ownerid" = %s'
+                    sql += glue + '("_ownerid" = %s)'
                     glue = ' AND '
                     vals.append(self.owner())
-                if self.filters():
-                    filtersql = " AND ".join(['%s %%s' % e for (e, v) in self.filters()])
-                    sql += glue + filtersql
-                    vals += [v for (e, v) in self.filters()]
+                for (e, v) in self.filters():
+                    if v is not None:
+                        sql += glue + '(%s %%s)' % e
+                        vals.append(v)
+                    else:
+                        e = e.strip()
+                        if e.endswith("!="):
+                            e = e[:-2]
+                            n = " IS NOT NULL"
+                        elif e.endswith("="):
+                            e = e[:-1]
+                            n = " IS NULL"
+                        else:
+                            n = ""
+                        sql += glue + '(%s %s)' % (e, n)
+                    glue = ' AND '
             if type == QueryType.Columns and self.sortorder():
                 sql += ' ORDER BY ' + ', '.join([('"' + c.colname + '" ' + c.order()) for c in self.sortorder()])
             cur = tx.get_cursor()

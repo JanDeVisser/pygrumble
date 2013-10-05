@@ -463,6 +463,14 @@ class Model():
             ret._id = k.id
             ret._key_name = k.name
         return ret
+    
+    @classmethod
+    def by(cls, property, value, **kwargs):
+        cls.seal()
+        assert cls != Model, "Cannot use by() on unconstrained Models"
+        kwargs["keys_only"] = False
+        q = cls.query('"%s" = ' % property, value, **kwargs)
+        return q.get()
 
     @classmethod
     def query(cls, *args, **kwargs):
@@ -510,6 +518,20 @@ class Model():
         return Query(cls).count()
 
     @classmethod
+    def _import_template_data(cls, data):
+        if "data" in data:
+            for cdata in data["data"]:
+                model = cdata["model"]
+                clazz = grumble.meta.Registry.get(model)
+                if clazz:
+                    with gripe.pgsql.Tx.begin():
+                        if clazz.all(keys_only = True).count() == 0:
+                            logger.info("load_template_data(%s): Loading template model data for model %s", cname, model)
+                            for d in cdata["data"]:
+                                logger.debug("load_template_data(%s): model %s object %s", cname, model, d)
+                                clazz.create(d)
+
+    @classmethod
     def load_template_data(cls):
         cname = cls.__name__.lower()
         fname = "data/template/" + cname + ".json"
@@ -517,17 +539,10 @@ class Model():
         if datastr:
             logger.info("Importing data file %s", fname)
             data = json.loads(datastr)
-            if "data" in data:
-                for cdata in data["data"]:
-                    model = cdata["model"]
-                    clazz = grumble.meta.Registry.get(model)
-                    if clazz:
-                        with gripe.pgsql.Tx.begin():
-                            if clazz.all(keys_only = True).count() == 0:
-                                logger.info("load_template_data(%s): Loading template model data for model %s", cname, model)
-                                for d in cdata["data"]:
-                                    logger.debug("load_template_data(%s): model %s object %s", cname, model, d)
-                                    clazz.create(d)
+            if hasattr(cls, "import_template_data") and callable(cls.import_template_data):
+                cls.import_template_data(data)
+            else:
+                cls._import_template_data(data)
 
 def delete(model):
     if not hasattr(model, "_brandnew") and model.exists():

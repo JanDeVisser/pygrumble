@@ -145,7 +145,7 @@ com.sweattrails.api.GeocodeField.prototype.renderEdit = function(value) {
     };
     span.appendChild(this.button);
     this.mapdiv = document.createElement("div");
-    this.mapdiv.id = "mapview-" + this.field.id;
+    this.mapdiv.id = "mapedit-" + this.field.id;
     ret.appendChild(this.mapdiv);
     if (value) {
         this.renderMap(value);

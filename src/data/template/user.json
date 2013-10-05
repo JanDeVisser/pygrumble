@@ -26,6 +26,13 @@
                     "display_name": "Some User",
                     "status": "Active",
                     "has_roles": [ "user" ]
+                },
+                {
+                    "email": "root@sweattrails.com",
+                    "password": "password",
+                    "display_name": "Template User",
+                    "status": "Inactive",
+                    "has_roles": []
                 }
             ]
         }

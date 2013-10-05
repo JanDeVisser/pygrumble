@@ -11,6 +11,7 @@ import hashlib
 import gripe
 import grumble.converter
 import grumble.errors
+import grumble.model
 import grumble.schema
 
 logger = gripe.get_logger(__name__)
@@ -34,6 +35,7 @@ class ModelProperty(object):
             ret.scoped = prop.scoped
             ret.indexed = prop.indexed
             ret.validator = prop.validator
+            ret.regexp = prop.regexp
             ret.converter = prop.converter
             ret.suffix = prop.suffix
             ret.choices = prop.choices
@@ -60,6 +62,7 @@ class ModelProperty(object):
                     if hasattr(cls, "converter") \
                     else grumble.converter.Converters.get(cls.datatype)
             )
+            ret.regexp = kwargs.get("regexp", cls.regexp if hasattr(cls, regexp) else None)
             ret.suffix = kwargs.get("suffix", None)
             ret.choices = kwargs.get("choices", None)
             ret.inherited_from = None
@@ -100,6 +103,8 @@ class ModelProperty(object):
             raise grumble.errors.PropertyRequired(self.name)
         if self.choices and value not in self.choices:
             raise grumble.errors.InvalidChoice(self.name, value)
+        if self.regexp and value and not re.match(self.regexp, value):
+            raise grumble.errors.PatternNotMatched(self.name, self.value)
         if self.validator:
             self.validator(value)
 
@@ -255,6 +260,9 @@ class StringProperty(ModelProperty):
 
 class TextProperty(StringProperty):
     pass
+
+class LinkProperty(StringProperty):
+    regexp = "(|https?:\/\/[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?^=%&amp;:/~\+#]*[\w\-\@?^=%&amp;/~\+#])?)"
 
 class PasswordProperty(StringProperty):
     def __init__(self, *args, **kwargs):

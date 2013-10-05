@@ -71,6 +71,13 @@ class User(grumble.Model, gripe.auth.AbstractUser):
                 comp = d[k]
                 component.update(comp, **flags)
 
+    def is_root(self):
+        return self.email == Config.app.grizzle.root
+    
+    @classmethod
+    def get_root(cls):
+        return cls.by("email", Config.app.grizzle.root)
+
     def is_active(self):
         """
           An active user is a user currently in good standing.

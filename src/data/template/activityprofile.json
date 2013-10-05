@@ -1,0 +1,62 @@
+{
+    "_author": "Jan de Visser",
+    "_version": "1.0",
+    "_description": "...",
+    "profile": [
+        {   
+            "name": "Triathlon",
+            "sessionType": [
+                { "name": "Run", "isA": null },
+                { "name": "Treadmill Run", "isA": "Run" },
+                { "name": "Track Session", "isA": "Run" },
+                { "name": "Trail Run", "isA": "Run" },
+                { "name": "Walk", "isA": "Run" },
+                { "name": "Hike", "isA": "Run" },
+                { "name": "Bike Ride", "isA": null },
+                { "name": "Road Ride", "isA": "Bike Ride" },
+                { "name": "Trainer Session", "isA": "Road Ride" },
+                { "name": "Commute/Transportation", "isA": "Road Ride" },
+                { "name": "Trail/Mountain Ride", "isA": "Bike" },
+                { "name": "Swim", "isA": null },
+                { "name": "Pool Swim", "isA": "Swim" },
+                { "name": "Pool Swim (20m)", "isA": "Pool Swim" },
+                { "name": "Pool Swim (20y)", "isA": "Pool Swim" },
+                { "name": "Pool Swim (SCM)", "isA": "Pool Swim" },
+                { "name": "Pool Swim (SCY)", "isA": "Pool Swim" },
+                { "name": "Pool Swim (LCM)", "isA": "Pool Swim" },
+                { "name": "Pool Swim (LCY)", "isA": "Pool Swim" },
+                { "name": "Open Water Swim", "isA": "Swim" },
+                { "name": "Other", "isA": null },
+                { "name": "Weights", "isA": "Other" },
+                { "name": "Core", "isA": "Other" }
+            ],
+            "gearType": [
+                { "name": "Bike", "isA": null, "usedFor": "Bike Ride", "partOf": null },
+                { "name": "Road Bike", "isA": null, "usedFor": "Road Ride", "partOf": null },
+                { "name": "TT/Tri Bike", "isA": null, "usedFor": "Road Ride", "partOf": null },
+                { "name": "Mountain Bike", "isA": null, "usedFor": "Trail/Mountain Ride", "partOf": null },
+                { "name": "Chain", "isA": null, "usedFor": "Bike Ride", "partOf": "Bike" },
+                { "name": "Cassette", "isA": null, "usedFor": "Bike Ride", "partOf": "Bike" },
+                { "name": "Bike Shoes", "isA": null, "usedFor": "Bike Ride", "partOf": null },
+                { "name": "Mountain Bike Shoes", "isA": "Bike Shoes", "usedFor": "Trail/Mountain Ride", "partOf": null },
+                { "name": "Running Shoes", "isA": null, "usedFor": "Run", "partOf": null },
+                { "name": "Wetsuit", "isA": null, "usedFor": "Open Water Swim", "partOf": null }
+            ],
+            "criticalPowerInterval": [
+                { "name": "1 second" },
+                { "name": "5 seconds" },
+                { "name": "10 seconds" },
+                { "name": "30 seconds" },
+                { "name": "1 minute" },
+                { "name": "3 minutes" },
+                { "name": "5 minutes" },
+                { "name": "10 minutes" },
+                { "name": "20 minutes" },
+                { "name": "30 minutes" },
+                { "name": "1 hour" },
+                { "name": "2 hours" },
+                { "name": "3 hours" }
+            ]
+        }
+    ]
+}
