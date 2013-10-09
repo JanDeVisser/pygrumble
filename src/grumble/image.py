@@ -4,13 +4,16 @@
 __author__ = "jan"
 __date__ = "$11-Feb-2013 2:47:51 PM$"
 
-import md5
+import hashlib
 import os
 import psycopg2
 import gripe
-import grumble
+import grumble.converter
+import grumble.property
 
-class BinaryConverter(grumble.PropertyConverter):
+class BinaryConverter(grumble.converter.PropertyConverter):
+    datatype = psycopg2.Binary
+
     def __init__(self):
         self.datatype = psycopg2.Binary
 
@@ -25,13 +28,11 @@ class BinaryConverter(grumble.PropertyConverter):
     def from_jsonvalue(self, value):
         raise gripe.NotSerializableError(self.name)
 
-grumble.register_propertyconverter(psycopg2.Binary, BinaryConverter())
-
-class BinaryProperty(grumble.ModelProperty):
+class BinaryProperty(grumble.property.ModelProperty):
     datatype = psycopg2.Binary
     sqltype = "BYTEA"
 
-class ImageProperty(grumble.CompoundProperty):
+class ImageProperty(grumble.property.CompoundProperty):
     def __init__(self, **kwargs):
         bin_kwargs = { "suffix": "_blob"}
         ct_kwargs = { "suffix": "_ct"}
@@ -40,8 +41,8 @@ class ImageProperty(grumble.CompoundProperty):
             bin_kwargs["verbose_name"] = kwargs["verbose_name"]
         super(ImageProperty, self).__init__(
             BinaryProperty(**bin_kwargs),
-            grumble.StringProperty(**ct_kwargs),
-            grumble.StringProperty(**hash_kwargs)
+            grumble.property.StringProperty(**ct_kwargs),
+            grumble.property.StringProperty(**hash_kwargs)
         )
 
     def __set__(self, instance, value):
@@ -52,23 +53,25 @@ class ImageProperty(grumble.CompoundProperty):
             if l == 3:
                 v = value
             else:
-                hash = md5.new(value[0]).hexdigest()
+                hash = hashlib.md5(value[0]).hexdigest()
                 v = (value[0], value[1], hash)
         else:
             assert isinstance(value, basestring), "Can't assign %s (%s) to ImageProperty" % (value, type(value))
             content = None
             with open(value, "rb") as fh:
                 content = fh.read()
-            hash = md5.new(content).hexdigest()
+            hash = hashlib.md5(content).hexdigest()
             v = (content, gripe.get_content_type(value), hash)
         super(ImageProperty, self).__set__(instance, v)
 
 if __name__ == "__main__":
-    class Test(grumble.Model):
-        label = grumble.TextProperty(required = True)
+    import grumble.model
+
+    class Test(grumble.model.Model):
+        label = grumble.property.TextProperty(required = True)
         image = ImageProperty()
 
-    with grumble.Tx.begin():
+    with gripe.pgsql.Tx.begin():
         with open("C:/Users/Public/Pictures/Sample Pictures/Desert.jpg", "rb") as fh:
             img = fh.read()
             desert = Test(label = "Desert")
@@ -81,7 +84,7 @@ if __name__ == "__main__":
     except:
         pass
 
-    with grumble.Tx.begin():
+    with gripe.pgsql.Tx.begin():
         desert = Test.get(k)
         with open("C:/Users/Public/Pictures/Sample Pictures/Desert_1.jpg", "wb") as fh:
             fh.write(desert.image_blob)

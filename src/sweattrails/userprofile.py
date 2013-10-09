@@ -5,6 +5,7 @@
 __author__="jan"
 __date__ ="$3-Oct-2013 8:34:23 AM$"
 
+import grizzle
 import grumble
 import grumble.geopt
 

@@ -62,7 +62,7 @@ class ModelProperty(object):
                     if hasattr(cls, "converter") \
                     else grumble.converter.Converters.get(cls.datatype)
             )
-            ret.regexp = kwargs.get("regexp", cls.regexp if hasattr(cls, regexp) else None)
+            ret.regexp = kwargs.get("regexp", cls.regexp if hasattr(cls, "regexp") else None)
             ret.suffix = kwargs.get("suffix", None)
             ret.choices = kwargs.get("choices", None)
             ret.inherited_from = None
@@ -101,7 +101,7 @@ class ModelProperty(object):
     def validate(self, value):
         if (value is None) and self.required:
             raise grumble.errors.PropertyRequired(self.name)
-        if self.choices and value not in self.choices:
+        if self.choices and value not in self.choices and value:
             raise grumble.errors.InvalidChoice(self.name, value)
         if self.regexp and value and not re.match(self.regexp, value):
             raise grumble.errors.PatternNotMatched(self.name, self.value)
@@ -210,6 +210,10 @@ class CompoundProperty(object):
     def _on_store(self, instance):
         for p in self.compound:
             p._on_store(instance)
+
+    def _after_store(self, value):
+        for p in self.compound:
+            p._after_store(value)
 
     def validate(self, value):
         for (p, v) in zip(self.compound, value):

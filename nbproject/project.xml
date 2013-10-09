@@ -6,7 +6,7 @@
             <name>Grumble</name>
             <sources>
                 <root id="src.etc.dir" name="Etc"/>
-                <root id="src.dir"/>
+                <root id="src.dir" name="Sources"/>
                 <root id="src.test.dir" name="Tests"/>
             </sources>
             <tests/>

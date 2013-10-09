@@ -6,9 +6,9 @@ __date__ = "$11-Feb-2013 8:28:51 AM$"
 
 import re
 import psycopg2
-from psycopg2 import extensions
+import psycopg2.extensions
 import gripe.pgsql
-import grumble
+import grumble.property
 
 class GeoPt(object):
     def __init__(self, *args):
@@ -79,7 +79,7 @@ class GeoPt(object):
             GeoPt._unknown.lon = 200
         return GeoPt._unknown
 
-class GeoPtProperty(grumble.ModelProperty):
+class GeoPtProperty(grumble.property.ModelProperty):
     datatype = GeoPt
     sqltype = "point"
 
@@ -88,9 +88,10 @@ class GeoPtProperty(grumble.ModelProperty):
 #
 
 def adapt_point(geopt):
-    return extensions.AsIs("'(%s, %s)'" % (extensions.adapt(geopt.lat), extensions.adapt(geopt.lon)))
+    return psycopg2.extensions.AsIs("'(%s, %s)'" %
+        (psycopg2.extensions.adapt(geopt.lat), psycopg2.extensions.adapt(geopt.lon)))
 
-extensions.register_adapter(GeoPt, adapt_point)
+psycopg2.extensions.register_adapter(GeoPt, adapt_point)
 
 def cast_point(value, cur):
     if value is None:
@@ -107,8 +108,8 @@ with gripe.pgsql.Tx.begin() as tx:
     cur.execute("SELECT NULL::point")
     point_oid = cur.description[0][1]
 
-POINT = extensions.new_type((point_oid,), "POINT", cast_point)
-extensions.register_type(POINT)
+POINT = psycopg2.extensions.new_type((point_oid,), "POINT", cast_point)
+psycopg2.extensions.register_type(POINT)
 
 if __name__ == "__main__":
     with gripe.pgsql.Tx.begin():

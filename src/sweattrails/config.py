@@ -5,6 +5,7 @@
 __author__="jan"
 __date__ ="$3-Oct-2013 8:40:17 AM$"
 
+import gripe
 import grumble
 import grumble.image
 
@@ -17,31 +18,6 @@ class Country(grumble.Model):
     countryname = grumble.StringProperty(verbose_name = "Country name", is_label = True)
     countrycode = grumble.StringProperty(verbose_name = "ISO 3166-1 code", is_key = True)
     flag_url = grumble.StringProperty(transient = True, getter = get_flag)
-
-class Brand(grumble.Model):
-    name = grumble.StringProperty()
-    description = grumble.StringProperty()
-    logo = grumble.image.ImageProperty()
-    website = grumble.StringProperty()   # FIXME LinkProperty
-    about = grumble.TextProperty()
-    country = grumble.ReferenceProperty(Country)
-    gearTypes = grumble.ListProperty() # (grumble.Key) FIXME Make list items typesafe
-
-    def sub_to_dict(self, descriptor):
-        gts = []
-        for gt in self.gearTypes:
-            gts.append(GearType.get(gt).to_dict())
-        descriptor["gearTypes"] = gts
-        return descriptor
-
-class Product(grumble.Model):
-    name = grumble.StringProperty()
-    icon = grumble.image.ImageProperty()
-    isA = grumble.SelfReferenceProperty(collection_name = "subtypes_set")
-    usedFor = grumble.ReferenceProperty(SessionType)
-    partOf = grumble.SelfReferenceProperty(collection_name = "parts_set")
-    baseType = grumble.SelfReferenceProperty(collection_name = "descendenttypes")
-
 
 #
 # ============================================================================
@@ -60,7 +36,7 @@ class SessionType(grumble.Model):
     speedPace = grumble.StringProperty(choices=set(['Speed', 'Pace', 'Swim Pace']))
     icon = grumble.image.ImageProperty()
 
-class GearType(db.Model):
+class GearType(grumble.Model):
     name = grumble.StringProperty()
     description = grumble.StringProperty()
     icon = grumble.image.ImageProperty()
@@ -151,7 +127,7 @@ class TreeNodeBase(NodeBase):
 # ----------------------------------------------------------------------------
 
 class SessionTypeNode(grumble.Model, TreeNodeBase):
-    sessionType = grumble.ReferenceProperty(SessionType.SessionType)
+    sessionType = grumble.ReferenceProperty(SessionType)
     pointer_class = SessionType
     pointer_name = "sessionType"
 
@@ -202,8 +178,8 @@ class ActivityProfile(grumble.Model):
     description = grumble.StringProperty()
     icon = grumble.image.ImageProperty()
     node_defs = {}
-    for app in gripe.Config.app.grizzle.activityprofileparts:
-        node_defs[app] = ( gripe.resolve(app.nodeClass), gripe.resolve(app.pointerClass) )
+    for (part, partdef) in gripe.Config.app.grizzle.activityprofileparts.items():
+        node_defs[part] = ( gripe.resolve(partdef.nodeClass), gripe.resolve(partdef.pointerClass) )
 
     def sub_to_dict(self, descriptor):
         # TODO: Build tree...
@@ -320,3 +296,36 @@ class ActivityProfile(grumble.Model):
         q = node_class.query(ancestor = self)
         q.add_filter('"' + pointer_name + '" = ', type)
         return q.count() > 0
+
+
+#
+# ============================================================================
+#  B R A N D S  A N D  P R O D U C T S
+# ============================================================================
+#
+
+class Brand(grumble.Model):
+    name = grumble.StringProperty()
+    description = grumble.StringProperty()
+    logo = grumble.image.ImageProperty()
+    website = grumble.StringProperty()   # FIXME LinkProperty
+    about = grumble.TextProperty()
+    country = grumble.ReferenceProperty(Country)
+    gearTypes = grumble.ListProperty() # (grumble.Key) FIXME Make list items typesafe
+
+    def sub_to_dict(self, descriptor):
+        gts = []
+        for gt in self.gearTypes:
+            gts.append(GearType.get(gt).to_dict())
+        descriptor["gearTypes"] = gts
+        return descriptor
+
+class Product(grumble.Model):
+    name = grumble.StringProperty()
+    icon = grumble.image.ImageProperty()
+    isA = grumble.SelfReferenceProperty(collection_name = "subtypes_set")
+    usedFor = grumble.ReferenceProperty(SessionType)
+    partOf = grumble.SelfReferenceProperty(collection_name = "parts_set")
+    baseType = grumble.SelfReferenceProperty(collection_name = "descendenttypes")
+
+

@@ -63,8 +63,8 @@ class Model():
     def __str__(self):
         self._load()
         label = self.label_prop if hasattr(self.__class__, "label_prop") else None
-        if self.name():
-            s = self.name()
+        if self.keyname():
+            s = self.keyname()
             if label:
                 s += " (%s)" % label
             return "<%s: %s>" % (self.kind(), s)
@@ -76,7 +76,7 @@ class Model():
 
     def __eq__(self, other):
         assert isinstance(other, Model)
-        return (self.kind() == other.kind()) and (self.name() == other.name())
+        return (self.kind() == other.kind()) and (self.keyname() == other.keyname())
 
     def __call__(self):
         return self
@@ -149,7 +149,7 @@ class Model():
 
     def _store(self):
         self._load()
-        logger.info("Storing model %s.%s", self.kind(), self.name())
+        logger.info("Storing model %s.%s", self.kind(), self.keyname())
         include_key_name = True
         if hasattr(self, "key_prop"):
             kp = getattr(self.__class__, self.key_prop)
@@ -207,7 +207,7 @@ class Model():
             self._id = self.key().id
         return self._id
 
-    def name(self):
+    def keyname(self):
         return self._key_name
 
     def label(self):
@@ -302,7 +302,7 @@ class Model():
 
     def update(self, descriptor, **flags):
         self._load()
-        logger.info("Updating model %s.%s using descriptor %s", self.kind(), self.name(), descriptor)
+        logger.info("Updating model %s.%s using descriptor %s", self.kind(), self.keyname(), descriptor)
         for b in self.__class__.__bases__:
             if hasattr(b, "_update") and callable(b._update):
                 b._update(self, descriptor)
@@ -519,6 +519,7 @@ class Model():
 
     @classmethod
     def _import_template_data(cls, data):
+        cname = cls.__name__.lower()
         if "data" in data:
             for cdata in data["data"]:
                 model = cdata["model"]
