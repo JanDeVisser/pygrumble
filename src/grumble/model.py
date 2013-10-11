@@ -522,28 +522,25 @@ class Model():
         cname = cls.__name__.lower()
         if "data" in data:
             for cdata in data["data"]:
-                model = cdata["model"]
-                clazz = grumble.meta.Registry.get(model)
+                clazz = grumble.meta.Registry.get(cdata.model)
                 if clazz:
                     with gripe.pgsql.Tx.begin():
                         if clazz.all(keys_only = True).count() == 0:
-                            logger.info("load_template_data(%s): Loading template model data for model %s", cname, model)
+                            logger.info("load_template_data(%s): Loading template model data for model %s", cname, cdata.model)
                             for d in cdata["data"]:
-                                logger.debug("load_template_data(%s): model %s object %s", cname, model, d)
+                                logger.debug("load_template_data(%s): model %s object %s", cname, cdata.model, d)
                                 clazz.create(d)
-
+                                
     @classmethod
     def load_template_data(cls):
         cname = cls.__name__.lower()
         fname = "data/template/" + cname + ".json"
-        datastr = gripe.read_file(fname)
-        if datastr:
-            logger.info("Importing data file %s", fname)
-            data = json.loads(datastr)
-            if hasattr(cls, "import_template_data") and callable(cls.import_template_data):
-                cls.import_template_data(data)
-            else:
-                cls._import_template_data(data)
+        data = gripe.json_util.JSON.file_read(fname)
+        logger.info("Importing data file %s", fname)
+        if hasattr(cls, "import_template_data") and callable(cls.import_template_data):
+            cls.import_template_data(data)
+        else:
+            cls._import_template_data(data)
 
 def delete(model):
     if not hasattr(model, "_brandnew") and model.exists():
