@@ -2,8 +2,8 @@
     "_author": "Jan de Visser",
     "_version": "1.0",
     "_description": "...",
-    "profile": [
-        {   
+    "data": [
+        {
             "name": "Triathlon",
             "sessionType": [
                 { "name": "Run", "isA": null },

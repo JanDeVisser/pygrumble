@@ -30,19 +30,19 @@ class Country(grumble.Model):
 # ----------------------------------------------------------------------------
 
 class SessionType(grumble.Model):
-    name = grumble.StringProperty()
+    name = grumble.StringProperty(is_key = True)
     description = grumble.StringProperty()
     trackDistance = grumble.BooleanProperty()
     speedPace = grumble.StringProperty(choices=set(['Speed', 'Pace', 'Swim Pace']))
     icon = grumble.image.ImageProperty()
 
 class GearType(grumble.Model):
-    name = grumble.StringProperty()
+    name = grumble.StringProperty(is_key = True)
     description = grumble.StringProperty()
     icon = grumble.image.ImageProperty()
 
 class CriticalPowerInterval(grumble.Model):
-    name = grumble.StringProperty()
+    name = grumble.StringProperty(is_key = True)
     duration = grumble.IntegerProperty()	# seconds
 
 
