@@ -5,6 +5,8 @@
     "data": [
         {
             "name": "Triathlon",
+            "isdefault": true,
+            "description": "Triathlon activity profile",
             "sessionType": [
                 { "name": "Run", "isA": null },
                 { "name": "Treadmill Run", "isA": "Run" },

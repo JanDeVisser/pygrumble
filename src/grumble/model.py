@@ -150,6 +150,11 @@ class Model():
     def _store(self):
         self._load()
         logger.info("Storing model %s.%s", self.kind(), self.keyname())
+        if hasattr(self, "_brandnew"):
+            for prop in self._properties.values():
+                prop._on_insert(self)
+            if hasattr(self, "initialize") and callable(self.initialize):
+                self.initialize()
         include_key_name = True
         if hasattr(self, "key_prop"):
             kp = getattr(self.__class__, self.key_prop)
@@ -162,11 +167,6 @@ class Model():
         elif not self._key_name:
             self._key_name = uuid.uuid1().hex
         self._id = None
-        if hasattr(self, "_brandnew"):
-            for prop in self._properties.values():
-                prop._on_insert(self)
-            if hasattr(self, "initialize") and callable(self.initialize):
-                self.initialize()
         for prop in self._properties.values():
             prop._on_store(self)
         if hasattr(self, "on_store") and callable(self.on_store):
@@ -214,8 +214,17 @@ class Model():
         return self.label_prop if hasattr(self, "label_prop") else str(self)
 
     def parent(self):
+        """
+            Returns the parent Model of this Model, as a Key, or None if this
+            Model does not have a parent.
+        """
         self._load()
         return self._parent
+
+    def set_parent(self, parent):
+        assert not self._flat, "Cannot set parent of flat Model %s" % self.kind()
+        self._load()
+        self._set_ancestors_from_parent(parent)
 
     def ancestors(self):
         """
@@ -226,6 +235,12 @@ class Model():
         return self._ancestors if self._ancestors != "/" else ""
 
     def key(self):
+        """
+            Returns the Key object representing this Model. A Key consists of
+            the Model's kind and its key name. These two identifying properties
+            are combined into the Model's id, which is also part of a Key
+            object.
+        """
         return grumble.key.Key(self.kind(), self._key_name) if self._key_name else None
 
     def path(self):
@@ -233,6 +248,11 @@ class Model():
         return (a if a != "/" else "") + "/" + str(self.key())
 
     def pathlist(self):
+        """
+            Returns a list containing the ancestors of this Model, the root
+            Model first. If this object has no parent, the returned list is 
+            empty.
+        """
         pl = self.path().split("/")
         del pl[0]  # First element is "/" because the path starts with a "/"
         return [Model.get(k) for k in pl]
@@ -465,12 +485,29 @@ class Model():
         return ret
     
     @classmethod
+    def get_by_key_and_parent(cls, key, parent):
+        cls.seal()
+        assert cls != Model, "Cannot use get_by_key_and_parent on unconstrained Models"
+        assert cls.key_prop, "Cannot use get_by_key_and_parent Models without explicit keys"
+        q = cls.query(parent = parent)
+        q.add_filter(cls.key_prop.name, "=", key)
+        return q.get()
+    
+    @classmethod
     def by(cls, property, value, **kwargs):
         cls.seal()
         assert cls != Model, "Cannot use by() on unconstrained Models"
         kwargs["keys_only"] = False
         q = cls.query('"%s" = ' % property, value, **kwargs)
         return q.get()
+    
+    def children(self):
+        q = self.query(parent = self)
+        return q
+    
+    def descendents(self):
+        q = self.query(ancestor = self)
+        return q
 
     @classmethod
     def query(cls, *args, **kwargs):
@@ -520,27 +557,28 @@ class Model():
     @classmethod
     def _import_template_data(cls, data):
         cname = cls.__name__.lower()
-        if "data" in data:
-            for cdata in data["data"]:
-                clazz = grumble.meta.Registry.get(cdata.model)
-                if clazz:
-                    with gripe.pgsql.Tx.begin():
-                        if clazz.all(keys_only = True).count() == 0:
-                            logger.info("load_template_data(%s): Loading template model data for model %s", cname, cdata.model)
-                            for d in cdata["data"]:
-                                logger.debug("load_template_data(%s): model %s object %s", cname, cdata.model, d)
-                                clazz.create(d)
+        for cdata in data:
+            clazz = grumble.meta.Registry.get(cdata.model)
+            if clazz:
+                with gripe.pgsql.Tx.begin():
+                    if clazz.all(keys_only = True).count() == 0:
+                        logger.info("_import_template_data(%s): Loading template model data for model %s", cname, cdata.model)
+                        for d in cdata["data"]:
+                            logger.debug("_import_template_data(%s): model %s object %s", cname, cdata.model, d)
+                            clazz.create(d)
                                 
     @classmethod
     def load_template_data(cls):
         cname = cls.__name__.lower()
         fname = "data/template/" + cname + ".json"
         data = gripe.json_util.JSON.file_read(fname)
-        logger.info("Importing data file %s", fname)
-        if hasattr(cls, "import_template_data") and callable(cls.import_template_data):
-            cls.import_template_data(data)
-        else:
-            cls._import_template_data(data)
+        if data and "data" in data:
+            d = data["data"]
+            logger.info("Importing data file %s", fname)
+            if hasattr(cls, "import_template_data") and callable(cls.import_template_data):
+                cls.import_template_data(d)
+            else:
+                cls._import_template_data(d)
 
 def delete(model):
     if not hasattr(model, "_brandnew") and model.exists():
@@ -651,4 +689,7 @@ class Query(grumble.query.ModelQuery):
                     else None)
         logger.debug("Query(%s, %s, %s).fetch(): %s", self.kind, self.filters, self._ancestor if hasattr(self, "_ancestor") else None, ret)
         return ret
+
+    def fetch_all(self):
+        return [ r for r in self ]
 

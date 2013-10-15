@@ -133,8 +133,21 @@ class ModelQuery(object):
     def clear_filters(self):
         self._filters = []
 
-    def add_filter(self, expr, value):
+    def add_filter(self, *args):
         self._reset_state()
+        if len(args) == 2:
+            expr = args[0]
+            value = args[1]
+        elif len(args) == 3:
+            prop = args[0]
+            assert isinstance(prop, basestring)
+            prop = prop.strip()
+            assert len(prop)
+            prop = '"' + prop + '"' if prop[0] != '"' or prop[-1:] != '"' else prop
+            expr = "%s %s %%s" % (prop, args[1])
+            value = args[2]
+        else:
+            assert 0, "Could not interpret %s arguments to add_filter" % len(args)
         if hasattr(value, "key") and callable(value.key):
             value = value.key().name
         self._filters.append((expr, value))

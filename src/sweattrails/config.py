@@ -5,6 +5,7 @@
 __author__="jan"
 __date__ ="$3-Oct-2013 8:40:17 AM$"
 
+import sys
 import gripe
 import grumble
 import grumble.image
@@ -52,12 +53,21 @@ class CriticalPowerInterval(grumble.Model):
 
 class NodeBase(object):
     id_prop = "name"
+    
+    def scope(self):
+        if not hasattr(self, "_scope"):
+            r = self.root()
+            self._scope = None if r.kind() == ActivityProfile.kind() else r
+        return self._scope
 
     def get_profile(self):
-        return self.parent()
-
+        if not hasattr(self, "_profile"):
+            path = self.pathlist()
+            self._profile = path[0] if path[0].kind() == ActivityProfile.kind() else path[1]
+        return self._profile
+            
     def get_type(self):
-        return getattr(self, self.pointer_name)
+        return getattr(self, self.ref_name)
 
     def get_links(self):
         return ()
@@ -72,53 +82,34 @@ class NodeBase(object):
 
     def prune_tree(self):
         pass
-
-    def get_or_create_node(self, descriptor, pointer_name):
-        node_class, pointer_class = ActivityProfile.node_defs[pointer_name]
-        node = None
-        pointer = pointer_class.get(descriptor["key"]) \
+    
+    def get_or_create_node(self, descriptor, ref_name, prop_name):
+        _, ref_class = ActivityProfile.node_defs[ref_name]
+        type = ref_class.get(descriptor["key"]) \
             if "key" in descriptor \
-            else pointer_class.by(self.id_prop, descriptor[self.id_prop], ancestor = self.get_profile().parent())
-        if not pointer:
-            pointer = pointer_class.create(descriptor, self.get_profile().parent())
-        if pointer:
-            node = node_class(parent = self.parent())
-            setattr(node, pointer_name, pointer)
-            node.put()
-        return node
+            else self.get_profile().get_reference(ref_name, descriptor[prop_name])
+        if not type:
+            type = ref_class.create(descriptor, self.scope())
+        return self.get_profile().get_or_create_node_for_type(type, ref_name)
 
 class TreeNodeBase(NodeBase):
 
     def get_subtypes(self, all = False):
-        ret = []
-        subs = []
-        subs.append(self)
-        while subs:
-            node = subs.pop(0)
-            for sub in node.subtypes:
-                ret.append(sub.get_type())
-            if all:
-                subs.extend(node.subtypes)
-        return ret
+        q = self.children() if not all else self.descendents()
+        return q.fetch_all()
 
     def get_all_subtypes(self):
         return self.get_subtypes(True)
 
     def has_subtype(self, type, deep = True):
-        subs = []
-        subs.append(self)
-        while subs:
-            node = subs.pop(0)
-            for sub in node.subtypes:
-                if sub.get_type() == type:
-                    return True
-            if deep:
-                subs.extend(node.subtypes)
-        return False
+        q = self.children() if not deep else self.descendents()
+        q.add_filter(self.ref_name, '=', type)
+        return q.fetch() is not None
 
     def prune_tree(self):
-        for sub in self.subtypes:
-            sub.isA = None
+        p = self.get_profile()
+        for sub in self.get_all_subtypes:
+            sub.set_parent(p)
             sub.put()
 
 
@@ -128,16 +119,16 @@ class TreeNodeBase(NodeBase):
 
 class SessionTypeNode(grumble.Model, TreeNodeBase):
     sessionType = grumble.ReferenceProperty(SessionType)
-    pointer_class = SessionType
-    pointer_name = "sessionType"
+    ref_class = SessionType
+    ref_name = "sessionType"
 
 
 class GearTypeNode(grumble.Model, TreeNodeBase):
     gearType = grumble.ReferenceProperty(GearType)
     partOf = grumble.SelfReferenceProperty(collection_name = "parts")
     usedFor = grumble.ReferenceProperty(SessionType)
-    pointer_class = GearType
-    pointer_name = "gearType"
+    ref_class = GearType
+    ref_name = "gearType"
 
     def get_links(self):
         return (self.partOf.gearType if self.partOf else None, self.usedFor)
@@ -176,6 +167,7 @@ class CriticalPowerIntervalNode(grumble.Model, NodeBase):
 class ActivityProfile(grumble.Model):
     name = grumble.StringProperty(is_key = True)
     description = grumble.StringProperty()
+    isdefault = grumble.BooleanProperty()
     icon = grumble.image.ImageProperty()
     node_defs = {}
     for (part, partdef) in gripe.Config.app.grizzle.activityprofileparts.items():
@@ -189,6 +181,47 @@ class ActivityProfile(grumble.Model):
         for pointer_name, defs in self.node_defs.items():
             self.update_or_create_nodes(d, pointer_name, defs)
         return self
+    
+    def initialize(self):
+        # Only do this for profiles that are user components:
+        if not self.parent():
+            return
+        
+        # Set the profile's name. Every user has only one profile object which
+        # is manipulated whenever the user selects another template profile.
+        self.name = "Activity Profile for " + self.parent()().display_name
+        
+        # Find the default profile:
+        profile = ActivityProfile.by("isdefault", True, parent = None)
+        
+        # If there is a default profile, import it into this profile:
+        if profile:
+            self.import_profile(profile)
+    
+    @classmethod
+    def import_template_data(cls, data):
+        """
+            Import template activity profile data.
+        """
+        with gripe.pgsql.Tx.begin():
+            if cls.all(keys_only = True).count() > 0:
+                return
+        for profile in data:
+            with gripe.pgsql.Tx.begin():
+                p = ActivityProfile(name = profile.name, 
+                    description = profile.description,
+                    isdefault = profile.isdefault)
+                p.put()
+                for pointer_name, (node_class, pointer_class) in self.node_defs.items():
+                    p.update_or_create_nodes(profile, pointer_name, (node_class, pointer_class))
+
+    def get_reference(self, ref_class, key_name):
+        p = self.parent()
+        ref = ref_class.get_by_key_and_parent(key_name, p)
+        if ref is None and p is not None:
+            ref = node_class.get_by_key_and_parent(key_name, None)
+        assert ref, "Cannot find reference to %s:%s" % (ref_class, key_name)
+        return ref
 
     def update_or_create_nodes(self, d, pointer_name, (node_class, pointer_class)):
         sub = d[pointer_name] if pointer_name in d else None
@@ -198,10 +231,16 @@ class ActivityProfile(grumble.Model):
         for subdict in sub:
             node = None
             isA = subdict["isA"] if "isA" in subdict else None
-            parent = node_class.get(isA) if isA else None
-            if isA and not parent:
-                return None
+            if isA:
+                p = self.parent()
+                parent = node_class.get_by_key(isA, parent = self.parent())
+                if parent is None and p is not None:
+                    parent = node_class.get_by_key(isA, parent = None)
+                assert parent, "ActivityProfile.update_or_create_nodes: Parent specified (isA = %s) but no parent found" % isA
+            else:
+                parent = None
             if "key" in subdict:
+                # FIXME Code path for JSON updates
                 node = node_class.get(subdict["key"])
                 if hasattr(self, "isA") and ((parent and parent != node.isA) or (not parent and node.isA)):
                     # Change of parent requested:
@@ -210,6 +249,9 @@ class ActivityProfile(grumble.Model):
                         return None
                     node.isA = parent
             else:
+                # Import code path
+                # Find referenced entity:
+                
                 pointer = pointer_class.by(node_class.id_prop, subdict[node_class.id_prop], parent = self.parent()) \
                     if node_class.id_prop in subdict else None
                 if not pointer:
@@ -254,7 +296,7 @@ class ActivityProfile(grumble.Model):
             profile = ActivityProfile.by("name", profile, parent = self.parent())
         if not(profile):
             return self
-        if (profile.parent() == self.parent()) or profile.parent().is_root():
+        if (profile.parent() == self.parent()) or not profile.parent():
             for pointer_name, (node_class, _) in self.node_defs.values():
                 p = profile
                 new_p = self
@@ -275,26 +317,37 @@ class ActivityProfile(grumble.Model):
                     new_node.set_links(node_links)                
         return self
 
-    def get_node_for_type(self, type, pointer_name):
-        node_class, _ = self.node_defs[pointer_name]
+    def get_node_for_type(self, type, ref_name):
+        node_class, _ = self.node_defs[ref_name]
         q = node_class.query(ancestor = self)
-        q.add_filter('"' + pointer_name + '" = ', type)
+        q.add_filter('"' + ref_name + '" = ', type)
         return q.get()
 
-    def get_all_types(self, pointer_name, only_root):
-        node_class, _ = self.node_defs[pointer_name]
+    def get_or_create_node_for_type(self, type, ref_name):
+        node_class, _ = self.node_defs[ref_name]
+        node = self.get_node_for_type(type, ref_name)
+        if not node:
+            node = node_class(parent = self)
+            setattr(node, ref_name, ref)
+            node.put()
+        return node
+            
+    def get_all_types(self, ref_name, only_root):
+        node_class, _ = self.node_defs[ref_name]
         ret = []
-        q = node_class.query(ancestor = self)
-        if only_root and hasattr(node_class, "isA"):
-            q.add_filter('"isA" = ', None)
+        q = node_class.query()
+        if only_root:
+            q.set_parent(self)
+        else:
+            q.set_ancestor(self)
         for node in q:
-            ret.append(getattr(node, pointer_name))
+            ret.append(getattr(node, ref_name))
         return ret
 
-    def has_type(self, pointer_name, type):
-        node_class, _ = self.node_defs[pointer_name]
+    def has_type(self, ref_name, type):
+        node_class, _ = self.node_defs[ref_name]
         q = node_class.query(ancestor = self)
-        q.add_filter('"' + pointer_name + '" = ', type)
+        q.add_filter('"' + ref_name + '" = ', type)
         return q.count() > 0
 
 
