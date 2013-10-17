@@ -62,8 +62,8 @@ if __name__ == '__main__':
     import gripe.sessionbridge
 
     class Country(grumble.Model):
-        name = grumble.TextProperty(verbose_name = "Country name", is_label = True)
-        code = grumble.TextProperty(is_key = True, verbose_name = "ISO Code")
+        countryname = grumble.TextProperty(verbose_name = "Country name", is_label = True)
+        countrycode = grumble.TextProperty(is_key = True, verbose_name = "ISO Code")
 
         def get_flag(self):
             return "http://flagspot.net/images/{0}/{1}.gif".format(self.code[0:1].lower(), self.code.lower())
@@ -138,7 +138,6 @@ if __name__ == '__main__':
     class SweatTrails(QApplication):
         def __init__(self, argv):
             super(SweatTrails, self).__init__(argv)
-            gripe.sessionbridge.login('jan@de-visser.net', ['admin', 'user'])
 
     app = SweatTrails(sys.argv)
 

@@ -539,9 +539,9 @@ class Model():
         kwargs = { "parent": parent }
         kwargs.update(descriptor)
         obj = cls(**kwargs)
-        obj.update(descriptor)
-        if hasattr(obj, "on_create") and callable(obj.on_update):
-            obj.on_create(descriptor) and obj.put()
+        obj.update(descriptor, **flags)
+        if hasattr(obj, "on_create") and callable(obj.on_create):
+            obj.on_create(descriptor, **flags) and obj.put()
         return obj
 
     @classmethod

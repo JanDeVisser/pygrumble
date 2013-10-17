@@ -66,7 +66,7 @@ class NodeBase(object):
             self._profile = path[0] if path[0].kind() == ActivityProfile.kind() else path[1]
         return self._profile
             
-    def get_type(self):
+    def get_reference(self):
         return getattr(self, self.ref_name)
 
     def get_links(self):
@@ -76,21 +76,24 @@ class NodeBase(object):
         pass
 
     def remove(self):
-        self.prune_tree()
-        hasattr(self, "on_delete") and callable(self.on_delete) and self.on_delete()
-        self.delete()
+        """
+            Remove this node. The tree rooted by this node will be pruned by the
+            prune_tree() method of the subclass of which self is an instance. 
+            After the tree is pruned, this object is deleted using the 
+            grumble.model.delete method, which calls on_delete under the covers.
+        """
+        hasattr(self, "prune_tree") and callable(self.prune_tree) and self.prune_tree()
+        grumble.model.delete(self)
 
-    def prune_tree(self):
-        pass
-    
-    def get_or_create_node(self, descriptor, ref_name, prop_name):
+    def get_or_create_node(self, ref_name, descriptor, prop_name):
         _, ref_class = ActivityProfile.node_defs[ref_name]
-        type = ref_class.get(descriptor["key"]) \
+        ref = ref_class.get(descriptor["key"]) \
             if "key" in descriptor \
-            else self.get_profile().get_reference(ref_name, descriptor[prop_name])
-        if not type:
-            type = ref_class.create(descriptor, self.scope())
-        return self.get_profile().get_or_create_node_for_type(type, ref_name)
+            else self.get_profile().get_reference(ref_class, descriptor[prop_name])
+        if not ref:
+            ref = ref_class.create(descriptor, self.scope())
+        return self.get_profile().get_or_create_node_for_reference(ref_name, type)
+
 
 class TreeNodeBase(NodeBase):
 
@@ -108,7 +111,7 @@ class TreeNodeBase(NodeBase):
 
     def prune_tree(self):
         p = self.get_profile()
-        for sub in self.get_all_subtypes:
+        for sub in self.get_all_subtypes():
             sub.set_parent(p)
             sub.put()
 
@@ -126,7 +129,7 @@ class SessionTypeNode(grumble.Model, TreeNodeBase):
 class GearTypeNode(grumble.Model, TreeNodeBase):
     gearType = grumble.ReferenceProperty(GearType)
     partOf = grumble.SelfReferenceProperty(collection_name = "parts")
-    usedFor = grumble.ReferenceProperty(SessionType)
+    usedFor = grumble.ReferenceProperty(SessionTypeNode)
     ref_class = GearType
     ref_name = "gearType"
 
@@ -135,15 +138,15 @@ class GearTypeNode(grumble.Model, TreeNodeBase):
 
     def set_links(self, links):
         (partOf, usedFor) = links
-        self.partOf = self.get_profile().get_node_for_type(partOf, "gearType")
-        self.usedFor = usedFor
+        self.partOf = self.get_profile().get_node_for_reference("gearType", partOf)
+        self.usedFor = self.get_profile().get_node_for_reference("sessionType", usedFor)
         return self
 
     def update(self, descriptor):
         if "usedFor" in descriptor and (type(descriptor["usedFor"]) == dict):
-            self.usedFor = self.get_or_create_node(descriptor["usedFor"], "sessionType")
+            self.usedFor = self.get_or_create_node("sessionType", descriptor, "usedFor")
         if "partOf" in descriptor and (type(descriptor["partOf"]) == dict):
-            self.partOf = self.get_or_create_node(descriptor["partOf"], "gearType")
+            self.partOf = self.get_or_create_node("gearType", descriptor, "partOf")
         return self
 
     def on_delete(self):
@@ -317,22 +320,22 @@ class ActivityProfile(grumble.Model):
                     new_node.set_links(node_links)                
         return self
 
-    def get_node_for_type(self, type, ref_name):
+    def get_node_for_reference(self, ref_name, ref):
         node_class, _ = self.node_defs[ref_name]
         q = node_class.query(ancestor = self)
-        q.add_filter('"' + ref_name + '" = ', type)
+        q.add_filter(ref_name, "=", ref)
         return q.get()
 
-    def get_or_create_node_for_type(self, type, ref_name):
+    def get_or_create_node_for_reference(self, ref_name, ref):
         node_class, _ = self.node_defs[ref_name]
-        node = self.get_node_for_type(type, ref_name)
+        node = self.get_node_for_type(ref, ref_name)
         if not node:
             node = node_class(parent = self)
             setattr(node, ref_name, ref)
             node.put()
         return node
             
-    def get_all_types(self, ref_name, only_root):
+    def get_all_references(self, ref_name, only_root):
         node_class, _ = self.node_defs[ref_name]
         ret = []
         q = node_class.query()
@@ -344,11 +347,8 @@ class ActivityProfile(grumble.Model):
             ret.append(getattr(node, ref_name))
         return ret
 
-    def has_type(self, ref_name, type):
-        node_class, _ = self.node_defs[ref_name]
-        q = node_class.query(ancestor = self)
-        q.add_filter('"' + ref_name + '" = ', type)
-        return q.count() > 0
+    def has_reference(self, ref_name, ref):
+        return self.get_node_for_references(ref_name, ref) is not None
 
 
 #
