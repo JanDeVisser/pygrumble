@@ -2,8 +2,8 @@
 # To change this template file, choose Tools | Templates
 # and open the template in the editor.
 
-__author__="jan"
-__date__ ="$17-Sep-2013 11:30:24 AM$"
+__author__ = "jan"
+__date__ = "$17-Sep-2013 11:30:24 AM$"
 
 import datetime
 import sys
@@ -23,7 +23,7 @@ class Sort(object):
     def __init__(self, colname, ascending):
         self.colname = colname
         self.ascending = ascending
-        
+
     def order(self):
         return "ASC" if self.ascending else "DESC"
 
@@ -254,7 +254,7 @@ class ModelQueryRenderer(object):
 
     def key_column(self):
         return self._manager.key_col
-    
+
     def has_keyname(self):
         return self._query.has_keyname()
 
@@ -278,7 +278,7 @@ class ModelQueryRenderer(object):
 
     def filters(self):
         return self._query.filters()
-    
+
     def sortorder(self):
         return self._query.sortorder()
 
@@ -293,7 +293,7 @@ class ModelQueryRenderer(object):
             # If not specified, set owner to creator:
             if not new_values.get("_ownerid"):
                 new_values["_ownerid"] = new_values["_createdby"]
-        else: # Update, don't clobber creation audit info:
+        else:  # Update, don't clobber creation audit info:
             if "_created" in new_values:
                 new_values.pop("_created")
             if "_createdby" in new_values:
@@ -323,7 +323,7 @@ class ModelQueryRenderer(object):
                     self._scrub_audit_info(new_values)
                 if type == QueryType.Update:
                     sql = 'UPDATE %s SET %s ' % (self.tablename(), ", ".join(['"%s" = %%s' % c for c in new_values]))
-                else: # Insert
+                else:  # Insert
                     sql = 'INSERT INTO %s ( "%s" ) VALUES ( %s )' % \
                             (self.tablename(), '", "'.join(new_values), ', '.join(['%s'] * len(new_values)))
                 vals.extend(new_values.values())
@@ -352,9 +352,14 @@ class ModelQueryRenderer(object):
                     vals.append(str(self.ancestor().get().path()) + "%")
                 if self.has_parent():
                     assert not self.flat(), "Cannot perform parent queries on flat table '%s'" % self.name()
-                    sql += glue + '"(_parent" = %s)'
+                    sql += glue + '("_parent" '
                     glue = ' AND '
-                    vals.append(str(self.parent()))
+                    if self.parent():
+                        sql += " = %s"
+                        vals.append(str(self.parent()))
+                    else:
+                        sql += " IS NULL"
+                    sql += ")"
                 if self.owner():
                     sql += glue + '("_ownerid" = %s)'
                     glue = ' AND '

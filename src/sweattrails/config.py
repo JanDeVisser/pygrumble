@@ -2,8 +2,8 @@
 # To change this template file, choose Tools | Templates
 # and open the template in the editor.
 
-__author__="jan"
-__date__ ="$3-Oct-2013 8:40:17 AM$"
+__author__ = "jan"
+__date__ = "$3-Oct-2013 8:40:17 AM$"
 
 import sys
 import gripe
@@ -34,7 +34,7 @@ class SessionType(grumble.Model):
     name = grumble.StringProperty(is_key = True)
     description = grumble.StringProperty()
     trackDistance = grumble.BooleanProperty()
-    speedPace = grumble.StringProperty(choices=set(['Speed', 'Pace', 'Swim Pace']))
+    speedPace = grumble.StringProperty(choices = set(['Speed', 'Pace', 'Swim Pace']))
     icon = grumble.image.ImageProperty()
 
 class GearType(grumble.Model):
@@ -44,7 +44,7 @@ class GearType(grumble.Model):
 
 class CriticalPowerInterval(grumble.Model):
     name = grumble.StringProperty(is_key = True)
-    duration = grumble.IntegerProperty()	# seconds
+    duration = grumble.IntegerProperty()  # seconds
 
 
 # ----------------------------------------------------------------------------
@@ -52,8 +52,6 @@ class CriticalPowerInterval(grumble.Model):
 # ----------------------------------------------------------------------------
 
 class NodeBase(object):
-    id_prop = "name"
-    
     def scope(self):
         if not hasattr(self, "_scope"):
             r = self.root()
@@ -65,7 +63,7 @@ class NodeBase(object):
             path = self.pathlist()
             self._profile = path[0] if path[0].kind() == ActivityProfile.kind() else path[1]
         return self._profile
-            
+
     def get_reference(self):
         return getattr(self, self.ref_name)
 
@@ -74,16 +72,6 @@ class NodeBase(object):
 
     def set_links(self, links):
         pass
-
-    def remove(self):
-        """
-            Remove this node. The tree rooted by this node will be pruned by the
-            prune_tree() method of the subclass of which self is an instance. 
-            After the tree is pruned, this object is deleted using the 
-            grumble.model.delete method, which calls on_delete under the covers.
-        """
-        hasattr(self, "prune_tree") and callable(self.prune_tree) and self.prune_tree()
-        grumble.model.delete(self)
 
     def get_or_create_node(self, ref_name, descriptor, prop_name):
         _, ref_class = ActivityProfile.node_defs[ref_name]
@@ -96,7 +84,6 @@ class NodeBase(object):
 
 
 class TreeNodeBase(NodeBase):
-
     def get_subtypes(self, all = False):
         q = self.children() if not all else self.descendents()
         return q.fetch_all()
@@ -109,7 +96,7 @@ class TreeNodeBase(NodeBase):
         q.add_filter(self.ref_name, '=', type)
         return q.fetch() is not None
 
-    def prune_tree(self):
+    def on_delete(self):
         p = self.get_profile()
         for sub in self.get_all_subtypes():
             sub.set_parent(p)
@@ -150,12 +137,7 @@ class GearTypeNode(grumble.Model, TreeNodeBase):
         return self
 
     def on_delete(self):
-        for part in self.parts:
-            part.partOf = None
-            part.put()
-
-    def prune_tree(self):
-        super(GearTypeNode, self).prune_tree()
+        super(GearTypeNode, self).on_delete()
         for part in self.parts:
             part.partOf = None
             part.put()
@@ -166,7 +148,6 @@ class CriticalPowerIntervalNode(grumble.Model, NodeBase):
     pointer_name = "criticalPowerInterval"
 
 
-
 class ActivityProfile(grumble.Model):
     name = grumble.StringProperty(is_key = True)
     description = grumble.StringProperty()
@@ -174,7 +155,7 @@ class ActivityProfile(grumble.Model):
     icon = grumble.image.ImageProperty()
     node_defs = {}
     for (part, partdef) in gripe.Config.app.grizzle.activityprofileparts.items():
-        node_defs[part] = ( gripe.resolve(partdef.nodeClass), gripe.resolve(partdef.pointerClass) )
+        node_defs[part] = (gripe.resolve(partdef.nodeClass), gripe.resolve(partdef.pointerClass))
 
     def sub_to_dict(self, descriptor):
         # TODO: Build tree...
@@ -184,23 +165,23 @@ class ActivityProfile(grumble.Model):
         for pointer_name, defs in self.node_defs.items():
             self.update_or_create_nodes(d, pointer_name, defs)
         return self
-    
+
     def initialize(self):
         # Only do this for profiles that are user components:
         if not self.parent():
             return
-        
+
         # Set the profile's name. Every user has only one profile object which
         # is manipulated whenever the user selects another template profile.
         self.name = "Activity Profile for " + self.parent()().display_name
-        
+
         # Find the default profile:
         profile = ActivityProfile.by("isdefault", True, parent = None)
-        
+
         # If there is a default profile, import it into this profile:
         if profile:
             self.import_profile(profile)
-    
+
     @classmethod
     def import_template_data(cls, data):
         """
@@ -211,23 +192,23 @@ class ActivityProfile(grumble.Model):
                 return
         for profile in data:
             with gripe.pgsql.Tx.begin():
-                p = ActivityProfile(name = profile.name, 
+                p = ActivityProfile(name = profile.name,
                     description = profile.description,
                     isdefault = profile.isdefault)
                 p.put()
-                for pointer_name, (node_class, pointer_class) in self.node_defs.items():
-                    p.update_or_create_nodes(profile, pointer_name, (node_class, pointer_class))
+                for ref_name, (node_class, ref_class) in cls.node_defs.items():
+                    p.update_or_create_nodes(profile, ref_name, (node_class, ref_class))
 
     def get_reference(self, ref_class, key_name):
         p = self.parent()
         ref = ref_class.get_by_key_and_parent(key_name, p)
         if ref is None and p is not None:
-            ref = node_class.get_by_key_and_parent(key_name, None)
+            ref = ref_class.get_by_key_and_parent(key_name, None)
         assert ref, "Cannot find reference to %s:%s" % (ref_class, key_name)
         return ref
 
-    def update_or_create_nodes(self, d, pointer_name, (node_class, pointer_class)):
-        sub = d[pointer_name] if pointer_name in d else None
+    def update_or_create_nodes(self, d, ref_name, (node_class, ref_class)):
+        sub = d[ref_name] if ref_name in d else None
         if not sub:
             return
         sub = sub if type(sub) == list else [sub]
@@ -254,7 +235,7 @@ class ActivityProfile(grumble.Model):
             else:
                 # Import code path
                 # Find referenced entity:
-                
+                ref = self.get_reference(ref_class, key_name)
                 pointer = pointer_class.by(node_class.id_prop, subdict[node_class.id_prop], parent = self.parent()) \
                     if node_class.id_prop in subdict else None
                 if not pointer:
@@ -293,10 +274,10 @@ class ActivityProfile(grumble.Model):
             return True
         else:
             return False
-        
+
     def import_profile(self, profile):
         if type(profile) == str:
-            profile = ActivityProfile.by("name", profile, parent = self.parent())
+            profile = ActivityProfile.by("name", profile, parent = None)
         if not(profile):
             return self
         if (profile.parent() == self.parent()) or not profile.parent():
@@ -317,7 +298,7 @@ class ActivityProfile(grumble.Model):
                     parents = subs
                 for node_tuple in links:
                     (new_node, node_links) = node_tuple
-                    new_node.set_links(node_links)                
+                    new_node.set_links(node_links)
         return self
 
     def get_node_for_reference(self, ref_name, ref):
@@ -334,7 +315,7 @@ class ActivityProfile(grumble.Model):
             setattr(node, ref_name, ref)
             node.put()
         return node
-            
+
     def get_all_references(self, ref_name, only_root):
         node_class, _ = self.node_defs[ref_name]
         ret = []
@@ -361,10 +342,10 @@ class Brand(grumble.Model):
     name = grumble.StringProperty()
     description = grumble.StringProperty()
     logo = grumble.image.ImageProperty()
-    website = grumble.StringProperty()   # FIXME LinkProperty
+    website = grumble.StringProperty()  # FIXME LinkProperty
     about = grumble.TextProperty()
     country = grumble.ReferenceProperty(Country)
-    gearTypes = grumble.ListProperty() # (grumble.Key) FIXME Make list items typesafe
+    gearTypes = grumble.ListProperty()  # (grumble.Key) FIXME Make list items typesafe
 
     def sub_to_dict(self, descriptor):
         gts = []

@@ -2,19 +2,14 @@
 # To change this template file, choose Tools | Templates
 # and open the template in the editor.
 
-__author__="jan"
-__date__ ="$17-Sep-2013 11:41:49 AM$"
+__author__ = "jan"
+__date__ = "$17-Sep-2013 11:41:49 AM$"
 
-import base64
-import json
-import sys
 import uuid
 
-import gripe
 import gripe.acl
 import gripe.pgsql
 import gripe.sessionbridge
-import grumble.converter
 import grumble.errors
 import grumble.key
 import grumble.meta
@@ -138,7 +133,7 @@ class Model():
             self._exists = False
 
     def _load(self):
-        #logger.debug("_load -> kind: %s, _id: %s, _key_name: %s", self.kind(), self._id, self._key_name)
+        # logger.debug("_load -> kind: %s, _id: %s, _key_name: %s", self.kind(), self._id, self._key_name)
         if (not(hasattr(self, "_values")) or (self._values is None)) and (self._id or self._key_name):
             self._populate(grumble.query.ModelQuery.get(self.key()))
         else:
@@ -416,11 +411,11 @@ class Model():
         if not propdef.transient:
             mm.add_column(propdef.get_coldef())
         if hasattr(propdef, "is_label") and propdef.is_label:
-            #assert not hasattr(cls, "label_prop") or cls.label_prop.inherited_from, "Can only assign one label property"
+            # assert not hasattr(cls, "label_prop") or cls.label_prop.inherited_from, "Can only assign one label property"
             assert not propdef.transient, "Label property cannot be transient"
             cls.label_prop = propdef
         if hasattr(propdef, "is_key") and propdef.is_key:
-            #assert not hasattr(cls, "key_prop") or cls.key_prop.inherited_from, "Can only assign one key property"
+            # assert not hasattr(cls, "key_prop") or cls.key_prop.inherited_from, "Can only assign one key property"
             assert not propdef.transient, "Key property cannot be transient"
             cls.key_prop = propname
         cls._properties[propname] = propdef
@@ -483,7 +478,7 @@ class Model():
             ret._id = k.id
             ret._key_name = k.name
         return ret
-    
+
     @classmethod
     def get_by_key_and_parent(cls, key, parent):
         cls.seal()
@@ -492,7 +487,7 @@ class Model():
         q = cls.query(parent = parent)
         q.add_filter(cls.key_prop.name, "=", key)
         return q.get()
-    
+
     @classmethod
     def by(cls, property, value, **kwargs):
         cls.seal()
@@ -500,11 +495,11 @@ class Model():
         kwargs["keys_only"] = False
         q = cls.query('"%s" = ' % property, value, **kwargs)
         return q.get()
-    
+
     def children(self):
         q = self.query(parent = self)
         return q
-    
+
     def descendents(self):
         q = self.query(ancestor = self)
         return q
@@ -566,7 +561,7 @@ class Model():
                         for d in cdata["data"]:
                             logger.debug("_import_template_data(%s): model %s object %s", cname, cdata.model, d)
                             clazz.create(d)
-                                
+
     @classmethod
     def load_template_data(cls):
         cname = cls.__name__.lower()
@@ -629,7 +624,7 @@ class Query(grumble.query.ModelQuery):
                 logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
                 return
         return super(Query, self).set_parent(parent)
-    
+
     def get_kind(self, ix = 0):
         return grumble.meta.Registry.get(self.kind[ix]) if self.kind and ix < len(self.kind) else None
 
