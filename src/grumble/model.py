@@ -47,6 +47,7 @@ class Model():
 
     @classmethod
     def seal(cls):
+        assert not cls._abstract, "Model %s is abstract." % cls.kind()
         if not cls._sealed:
             cls._sealed = True
             cls.modelmanager.reconcile()
@@ -70,8 +71,13 @@ class Model():
         return hash(self.id())
 
     def __eq__(self, other):
-        assert isinstance(other, Model)
-        return (self.kind() == other.kind()) and (self.keyname() == other.keyname())
+        if not isinstance(other, Model) and callable(other.key):
+            return self.__eq__(other())
+        else:
+            if not other:
+                return False
+            assert isinstance(other, Model)
+            return (self.kind() == other.kind()) and (self.keyname() == other.keyname())
 
     def __call__(self):
         return self
@@ -97,10 +103,9 @@ class Model():
                 self._parent = None
                 self._ancestors = "/"
             elif isinstance(ancestors, basestring):
+                assert ancestors.endswith("/" + parent), "_set_ancestors: mismatch parent: %s, ancestors: %s" % (parent, ancestors)
                 self._ancestors = ancestors
-                (a, sep, p) = ancestors.rpartition("/")
-                assert p == str(parent)
-                self._parent = grumble.key.Key(p)
+                self._parent = grumble.key.Key(parent)
         else:
             self._parent = None
             self._ancestors = "/"
@@ -157,7 +162,7 @@ class Model():
             key = getattr(self, kp.name)
             if key is None:
                 raise grumble.errors.KeyPropertyRequired(self.kind(), kp.name)
-            self._key_name = "%s/%s" % (self.parent(), key) if scoped else key
+            self._key_name = "%s/%s" % (self.parent() if self.parent() else "", key) if scoped else key
             include_key_name = scoped
         elif not self._key_name:
             self._key_name = uuid.uuid1().hex
@@ -181,6 +186,8 @@ class Model():
         values["_ownerid"] = self._ownerid if hasattr(self, "_ownerid") else None
         grumble.query.ModelQuery.set(hasattr(self, "_brandnew"), self.key(), values)
         if hasattr(self, "_brandnew"):
+            if hasattr(self, "after_insert") and callable(self.after_insert):
+                self.after_insert()
             del self._brandnew
         for prop in self._properties.values():
             prop._after_store(self)
@@ -218,6 +225,7 @@ class Model():
 
     def set_parent(self, parent):
         assert not self._flat, "Cannot set parent of flat Model %s" % self.kind()
+        assert str(self.key()) not in parent.path(), "Cyclical model: attempting to set %s as parent of %s" % (parent, self)
         self._load()
         self._set_ancestors_from_parent(parent)
 
@@ -433,10 +441,18 @@ class Model():
     @classmethod
     def kind(cls):
         return cls._kind
+    
+    @classmethod
+    def abstract(cls):
+        return cls._abstract
 
     @classmethod
     def properties(cls):
         return cls._properties
+    
+    @classmethod
+    def keyproperty(cls):
+        return cls.key_prop if hasattr(cls, "key_prop") else None
 
     @classmethod
     def for_name(cls, name):
@@ -485,7 +501,7 @@ class Model():
         assert cls != Model, "Cannot use get_by_key_and_parent on unconstrained Models"
         assert cls.key_prop, "Cannot use get_by_key_and_parent Models without explicit keys"
         q = cls.query(parent = parent)
-        q.add_filter(cls.key_prop.name, "=", key)
+        q.add_filter(cls.key_prop, "=", key)
         return q.get()
 
     @classmethod
@@ -584,6 +600,9 @@ def delete(model):
             logger.info("on_delete trigger prevented deletion of model %s.%s", model.kind(), model.key())
     return None
 
+def abstract(cls):
+    cls._abstract = True
+    return cls
 
 class Query(grumble.query.ModelQuery):
     def __init__(self, kind, keys_only = True, include_subclasses = True, **kwargs):
@@ -594,10 +613,12 @@ class Query(grumble.query.ModelQuery):
             kinds = [grumble.meta.Registry.get(kind)]
         self.kind = []
         for k in kinds:
-            self.kind.append(k.kind())
+            if not k.abstract():
+                self.kind.append(k.kind())
             if include_subclasses:
                 for sub in k.subclasses():
-                    self.kind.append(sub.kind())
+                    if not sub.abstract():
+                        self.kind.append(sub.kind())
         ancestor = kwargs.get("ancestor")
         if ancestor:
             self.set_ancestor(ancestor)

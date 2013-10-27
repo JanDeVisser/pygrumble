@@ -21,6 +21,7 @@ class ModelMetaClass(type):
             else:
                 tablename = name
                 kind.table_name = name
+            kind._abstract = dct.get("_abstract", False)
             kind._flat = dct.get("_flat", False)
             kind._audit = dct.get("_audit", True)
             acl = gripe.Config.model["model"][name]["acl"] \

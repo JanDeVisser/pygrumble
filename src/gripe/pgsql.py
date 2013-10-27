@@ -18,6 +18,7 @@ class Cursor(psycopg2.extensions.cursor):
             self._columns = kwargs["columns"]
         if "key_index" in kwargs:
             self._key_index = kwargs["key_index"]
+        logger.debug("sql: %s args %s", sql, args)
         logger.debug(self.mogrify(sql, args))
         try:
             super(Cursor, self).execute(sql, args)

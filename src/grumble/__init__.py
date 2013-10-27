@@ -42,6 +42,7 @@ from grumble.property import TimeProperty
 from grumble.model import Model
 from grumble.model import Query
 from grumble.model import delete
+from grumble.model import abstract
 
 from grumble.reference import QueryProperty
 from grumble.reference import ReferenceProperty

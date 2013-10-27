@@ -7,20 +7,22 @@
     ],
     "grizzle": {
         "userparts": [ "sweattrails.userprofile.UserProfile", "sweattrails.config.ActivityProfile" ],
-        "root": "root@sweattrails.com",
+        "root": "root@sweattrails.com"
+    },
+    "sweattrails": {
         "activityprofileparts": {
             "sessionType": { 
                 "nodeClass": "sweattrails.config.SessionTypeNode", 
-                "pointerClass": "sweattrails.config.SessionType"
+                "refClass": "sweattrails.config.SessionType"
             },
             "gearType": { 
                 "nodeClass": "sweattrails.config.GearTypeNode", 
-                "pointerClass": "sweattrails.config.GearType"
+                "refClass": "sweattrails.config.GearType"
             },
             "criticalPowerInterval": { 
                 "nodeClass": "sweattrails.config.CriticalPowerIntervalNode", 
-                "pointerClass": "sweattrails.config.CriticalPowerInterval"
+                "refClass": "sweattrails.config.CriticalPowerInterval"
             }
-        }
+        }        
     }
 }

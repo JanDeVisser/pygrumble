@@ -7,149 +7,172 @@
 __author__ = "jan"
 __date__ = "$18-Sep-2013 8:57:43 AM$"
 
-import sys
-
-if __name__ != '__main__' and __name__ != 'model':
-    print __name__
-    print "Get off my lawn, punk!"
-    sys.exit(0)
-
 import gripe.pgsql
 import grumble
 
-with gripe.pgsql.Tx.begin():
-    class Test(grumble.Model):
-        testname = grumble.TextProperty(required = True, is_label = True)
-        value = grumble.IntegerProperty(default = 12)
-
-    jan = Test(testname = "Jan", value = "42")
-    assert jan.id() is None
-    assert jan.testname == "Jan"
-    assert jan.value == 42
-    jan.put()
-    assert jan.id() is not None, "jan.id() is still None after put()"
-    x = jan.key()
-
-with gripe.pgsql.Tx.begin():
-    y = Test.get(x)
-    assert y.id() == x.id
-    assert y.testname == "Jan"
-    assert y.value == 42
-    y.value = 43
-    y.put()
-    assert y.value == 43
-
-with gripe.pgsql.Tx.begin():
-    tim = Test(testname = "Tim", value = 9, parent = y)
-    tim.put()
-    assert tim.parent().id == y.id()
-
-    gripe.pgsql.Tx.flush_cache()
-    q = grumble.Query(Test)
-    for t in q:
-        print t.testname
-
-    gripe.pgsql.Tx.flush_cache()
-    q = grumble.Query(Test, False)
-    for t in q:
-        print t.testname
-
-    print Test.all().count()
-    for t in Test.all():
-        print t.testname
-
-    count = Test.count()
-    assert count == 2, "Expected Test.count() to return 2, but it returned %s instead" % count
-
-    class Test2(grumble.Model):
-        testname = grumble.TextProperty(required = True, is_label = True)
-        value = grumble.IntegerProperty(default = 12)
-    mariska = Test2(testname = "Mariska", value = 40, parent = y)
-    mariska.put()
-
-    class Test3(grumble.Model):
-        testname = grumble.TextProperty(required = True, is_label = True)
-        value = grumble.IntegerProperty(default = 12)
-    jeroen = Test3(testname = "Jeroen", value = 44, parent = y)
-    jeroen.put()
-
-    print ">>> Test, Test2, Test3 with ancestor"
-    q = grumble.Query((Test, Test2, Test3), False, ancestor = y)
-    for t in q:
-        print t.testname
+class Person(grumble.Model):
+    name = grumble.TextProperty(required = True, is_label = True, 
+        is_key = True, scoped = True)
+    age = grumble.IntegerProperty(default = 30)
 
 
-    print ">>> Test2, Test3 with ancestor"
-    q = grumble.Query((Test2, Test3), False, ancestor = y)
-    for t in q:
-        print t.testname
+def test():
+    keys = []
+    names = []
+    with gripe.pgsql.Tx.begin():
+        print ">>> Creating Person object"
+        jan = Person(name = "Jan", age = "47")
+        assert jan.id() is None
+        assert jan.name == "Jan"
+        assert jan.age == 47
+        jan.put()
+        assert jan.id() is not None, "jan.id() is still None after put()"
+        x = jan.key()
+        keys.append(x)
+        names.append("Jan")
 
-    print "<<<"
+    with gripe.pgsql.Tx.begin():
+        print ">>> Retrieving Person object by key"
+        y = Person.get(x)
+        assert y.id() == x.id
+        assert y.name == "Jan"
+        assert y.age == 47
+        y.age = 43
+        y.put()
+        assert y.age == 43
 
-    print ">>> Subclassing models"
-    class Test3Sub(Test3):
-        lightswitch = grumble.BooleanProperty(default = False)
+    with gripe.pgsql.Tx.begin():
+        print ">>> Creating Person with parent"
+        tim = Person(name = "Tim", age = 9, parent = y)
+        tim.put()
+        assert tim.parent().id == y.id()
+        keys.append(tim.key())
+        names.append("Tim")
 
-    t3s = Test3Sub(testname = "T3S", value = "3", lightswitch = True)
-    t3s.put()
-    print t3s.testname, t3s.value, t3s.lightswitch
-    q = grumble.Query(Test3, False)
-    for t in q:
-        print t.testname
-    print "<<<"
+        print ">>> Querying all Person objects by Query"
+        gripe.pgsql.Tx.flush_cache()
+        q = grumble.Query(Person)
+        for p in q:
+            assert p.key() in keys, "Key %s not known"
 
-    class RefTest(grumble.Model):
-        refname = grumble.TextProperty(required = True, is_key = True)
-        ref = grumble.ReferenceProperty(Test)
+        print ">>> Querying all Person objects by Query, keys_only == False"
+        gripe.pgsql.Tx.flush_cache()
+        q = grumble.Query(Person, False)
+        for p in q:
+            assert p.name in names, "Name %s not known"
 
-    print ">>", jan, jan.id()
-    r = RefTest(refname = "Jan", ref = jan)
-    print "-->", r.refname, r.ref
-    r.put()
+        print ">>> Person.all()"
+        assert Person.all().count() == 2
+        for p in Person.all():
+            assert p.name in names, "Name %s not known"
 
-    q = grumble.Query(Test)
-    q.set_ancestor("/")
-    for t in q:
-        print t
+        print ">>> Person.count()"
+        count = Person.count()
+        assert count == 2
 
-    q = grumble.Query(Test)
-    q.set_ancestor(y)
-    for t in q:
-        print t
+        print ">>> Person.get_by_key_and_parent()"
+        gripe.pgsql.Tx.flush_cache()
+        tim2 = Person.get_by_key_and_parent("Tim", y)
+        assert tim2, "Person.get_by_key_and_parent() returned None"
+        assert tim2.name == "Tim", "Person.get_by_key_and_parent() returned %s" % tim2.name
 
-    q = grumble.Query(Test)
-    q.add_filter("value = ", 9)
-    q.get()
+        print ">>> Query with ancestor /"
+        q = grumble.Query(Person)
+        q.set_ancestor("/")
+        for t in q:
+            print t
 
-    q = grumble.Query(Test)
-    q.set_ancestor(y)
-    q.add_filter("testname = ", 'Tim')
-    q.add_filter("value < ", 10)
-    for t in q:
-        print t
+        print ">>> Query with ancestor Jan"
+        q = grumble.Query(Person)
+        q.set_ancestor(y)
+        for t in q:
+            print t
 
-    q = grumble.Query(RefTest)
-    q.add_filter("ref = ", y)
-    for t in q:
-        print t
+        print ">>> Query with age = 9"
+        q = grumble.Query(Person)
+        q.add_filter("age", "=", 9)
+        assert q.get().name == "Tim"
 
-    y.reftest_set.run()
+        print ">>> Query with name = Tim and age < 10"
+        q = grumble.Query(Person)
+        q.set_ancestor(y)
+        q.add_filter("name", "=", 'Tim')
+        q.add_filter("age", " < ", 10)
+        assert q.get().name == "Tim"
 
-    class SelfRefTest(grumble.Model):
-        selfrefname = grumble.TextProperty(key = True, required = True)
-        ref = grumble.SelfReferenceProperty(collection_name = "loves")
+        class Test2(grumble.Model):
+            name = grumble.TextProperty(required = True, is_label = True)
+            value = grumble.IntegerProperty(default = 12)
+        mariska = Test2(name = "Mariska", value = 40, parent = y)
+        mariska.put()
 
-    luc = SelfRefTest(selfrefname = "Luc")
-    luc.put()
+        class Test3(grumble.Model):
+            name = grumble.TextProperty(required = True, is_label = True)
+            value = grumble.IntegerProperty(default = 12)
+        jeroen = Test3(name = "Jeroen", value = 44, parent = y)
+        jeroen.put()
 
-    schapie = SelfRefTest(selfrefname = "Schapie", ref = luc)
-    schapie.put()
-    print schapie.to_dict()
+        print ">>> Person, Test2, Test3 with ancestor"
+        q = grumble.Query((Person, Test2, Test3), False, ancestor = y)
+        for t in q:
+            print t.name
 
-    for s in luc.loves:
-        print s
 
-    luc.ref = schapie
-    luc.put()
-    print schapie.to_dict()
-    print luc.to_dict()
+        print ">>> Test2, Test3 with ancestor"
+        q = grumble.Query((Test2, Test3), False, ancestor = y)
+        for t in q:
+            print t.name
+
+        print "<<<"
+
+        print ">>> Subclassing models"
+        class Test3Sub(Test3):
+            lightswitch = grumble.BooleanProperty(default = False)
+
+        t3s = Test3Sub(name = "T3S", value = "3", lightswitch = True)
+        t3s.put()
+        print t3s.name, t3s.value, t3s.lightswitch
+        q = grumble.Query(Test3, False)
+        for t in q:
+            print t.name
+        print "<<<"
+
+        print ">>> Class with Reference property"
+        class Pet(grumble.Model):
+            name = grumble.TextProperty(required = True, is_key = True)
+            owner = grumble.ReferenceProperty(Person)
+
+        toffee = Pet(name = "Toffee", owner = jan)
+        toffee.put()
+
+        print ">>> Query for Reference property"
+        q = grumble.Query(Pet)
+        q.add_filter("owner", " = ", y)
+        for t in q:
+            print t
+
+        y.pet_set.run()
+
+        class SelfRefTest(grumble.Model):
+            selfrefname = grumble.TextProperty(key = True, required = True)
+            ref = grumble.SelfReferenceProperty(collection_name = "loves")
+
+        luc = SelfRefTest(selfrefname = "Luc")
+        luc.put()
+
+        schapie = SelfRefTest(selfrefname = "Schapie", ref = luc)
+        schapie.put()
+        print schapie.to_dict()
+
+        for s in luc.loves:
+            print s
+
+        luc.ref = schapie
+        luc.put()
+        print schapie.to_dict()
+        print luc.to_dict()
+
+
+if __name__ == '__main__':
+    test()
+

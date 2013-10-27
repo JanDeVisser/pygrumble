@@ -18,6 +18,7 @@ class ColumnDefinition(object):
         self.defval = defval
         self.indexed = indexed
         self.is_key = False
+        self.scoped = False
 
 class ModelManager(object):
     modelconfig = gripe.Config.model
@@ -48,15 +49,19 @@ class ModelManager(object):
         logger.debug("%s.set_columns(%s)", self.name, len(self._prep_columns))
         self.key_col = None
         for c in self._prep_columns:
-            if c.is_key and not c.scoped:
-                logger.debug("%s.set_columns: found key_col: %s", self.name, c.name)
-                self.key_col = c
-                c.required = True
+            if c.is_key:
+                if not c.scoped:
+                    logger.debug("%s._set_columns: found key_col: %s", self.name, c.name)
+                    self.key_col = c
+                    c.required = True
+                else:
+                    logger.debug("%s._set_columns: found scoped key_col: %s", self.name, c.name)                    
         self.columns = []
         if not self.key_col:
             logger.debug("%s.set_columns: Adding synthetic key_col", self.name)
             kc = ColumnDefinition("_key_name", "TEXT", True, None, False)
             kc.is_key = True
+            kc.scoped = False
             self.key_col = kc
             self.columns.append(kc)
         if not self.flat:
@@ -159,11 +164,13 @@ class ModelManager(object):
             if c.defval:
                 sql += " DEFAULT %s"
                 vars.append(c.defval)
-            if c.is_key:
+            if c.is_key and not c.scoped:
                 sql += " PRIMARY KEY"
             cur.execute(sql, vars)
             if c.indexed and not c.is_key:
                 cur.execute('CREATE INDEX "%s_%s" ON %s ( "%s" )' % (self.table, c.name, self.tablename, c.name))
+            if c.is_key and c.scoped:
+                cur.execute('CREATE UNIQUE INDEX "%s_%s" ON %s ( "_parent", "%s" )' % (self.table, c.name, self.tablename, c.name))
 
     modelmanagers_byname = {}
     @classmethod

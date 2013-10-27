@@ -23,6 +23,7 @@ class UserGroup(grumble.Model, gripe.auth.AbstractUserGroup):
     def _explicit_roles(self):
         return set(self.has_roles)
 
+@grumble.abstract
 class UserComponent(grumble.Model):
     pass
 
@@ -46,20 +47,21 @@ class User(grumble.Model, gripe.auth.AbstractUser):
     display_name = grumble.TextProperty(is_label = True)
     has_roles = grumble.ListProperty()
     
-    def after_store(self):
+    def after_insert(self):
         for m in gripe.Config.app.grizzle.userparts:
             if m not in self._resolved_parts:
-                logger.debug("grizzle.User.after_store(%s): Resolving user part %s", self.email, m)
+                logger.debug("grizzle.User.after_insert(%s): Resolving user part %s", self.email, m)
                 gripe.resolve(m)
                 self._resolved_parts.add(m)
-            logger.debug("grizzle.User.after_store(%s): Creating user part %s", self.email, m)
+            logger.debug("grizzle.User.after_insert(%s): Creating user part %s", self.email, m)
             k = grumble.Model.for_name(m)
             component = k(parent = self)
             component.put()
             
     def sub_to_dict(self, d, **flags):
-        if flags.get("include_components"):
+        if "include_components" in flags:
             for component in grumble.Query(UserComponent, False, True).set_parent(self):
+                logger.debug("grizzle.User.sub_to_dict(%s) got component %s", self.email, component)
                 (_, _, k) = component.kind().rpartition(".")
                 d[k] = component.to_dict()
         return d

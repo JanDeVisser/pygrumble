@@ -52,7 +52,7 @@ class Key(object):
         else:
             self.id = value
             s = base64.urlsafe_b64decode(value)
-        (k, self.name) = s.split(":")
+        (k, _, self.name) = s.partition(":")
         self.kind = grumble.meta.Registry.get(k).kind()
 
     def __str__(self):
@@ -68,8 +68,13 @@ class Key(object):
         return grumble.meta.Registry.get(self.kind)
 
     def __eq__(self, other):
-        assert isinstance(other, Key)
-        return (self.kind == other.kind) and (self.name == other.name)
+        if not isinstance(other, Key) and hasattr(other, "key") and callable(other.key):
+            return self.__eq__(other.key())
+        else:
+            if not other:
+                return False
+            assert isinstance(other, Key), "Can't compare key '%s' and %s '%s'" % (self, other.__class__, other)
+            return (self.kind == other.kind) and (self.name == other.name)
 
     def __hash__(self):
         return hash(str(self))

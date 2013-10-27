@@ -77,11 +77,7 @@ class ModelQuery(object):
             ancestor = ancestor.key()
         assert (ancestor is None) or isinstance(ancestor, grumble.key.Key), \
                 "Must specify an ancestor object or None in ModelQuery.set_ancestor"
-        if ancestor is None:
-            self.unset_ancestor()
-            self.set_parent(None)
-        else:
-            self._ancestor = ancestor
+        self._ancestor = ancestor
         return self
 
     def unset_ancestor(self):
@@ -144,7 +140,7 @@ class ModelQuery(object):
             prop = prop.strip()
             assert len(prop)
             prop = '"' + prop + '"' if prop[0] != '"' or prop[-1:] != '"' else prop
-            expr = "%s %s %%s" % (prop, args[1])
+            expr = "%s %s" % (prop, args[1])
             value = args[2]
         else:
             assert 0, "Could not interpret %s arguments to add_filter" % len(args)
@@ -345,7 +341,7 @@ class ModelQueryRenderer(object):
                     glue = ' AND '
                     sql += ' WHERE ("%s" = %%s)' % self.key_column().name
                     vals.append(str(self.keyname().name))
-                if self.has_ancestor():
+                if self.has_ancestor() and self.ancestor():
                     assert not self.flat(), "Cannot perform ancestor queries on flat table '%s'" % self.name()
                     glue = ' AND '
                     sql += ' WHERE ("_ancestors" LIKE %s)'
