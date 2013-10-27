@@ -11,7 +11,7 @@ import gripe.pgsql
 import grumble
 
 class Person(grumble.Model):
-    name = grumble.TextProperty(required = True, is_label = True, 
+    name = grumble.TextProperty(required = True, is_label = True,
         is_key = True, scoped = True)
     age = grumble.IntegerProperty(default = 30)
 

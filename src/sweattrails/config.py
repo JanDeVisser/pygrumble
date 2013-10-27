@@ -6,6 +6,7 @@ __author__ = "jan"
 __date__ = "$3-Oct-2013 8:40:17 AM$"
 
 import gripe
+import gripe.pgsql
 import grizzle
 import grumble
 import grumble.image
@@ -62,13 +63,13 @@ class NodeTypeRegistry():
     _by_ref_name = {}
     _by_ref_class = {}
     _by_node_class = {}
-        
+
     @classmethod
     def register(cls, definition):
         cls._by_ref_name[definition._ref_name] = definition
         cls._by_ref_class[definition._ref_class] = definition
         cls._by_node_class[definition._node_class] = definition
-        
+
     @classmethod
     def get_by_name(cls, ref_name):
         return cls._by_ref_name[ref_name]
@@ -80,11 +81,11 @@ class NodeTypeRegistry():
     @classmethod
     def get_by_node_class(cls, node_class):
         return cls._by_node_class[node_class]
-    
+
     @classmethod
     def names(cls):
         return cls._by_ref_name.keys()
-    
+
     @classmethod
     def types(cls):
         return cls._by_ref_name.values()
@@ -95,16 +96,16 @@ class NodeTypeDefinition(object):
         self._ref_class = ref_class
         self._node_class = node_class
         NodeTypeRegistry.register(self)
-        
+
     def name(self):
         return self._ref_name
-    
+
     def ref_class(self):
         return self._ref_class
-    
+
     def node_class(self):
         return self._node_class
-    
+
     def name_property(self):
         return self.ref_class().keyproperty()
 
@@ -115,7 +116,7 @@ class NodeTypeDefinition(object):
                 if isinstance(p, grumble.ReferenceProperty) and issubclass(p.reference_class, NodeBase):
                    self._link_props[p.name] = NodeTypeRegistry.get_by_node_class(p.reference_class)
         return self._link_props
-    
+
     def get_reference_by_name(self, profile, key_name):
         p = profile.parent()
         ref = self.ref_class().get_by_key_and_parent(key_name, p)
@@ -130,11 +131,11 @@ class NodeTypeDefinition(object):
             else self.get_reference_by_name(profile, descriptor[self.name_property()])
         if not ref:
             ref = self.ref_class()(parent = profile.parent())
-        assert ref, "No reference found for %s in %s" % (self, name(), descriptor)
+        assert ref, "No reference found for %s in %s" % (self.name(), descriptor)
         node = self.get_or_create_node_for_reference(profile, ref, parent)
         self.update_node(node, descriptor)
         return node
-    
+
     def update_node(self, node, descriptor):
         ref = getattr(node, self.name())
         assert ref, "%s.update_node: no reference" % self.name()
@@ -149,10 +150,13 @@ class NodeTypeDefinition(object):
         if dirty:
             node.put()
         return node
-    
+
     def get_or_create_node_for_reference(self, profile, ref, parent = None):
+        logger.debug("get_or_create_node_for_reference(%s, %s, %s)",
+            self.name(), getattr(ref, self.name_property()), profile.name)
         node = self.get_node_for_reference(profile, ref)
         if not node:
+            logger.debug("Node not found. Creating")
             node = self.node_class()(parent = parent if parent else profile)
             setattr(node, self.name(), ref)
             node.put()
@@ -160,57 +164,82 @@ class NodeTypeDefinition(object):
         return node
 
     def get_node_for_reference(self, profile, ref):
-        q = self.node_class().query(ancestor = profile)
+        logger.debug("get_node_for_reference(%s, %s, %s)",
+            self.name(), getattr(ref, self.name_property()), profile.name)
+        q = self.node_class().query()
+        q.set_ancestor(profile)
         q.add_filter(self.name(), "=", ref)
-        return q.get()
-    
+        ret = q.get()
+        if ret:
+            logger.debug("get_node_for_reference(%s, %s, %s) found %s",
+                self.name(), getattr(ref, self.name_property()), profile.name,
+                ret.path())
+        else:
+            logger.debug("get_node_for_reference(%s, %s, %s) not found",
+                self.name(), getattr(ref, self.name_property()), profile.name)
+        return ret
+
     def get_node_by_reference_name(self, profile, key_name):
         ref = self.get_reference_by_name(profile, key_name)
         return self.get_node_for_reference(profile, ref)
 
     def get_or_duplicate_reference(self, original, profile):
-        ref_key = getattr(original, self.name_property())
-        # Check if the reference already exists:
-        ref = self.get_reference_by_name(profile, ref_key)
-        if ref:
-            return ref
         # Only copy if reference is owned by another profile. If the reference
         # is not owned by another profile, it's a global entity.
-        ref = original
-        if ref.parent():
+        ref_key = getattr(original, self.name_property())
+        logger.debug("get_or_duplicate_reference(%s, %s)", self.name(), ref_key)
+        if original.parent():
+            logger.debug("original is global")
+            return original
+        # Check if the reference already exists:
+        ref = self.get_reference_by_name(profile, ref_key)
+        if not ref:
+            logger.debug("reference does not yet exist. copying")
             ref = self.ref_class().create(original.to_dict(), profile.parent())
+            ref.put()
         return ref
-    
+
+    def get_or_duplicate_node(self, original, profile):
+        orig_ref = getattr(original, self.name())
+        ref_key = getattr(orig_ref, self.name_property())
+        logger.debug("get_or_duplicate_node(%s, %s)", self.name(), ref_key)
+        node = self.get_node_by_reference_name(
+                profile, ref_key)
+        return node if node else self.duplicate_node(original, profile)
+
     def duplicate_node(self, original, profile):
         orig_ref = getattr(original, self.name())
+        ref_key = getattr(orig_ref, self.name_property())
+        logger.debug("duplicate_node(%s, %s, %s)", self.name(), ref_key, profile.name)
         ref = self.get_or_duplicate_reference(orig_ref, profile)
         if isinstance(original.parent(), original.__class__):
-            orig_parent_ref = getattr(original.parent(), self.name())
-            orig_parent = self.get_node_for_reference(profile, orig_parent_ref)
-            parent = self.duplicate_node(orig_parent, profile)
+            logger.debug("duplicate_node(%s, %s): must resolve parent", self.name(), ref_key)
+            parent = self.get_or_duplicate_node(original.parent(), profile)
         else:
             parent = profile
         node = self.get_or_create_node_for_reference(profile, ref, parent)
+        logger.debug("node: %s original: %s", node, original)
         dirty = False
         for (prop, t) in self.link_properties():
-            n = t.duplicate_node(getattr(original, prop), profile)
+            n = t.get_or_duplicate_node(getattr(original, prop), profile)
             node.setattr(node, prop, n)
             dirty = True
         if dirty:
             node.put()
-        
-        
+        return node
+
+
 @grumble.abstract
 class NodeBase(grumble.Model):
-    
+
     @classmethod
     def get_node_definition(cls):
         return NodeTypeRegistry.get_by_node_class(cls)
-    
+
     @classmethod
     def is_tree(cls):
         return False
-    
+
     def scope(self):
         if not hasattr(self, "_scope"):
             r = self.root()
@@ -222,7 +251,7 @@ class NodeBase(grumble.Model):
             path = self.pathlist()
             self._profile = path[0] if path[0].kind() == 'sweattrails.config.activityprofile' else path[1]
         return self._profile
-    
+
     def sub_to_dict(self, d, **flags):
         ref = getattr(self, self.get_node_definition().name())
         d.update(ref.to_dict())
@@ -234,7 +263,7 @@ class TreeNodeBase(NodeBase):
     @classmethod
     def is_tree(cls):
         return True
-    
+
     def get_subtypes(self, all = False):
         q = self.children() if not all else self.descendents()
         return q.fetch_all()
@@ -387,13 +416,14 @@ class ActivityProfile(grizzle.UserComponent):
                 for node in node_type.node_class().query(ancestor = profile):
                     logger.debug(" --> node %s", node)
                     new_node = node_type.duplicate_node(node, self)
+                    logger.debug(" --> new_node %s", new_node)
         return self
 
     def scope(self):
         if not hasattr(self, "_scope"):
             self._scope = self.parent()
         return self._scope
-    
+
     def get_reference_from_descriptor(self, ref_class, d):
         p = self.parent()
         key = None
@@ -410,7 +440,7 @@ class ActivityProfile(grizzle.UserComponent):
         else:
             return self.get_reference_by_name(ref_class, name)
         return ref
-        
+
 
 #
 # ============================================================================

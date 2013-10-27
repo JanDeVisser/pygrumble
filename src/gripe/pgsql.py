@@ -47,10 +47,10 @@ class Cursor(psycopg2.extensions.cursor):
         return self.single_row()[0]
 
     #_close = close
-    
+
     def _close(self):
         pass
-    
+
     def close(self):
         if not self.closed:
             tx = Tx.get()
@@ -249,7 +249,6 @@ class Tx(object):
         if tx:
             del tx.cache
             tx.cache = {}
-
 
 logger.info("Initialized module %s", __name__)
 

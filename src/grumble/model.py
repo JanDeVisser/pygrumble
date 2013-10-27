@@ -47,11 +47,10 @@ class Model():
 
     @classmethod
     def seal(cls):
-        assert not cls._abstract, "Model %s is abstract." % cls.kind()
         if not cls._sealed:
             cls._sealed = True
-            cls.modelmanager.reconcile()
-
+            if not cls._abstract:
+                cls.modelmanager.reconcile()
 
     def __repr__(self):
         return str(self.key())
@@ -231,7 +230,7 @@ class Model():
 
     def ancestors(self):
         """
-            Returns the ancestor path of this Model object. This is the path 
+            Returns the ancestor path of this Model object. This is the path
             string of the parent object or empty if this object has no parent.
         """
         self._load()
@@ -253,7 +252,7 @@ class Model():
     def pathlist(self):
         """
             Returns a list containing the ancestors of this Model, the root
-            Model first. If this object has no parent, the returned list is 
+            Model first. If this object has no parent, the returned list is
             empty.
         """
         pl = self.path().split("/")
@@ -441,7 +440,7 @@ class Model():
     @classmethod
     def kind(cls):
         return cls._kind
-    
+
     @classmethod
     def abstract(cls):
         return cls._abstract
@@ -449,7 +448,7 @@ class Model():
     @classmethod
     def properties(cls):
         return cls._properties
-    
+
     @classmethod
     def keyproperty(cls):
         return cls.key_prop if hasattr(cls, "key_prop") else None
@@ -619,9 +618,8 @@ class Query(grumble.query.ModelQuery):
                 for sub in k.subclasses():
                     if not sub.abstract():
                         self.kind.append(sub.kind())
-        ancestor = kwargs.get("ancestor")
-        if ancestor:
-            self.set_ancestor(ancestor)
+        if "ancestor" in kwargs:
+            self.set_ancestor(kwargs["ancestor"])
         parent = kwargs.get("parent")
         if parent:
             self.set_parent(parent)

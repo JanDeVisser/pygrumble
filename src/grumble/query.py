@@ -99,7 +99,7 @@ class ModelQuery(object):
         assert not (self.has_ancestor() or self.has_keyname()), \
             "Cannot query for ancestor or keyname and parent at the same time"
         if isinstance(parent, basestring):
-            ancestor = grumble.key.Key(parent) if parent != "/" else None
+            parent = grumble.key.Key(parent) if parent else None
         elif hasattr(parent, "key") and callable(parent.key):
             parent = parent.key()
         assert (parent is None) or isinstance(parent, grumble.key.Key), \
