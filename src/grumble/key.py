@@ -6,6 +6,7 @@ __author__="jan"
 __date__ ="$17-Sep-2013 8:38:26 PM$"
 
 import base64
+import urllib
 import grumble.meta
 
 class Key(object):
@@ -52,11 +53,12 @@ class Key(object):
         else:
             self.id = value
             s = base64.urlsafe_b64decode(value)
-        (k, _, self.name) = s.partition(":")
+        (k, _, n) = s.partition(":")
+        self.name = urllib.unquote_plus(n)
         self.kind = grumble.meta.Registry.get(k).kind()
 
     def __str__(self):
-        return self.kind + ":" + self.name
+        return self.kind + ":" + urllib.quote_plus(self.name)
 
     def __call__(self):
         return self.get()

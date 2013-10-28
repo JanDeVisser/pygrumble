@@ -47,6 +47,7 @@ class ModelQuery(object):
                 keyname = grumble.key.Key(keyname)
             except:
                 keyname = grumble.key.Key(kind, keyname)
+        logger.debug("Q: Setting keyname to %s", keyname)
         if keyname is None:
             self.unset_keyname()
         else:
@@ -75,8 +76,10 @@ class ModelQuery(object):
             ancestor = grumble.key.Key(ancestor) if ancestor != "/" else None
         elif hasattr(ancestor, "key") and callable(ancestor.key):
             ancestor = ancestor.key()
+            assert ancestor, "ModelQuery.set_ancestor: not-None ancestor with key() == None. Is the Model stored"
         assert (ancestor is None) or isinstance(ancestor, grumble.key.Key), \
                 "Must specify an ancestor object or None in ModelQuery.set_ancestor"
+        logger.debug("Q: Setting ancestor to %s", ancestor)
         self._ancestor = ancestor
         return self
 
@@ -102,8 +105,10 @@ class ModelQuery(object):
             parent = grumble.key.Key(parent) if parent else None
         elif hasattr(parent, "key") and callable(parent.key):
             parent = parent.key()
+            assert parent, "ModelQuery.set_parent: not-None ancestor with key() == None. Is the Model stored"
         assert (parent is None) or isinstance(parent, grumble.key.Key), \
                 "Must specify a parent object or None in ModelQuery.set_parent"
+        logger.debug("Q: Setting parent to %s", parent)
         self._parent = parent
         return self
 
@@ -146,6 +151,7 @@ class ModelQuery(object):
             assert 0, "Could not interpret %s arguments to add_filter" % len(args)
         if hasattr(value, "key") and callable(value.key):
             value = value.key().name
+        logger.debug("Q: Adding filter %s %s", expr, value)
         self._filters.append((expr, value))
         return self
 
@@ -302,6 +308,7 @@ class ModelQueryRenderer(object):
 
     def execute(self, type, new_values = None):
         assert self._query, "Must set a Query prior to executing a ModelQueryRenderer"
+        logger.debug("Rendering query")
         with gripe.pgsql.Tx.begin() as tx:
             key_ix = -1
             cols = ()
@@ -338,15 +345,18 @@ class ModelQueryRenderer(object):
             if type != QueryType.Insert:
                 glue = ' WHERE '
                 if self.has_keyname():
+                    logger.debug("QR: has_keyname")
                     glue = ' AND '
                     sql += ' WHERE ("%s" = %%s)' % self.key_column().name
                     vals.append(str(self.keyname().name))
                 if self.has_ancestor() and self.ancestor():
+                    logger.debug("QR: has_ancestor")
                     assert not self.flat(), "Cannot perform ancestor queries on flat table '%s'" % self.name()
                     glue = ' AND '
                     sql += ' WHERE ("_ancestors" LIKE %s)'
                     vals.append(str(self.ancestor().get().path()) + "%")
                 if self.has_parent():
+                    logger.debug("QR: has_parent")
                     assert not self.flat(), "Cannot perform parent queries on flat table '%s'" % self.name()
                     sql += glue + '("_parent" '
                     glue = ' AND '
@@ -357,10 +367,12 @@ class ModelQueryRenderer(object):
                         sql += " IS NULL"
                     sql += ")"
                 if self.owner():
+                    logger.debug("QR: has owner")
                     sql += glue + '("_ownerid" = %s)'
                     glue = ' AND '
                     vals.append(self.owner())
                 for (e, v) in self.filters():
+                    logger.debug("QR: Filter %s %s", e, v)
                     if v is not None:
                         sql += glue + '(%s %%s)' % e
                         vals.append(v)

@@ -61,9 +61,8 @@ class User(grumble.Model, gripe.auth.AbstractUser):
     def sub_to_dict(self, d, **flags):
         if "include_components" in flags:
             for component in grumble.Query(UserComponent, False, True).set_parent(self):
-                logger.debug("grizzle.User.sub_to_dict(%s) got component %s", self.email, component)
                 (_, _, k) = component.kind().rpartition(".")
-                d[k] = component.to_dict()
+                d[k] = component.to_dict(**flags)
         return d
 
     def on_update(self, d, **flags):

@@ -635,6 +635,7 @@ class Query(grumble.query.ModelQuery):
             if grumble.meta.Registry.get(k)._flat:
                 logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
                 return
+        logger.debug("Q(%s): setting ancestor to %s", self.kind, type(ancestor) if ancestor else "<None>")
         return super(Query, self).set_ancestor(ancestor)
 
     def set_parent(self, parent):
@@ -642,6 +643,7 @@ class Query(grumble.query.ModelQuery):
             if grumble.meta.Registry.get(k)._flat:
                 logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
                 return
+        logger.debug("Q(%s): setting parent to %s", self.kind, parent)
         return super(Query, self).set_parent(parent)
 
     def get_kind(self, ix = 0):

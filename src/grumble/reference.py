@@ -25,23 +25,13 @@ class ReferenceConverter(grumble.converter.PropertyConverter):
             return k.name if self.reference_class else str(k)
 
     def from_sqlvalue(self, sqlvalue):
-        return grumble.model.Model.get(
-            grumble.model.Key(self.reference_class, sqlvalue) 
-                if self.reference_class 
-                else grumble.model.Key(sqlvalue))
-
-    def to_jsonvalue(self, value):
-        return value.to_dict() if self.serialize else value.id()
-
-    def from_jsonvalue(self, value):
-        clazz = self.reference_class
-        if isinstance(value, basestring):
-            value = clazz.get(value) if clazz else grumble.model.Model.get(value)
-        elif isinstance(value, dict) and ("key" in value):
-            value = clazz.get(value["key"])
-        elif not isinstance(value, clazz):
-            assert 0, "Cannot update ReferenceProperty to %s (wrong type %s)" % (value, str(type(value)))
-        return value
+        if sqlvalue:
+            return grumble.model.Model.get(
+                grumble.key.Key(self.reference_class, sqlvalue) 
+                    if self.reference_class 
+                    else grumble.key.Key(sqlvalue))
+        else:
+            return None
 
 class QueryProperty(object):
     def __init__(self, name, foreign_kind, foreign_key, private = True, serialize = False, verbose_name = None):
@@ -114,6 +104,22 @@ class ReferenceProperty(grumble.property.ModelProperty):
             qp = QueryProperty(self.collection_name, k, self.name, self.collection_private, self.collection_serialize, self.collection_verbose_name)
             setattr(self.reference_class, self.collection_name, qp)
             self.reference_class._query_properties[self.collection_name] = qp
+
+    def to_json_value(self, instance, values):
+        ref = values.get(self.name)
+        if ref:
+            values[self.name] = ref.to_dict() if self.serialize else ref.id()
+        return values
+
+    def from_json_value(self, instance, values):
+        clazz = self.reference_class
+        if isinstance(value, basestring):
+            value = clazz.get(value) if clazz else grumble.model.Model.get(value)
+        elif isinstance(value, dict) and ("key" in value):
+            value = clazz.get(value["key"])
+        elif not isinstance(value, clazz):
+            assert 0, "Cannot update ReferenceProperty to %s (wrong type %s)" % (value, str(type(value)))
+        return value
 
 class SelfReferenceProperty(ReferenceProperty):
     def set_kind(self, kind):

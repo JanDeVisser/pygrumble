@@ -10,7 +10,6 @@ import gripe.pgsql
 import grizzle
 import grumble
 import grumble.image
-import grumble.model
 
 logger = gripe.get_logger(__name__)
 
@@ -153,11 +152,8 @@ class NodeTypeDefinition(object):
         return node
 
     def get_or_create_node_for_reference(self, profile, ref, parent = None):
-        logger.debug("get_or_create_node_for_reference(%s, %s, %s)",
-            self.name(), getattr(ref, self.name_property()), profile.name)
         node = self.get_node_for_reference(profile, ref)
         if not node:
-            logger.debug("Node not found. Creating")
             node = self.node_class()(parent = parent if parent else profile)
             setattr(node, self.name(), ref)
             node.put()
@@ -165,21 +161,9 @@ class NodeTypeDefinition(object):
         return node
 
     def get_node_for_reference(self, profile, ref):
-        with gripe.LoggerSwitcher.begin(grumble.model, logger):
-            logger.debug("get_node_for_reference(%s, %s, %s)",
-                self.name(), getattr(ref, self.name_property()), profile.name)
-            q = self.node_class().query()
-            q.set_ancestor(profile)
-            q.add_filter(self.name(), "=", ref)
-            ret = q.get()
-            if ret:
-                logger.debug("get_node_for_reference(%s, %s, %s) found %s",
-                    self.name(), getattr(ref, self.name_property()), profile.name,
-                    ret.path())
-            else:
-                logger.debug("get_node_for_reference(%s, %s, %s) not found",
-                    self.name(), getattr(ref, self.name_property()), profile.name)
-            return ret
+        q = self.node_class().query(ancestor = profile)
+        q.add_filter(self.name(), "=", ref)
+        return q.get()
 
     def get_node_by_reference_name(self, profile, key_name):
         ref = self.get_reference_by_name(profile, key_name)
@@ -189,14 +173,12 @@ class NodeTypeDefinition(object):
         # Only copy if reference is owned by another profile. If the reference
         # is not owned by another profile, it's a global entity.
         ref_key = getattr(original, self.name_property())
-        logger.debug("get_or_duplicate_reference(%s, %s)", self.name(), ref_key)
         if original.parent():
             logger.debug("original is global")
             return original
         # Check if the reference already exists:
         ref = self.get_reference_by_name(profile, ref_key)
         if not ref:
-            logger.debug("reference does not yet exist. copying")
             ref = self.ref_class().create(original.to_dict(), profile.parent())
             ref.put()
         return ref
@@ -212,15 +194,12 @@ class NodeTypeDefinition(object):
     def duplicate_node(self, original, profile):
         orig_ref = getattr(original, self.name())
         ref_key = getattr(orig_ref, self.name_property())
-        logger.debug("duplicate_node(%s, %s, %s)", self.name(), ref_key, profile.name)
         ref = self.get_or_duplicate_reference(orig_ref, profile)
         if isinstance(original.parent(), original.__class__):
-            logger.debug("duplicate_node(%s, %s): must resolve parent", self.name(), ref_key)
             parent = self.get_or_duplicate_node(original.parent(), profile)
         else:
             parent = profile
         node = self.get_or_create_node_for_reference(profile, ref, parent)
-        logger.debug("node: %s original: %s", node, original)
         dirty = False
         for (prop, t) in self.link_properties():
             n = t.get_or_duplicate_node(getattr(original, prop), profile)
@@ -251,12 +230,17 @@ class NodeBase(grumble.Model):
     def get_profile(self):
         if not hasattr(self, "_profile"):
             path = self.pathlist()
+            # FIXME Ugly
             self._profile = path[0] if path[0].kind() == 'sweattrails.config.activityprofile' else path[1]
         return self._profile
 
     def sub_to_dict(self, d, **flags):
+        logger.debug("NodeBase.sub_to_dict %s", d)
         ref = getattr(self, self.get_node_definition().name())
-        d.update(ref.to_dict())
+        r = ref.to_dict()
+        r["refkey"] = r["key"]
+        del r["key"]
+        d.update(r)
         return d
 
 
@@ -303,7 +287,6 @@ class CriticalPowerIntervalNode(NodeBase):
     criticalPowerInterval = grumble.ReferenceProperty(CriticalPowerInterval, serialize = False)
 
 
-logger.debug("sweattrails config: %s", gripe.Config.app.sweattrails)
 for (part, partdef) in gripe.Config.app.sweattrails.activityprofileparts.items():
     definition = NodeTypeDefinition(part, gripe.resolve(partdef.refClass), gripe.resolve(partdef.nodeClass))
 
@@ -314,14 +297,12 @@ class ActivityProfile(grizzle.UserComponent):
     isdefault = grumble.BooleanProperty()
     icon = grumble.image.ImageProperty()
 
-    def sub_to_dict(self, descriptor):
-        logger.debug("ActivityProfile.sub_to_dict(%s)", self.name)
+    def sub_to_dict(self, descriptor, **flags):
         for part in grumble.Query(NodeBase, False, True).set_ancestor(self):
-            logger.debug("ActivityProfile.sub_to_dict(%s) got part %s", self.name, part)
             node_type = NodeTypeRegistry.get_by_node_class(part.__class__)
             if node_type.name() not in descriptor:
                 descriptor[node_type.name()] = []
-            descriptor[node_type.name()].append(part.to_dict())
+            descriptor[node_type.name()].append(part.to_dict(**flags))
         return descriptor
 
     def sub_update(self, d):
@@ -334,15 +315,13 @@ class ActivityProfile(grizzle.UserComponent):
         # Only do this for profiles that are user components:
         if not self.parent():
             return
-
         # Set the profile's name. Every user has only one profile object which
         # is manipulated whenever the user selects another template profile.
         self.name = "Activity Profile for " + self.parent()().display_name
 
+    def after_insert(self):
         # Find the default profile:
         profile = self.__class__.by("isdefault", True, parent = None)
-        logger.debug("initialize(%s): default profile = %s", self.name, profile)
-
         # If there is a default profile, import it into this profile:
         if profile:
             self.import_profile(profile)
@@ -355,18 +334,14 @@ class ActivityProfile(grizzle.UserComponent):
         with gripe.pgsql.Tx.begin():
             if cls.all(keys_only = True).count() > 0:
                 return
-        logger.debug("Loading ActivityProfile template data")
         for profile in data:
             with gripe.pgsql.Tx.begin():
                 p = cls(name = profile.name,
                     description = profile.description,
                     isdefault = profile.isdefault)
                 p.put()
-                logger.debug("import_template_data: Created profile %s", p.name)
                 for ref_name in NodeTypeRegistry.names():
-                    logger.debug("import_template_data: checking %s", ref_name)
                     if ref_name in profile:
-                        logger.debug("import_template_data: processing %s", ref_name)
                         p.update_or_create_nodes(profile[ref_name], ref_name)
 
     def update_or_create_nodes(self, d, ref_name):
@@ -410,15 +385,10 @@ class ActivityProfile(grizzle.UserComponent):
             profile = ActivityProfile.by("name", profile, parent = None)
         if not(profile):
             return self
-        logger.debug("Profile %s: Importing profile %s", self.name, profile.name)
         if (profile.parent() == self.parent()) or not profile.parent():
-            logger.debug("Profile %s: Importing profile %s REALLY", self.name, profile.name)
             for node_type in NodeTypeRegistry.types():
-                logger.debug(" -> node_type %s", node_type.name())
                 for node in node_type.node_class().query(ancestor = profile):
-                    logger.debug(" --> node %s", node)
                     new_node = node_type.duplicate_node(node, self)
-                    logger.debug(" --> new_node %s", new_node)
         return self
 
     def scope(self):
