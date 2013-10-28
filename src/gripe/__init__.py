@@ -88,6 +88,28 @@ class LoopDetector(set):
     def begin(cls):
         return LoopDetector._tl.detector if hasattr(LoopDetector._tl, "detector") else LoopDetector()
 
+class LoggerSwitcher(object):
+    def __init__(self, packages, logger):
+        self._backup = {}
+        self._packages = packages if isinstance(packages, (list, tuple)) else [packages]
+        self._logger = logger
+
+    def __enter__(self):
+        for p in self._packages:
+            if hasattr(p, "logger"):
+                print >> sys.stderr, "Switching logger for package", p.__name__
+                self._backup[p] = p.logger
+                p.logger = self._logger
+        return self
+
+    def __exit__(self, *args):
+        for p in self._backup:
+            p.logger = self._backup[p]
+
+    @classmethod
+    def begin(cls, packages, logger):
+        return LoggerSwitcher(packages, logger)
+
 class ContentType(object):
     Binary, Text = range(2)
     _by_ext = {}

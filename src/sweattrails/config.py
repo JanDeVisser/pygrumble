@@ -10,6 +10,7 @@ import gripe.pgsql
 import grizzle
 import grumble
 import grumble.image
+import grumble.model
 
 logger = gripe.get_logger(__name__)
 
@@ -164,20 +165,21 @@ class NodeTypeDefinition(object):
         return node
 
     def get_node_for_reference(self, profile, ref):
-        logger.debug("get_node_for_reference(%s, %s, %s)",
-            self.name(), getattr(ref, self.name_property()), profile.name)
-        q = self.node_class().query()
-        q.set_ancestor(profile)
-        q.add_filter(self.name(), "=", ref)
-        ret = q.get()
-        if ret:
-            logger.debug("get_node_for_reference(%s, %s, %s) found %s",
-                self.name(), getattr(ref, self.name_property()), profile.name,
-                ret.path())
-        else:
-            logger.debug("get_node_for_reference(%s, %s, %s) not found",
+        with gripe.LoggerSwitcher.begin(grumble.model, logger):
+            logger.debug("get_node_for_reference(%s, %s, %s)",
                 self.name(), getattr(ref, self.name_property()), profile.name)
-        return ret
+            q = self.node_class().query()
+            q.set_ancestor(profile)
+            q.add_filter(self.name(), "=", ref)
+            ret = q.get()
+            if ret:
+                logger.debug("get_node_for_reference(%s, %s, %s) found %s",
+                    self.name(), getattr(ref, self.name_property()), profile.name,
+                    ret.path())
+            else:
+                logger.debug("get_node_for_reference(%s, %s, %s) not found",
+                    self.name(), getattr(ref, self.name_property()), profile.name)
+            return ret
 
     def get_node_by_reference_name(self, profile, key_name):
         ref = self.get_reference_by_name(profile, key_name)
