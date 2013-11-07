@@ -8,20 +8,20 @@
 
 <st:tab code="profile" label="Profile">
     <st:form name="user" url="/json/user/{{key}}">
-        <st:flag name="include_components"/>
+        <st:flag name="include_parts"/>
         <st:field id="email" type="text" property="email" label="Email" readonly="true"/>
         <st:field id="display_name" type="text" property="display_name" label="Name" required="true"/>
-        <st:field id="country" type="lookup" property="profile.country" label="Country" 
+        <st:field id="country" type="lookup" property="userprofile.country" label="Country" 
                   url="/json/country" text="countryname" key="countrycode"/>
-        <st:field id="location" type="geocode" property="profile.location" label="Location"/>
-        <st:field id="dob" type="date" property="profile.dob" label="Birthdate"/>
-        <st:field id="gender" type="lookup" property="profile.gender" label="Gender" presentationtype="radio">
+        <st:field id="location" type="geocode" property="userprofile.location" label="Location"/>
+        <st:field id="dob" type="date" property="userprofile.dob" label="Birthdate"/>
+        <st:field id="gender" type="lookup" property="userprofile.gender" label="Gender" presentationtype="radio">
             <st:value text="Female" key="female"/>
             <st:value text="Male" key="male"/>
             <st:value text="Other" key="other"/>
         </st:field>
-        <st:field id="height" type="length" property="profile.height" label="Height"/>
-        <st:field id="units" type="lookup" property="profile.units" label="Units" presentationtype="radio">
+        <st:field id="height" type="length" property="userprofile.height" label="Height"/>
+        <st:field id="units" type="lookup" property="userprofile.units" label="Units" presentationtype="radio">
             <st:value text="Metric" key="metric"/>
             <st:value text="Imperial" key="imperial"/>
         </st:field>

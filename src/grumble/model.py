@@ -133,6 +133,8 @@ class Model():
                 logger.debug("No key prop. Using key_name %s", self._key_name)
             self._id = self.key().id
             self._exists = True
+            if hasattr(self, "after_load") and callable(self.after_load):
+                self.after_load()
         else:
             self._exists = False
 
@@ -442,6 +444,11 @@ class Model():
         return cls._kind
 
     @classmethod
+    def basekind(cls):
+        (_, _, k) = cls.kind().rpartition(".")
+        return k
+
+    @classmethod
     def abstract(cls):
         return cls._abstract
 
@@ -525,7 +532,7 @@ class Model():
         logger.debug("%s.query: args %s kwargs %s", cls.__name__, args, kwargs)
         assert (args is None) or (len(args) % 2 == 0), "Must specify a value for every filter"
         assert cls != Model, "Cannot query on unconstrained Model class"
-        q = Query(cls, kwargs.get("keys_only", True))
+        q = Query(cls, kwargs.get("keys_only", True), kwargs.get("include_subclasses", True))
         if "ancestor" in kwargs and not cls._flat:
             q.set_ancestor(kwargs["ancestor"])
         if "parent" in kwargs and "ancestor" not in kwargs and not cls._flat:

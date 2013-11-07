@@ -41,6 +41,7 @@ class ProfileReference(object):
 class SessionType(grumble.Model, ProfileReference):
     name = grumble.StringProperty(is_key = True, scoped = True)
     description = grumble.StringProperty()
+    intervalpart = grumble.StringProperty()
     trackDistance = grumble.BooleanProperty()
     speedPace = grumble.StringProperty(choices = set(['Speed', 'Pace', 'Swim Pace']))
     icon = grumble.image.ImageProperty()
@@ -216,6 +217,9 @@ class NodeBase(grumble.Model):
     @classmethod
     def get_node_definition(cls):
         return NodeTypeRegistry.get_by_node_class(cls)
+    
+    def get_reference(self):
+        return getattr(self, self.get_node_definition().name())
 
     @classmethod
     def is_tree(cls):
@@ -235,8 +239,7 @@ class NodeBase(grumble.Model):
         return self._profile
 
     def sub_to_dict(self, d, **flags):
-        logger.debug("NodeBase.sub_to_dict %s", d)
-        ref = getattr(self, self.get_node_definition().name())
+        ref = self.get_reference()
         r = ref.to_dict()
         r["refkey"] = r["key"]
         del r["key"]
@@ -249,6 +252,11 @@ class TreeNodeBase(NodeBase):
     @classmethod
     def is_tree(cls):
         return True
+    
+    def get_root_property(self, prop):
+        ref = self.get_reference()
+        val = getattr(ref, prop)
+        return val if val is not None or self.parent() is None else self.parent().get_root_property(prop)
 
     def get_subtypes(self, all = False):
         q = self.children() if not all else self.descendents()
@@ -276,6 +284,9 @@ class TreeNodeBase(NodeBase):
 
 class SessionTypeNode(TreeNodeBase):
     sessionType = grumble.ReferenceProperty(SessionType, serialize = False)
+    
+    def intervalpart(self):
+        return get_root_property("intervalpart")
 
 
 class GearTypeNode(TreeNodeBase):
@@ -291,7 +302,7 @@ for (part, partdef) in gripe.Config.app.sweattrails.activityprofileparts.items()
     definition = NodeTypeDefinition(part, gripe.resolve(partdef.refClass), gripe.resolve(partdef.nodeClass))
 
 
-class ActivityProfile(grizzle.UserComponent):
+class ActivityProfile(grizzle.UserPart):
     name = grumble.StringProperty(is_key = True)
     description = grumble.StringProperty()
     isdefault = grumble.BooleanProperty()
@@ -413,6 +424,17 @@ class ActivityProfile(grizzle.UserComponent):
             return self.get_reference_by_name(ref_class, name)
         return ref
 
+    def get_reference(self, ref_class, key_name):
+        node_type = NodeTypeRegistry.get_by_ref_class(ref_class)
+        return node_type.get_reference_by_name(self, key_name)
+
+    def get_node(self, ref_class, key_name):
+        node_type = NodeTypeRegistry.get_by_ref_class(ref_class)
+        return node_type.get_node_by_reference_name(self, key_name)
+    
+    @classmethod
+    def get_profile(cls, user):
+        return user.get_part(cls)
 
 #
 # ============================================================================

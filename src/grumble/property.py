@@ -30,6 +30,7 @@ class ModelProperty(object):
             ret.transient = prop.transient
             ret.getter = prop.getter
             ret.setter = prop.setter
+            ret.after_set = prop.after_set
             ret.is_label = prop.is_label
             ret.is_key = prop.is_key
             ret.scoped = prop.scoped
@@ -51,6 +52,7 @@ class ModelProperty(object):
             ret.transient = kwargs.get("transient", False)
             ret.getter = kwargs.get("getter", None)
             ret.setter = kwargs.get("setter", None)
+            ret.after_set = kwargs.get("after_set", None)
             ret.is_label = kwargs.get("is_label", False)
             ret.is_key = kwargs.get("is_key", False)
             ret.scoped = kwargs.get("scoped", False) if ret.is_key else False
@@ -131,7 +133,10 @@ class ModelProperty(object):
             self.setter(instance, value)
         else:
             instance._load()
+            old = instance._values[self.name] if self.name in instance._values else None
             instance._values[self.name] = self.convert(value) if value is not None else None
+            new = instance._values[self.name] if self.name in instance._values else None
+            self.after_set and self.after_set(instance, old, new)
 
     def __delete__(self, instance):
         return NotImplemented

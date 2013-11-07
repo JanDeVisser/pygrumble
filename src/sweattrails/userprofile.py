@@ -9,7 +9,7 @@ import grizzle
 import grumble
 import grumble.geopt
 
-class UserProfile(grizzle.UserComponent):
+class UserProfile(grizzle.UserPart):
     country = grumble.StringProperty(default = "CA")
     dob = grumble.DateProperty()
     gender = grumble.StringProperty(choices = set(['male', 'female', 'other']), default = 'other')

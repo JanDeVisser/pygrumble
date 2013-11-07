@@ -66,6 +66,10 @@ class Key(object):
     def key(self):
         return self
     
+    def basekind(self):
+        (_, _, k) = self.kind.rpartition(".")
+        return k
+    
     def modelclass(self):
         return grumble.meta.Registry.get(self.kind)
 

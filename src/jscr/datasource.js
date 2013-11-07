@@ -30,7 +30,7 @@ com.sweattrails.api.getHttpRequest = function(jsonRequest) {
                 try {
                     object = JSON.parse(this.responseText);
                 } catch (e) {
-                    // Ignored
+                    console.log("Exception parsing JSON text " + this.responseText)
                 }
             }
             if ((this.status >= 200 && this.status <= 200) || this.status === 304) {

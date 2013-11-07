@@ -275,11 +275,12 @@ class JSONHandler(BridgedHandler):
             data = urllib.unquote_plus(data)
             if data.endswith("="):
                 (data, _, _) = data.rpartition("=")
-            logger.debug("load() - data = %s", data)
+            logger.debug("initialize_bridge() - data = %s", data)
             self._query = json.loads(data)
             if "_flags" in self._query:
                 self._flags = self._query["_flags"]
                 del self._query["_flags"]
+                logger.debug("initialize_bridge() - flags = %s", self._flags)
             else:
                 self._flags = {}
         else:
@@ -314,6 +315,7 @@ class JSONHandler(BridgedHandler):
                     if self.object():
                         ret.append(self.object().to_dict(**self._flags))
             ret = ret[0] if len(ret) == 1 else ret
+            logger.info("JSONHandler.post => %s", ret)
             self.json_dump(ret)
             return
         self.error(401)

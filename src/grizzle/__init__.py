@@ -24,8 +24,12 @@ class UserGroup(grumble.Model, gripe.auth.AbstractUserGroup):
         return set(self.has_roles)
 
 @grumble.abstract
-class UserComponent(grumble.Model):
-    pass
+class UserPart(grumble.Model):
+
+    @classmethod
+    def get_userpart(cls, user):
+        return user.get_part(cls)
+
 
 """
     Banned - User is still there, content is still there, user cannot log in.
@@ -48,36 +52,42 @@ class User(grumble.Model, gripe.auth.AbstractUser):
     has_roles = grumble.ListProperty()
     
     def after_insert(self):
+        self._parts = {}
         for m in gripe.Config.app.grizzle.userparts:
             if m not in self._resolved_parts:
                 logger.debug("grizzle.User.after_insert(%s): Resolving user part %s", self.email, m)
                 gripe.resolve(m)
                 self._resolved_parts.add(m)
-            logger.debug("grizzle.User.after_insert(%s): Creating user part %s", self.email, m)
             k = grumble.Model.for_name(m)
-            component = k(parent = self)
-            component.put()
+            part = k(parent = self)
+            part.put()
+            self._parts[part.basekind().lower()] = part
             
     def sub_to_dict(self, d, **flags):
-        if "include_components" in flags:
-            for component in grumble.Query(UserComponent, False, True).set_parent(self):
-                (_, _, k) = component.kind().rpartition(".")
-                d[k] = component.to_dict(**flags)
+        if "include_parts" in flags:
+            for (k, part) in self._parts.items():
+                d[k] = part.to_dict(**flags)
         return d
 
     def on_update(self, d, **flags):
-        for component in grumble.Query(UserComponent, False, True).set_parent(self):
-            (_, _, k) = component.kind().rpartition(".")
+        for (k, part) in self._parts.items():
             if k in d:
-                comp = d[k]
-                component.update(comp, **flags)
+                p = d[k]
+                part.update(p, **flags)
 
-#    def is_root(self):
-#        return self.email == Config.app.grizzle.root
-#    
-#    @classmethod
-#    def get_root(cls):
-#        return cls.by("email", Config.app.grizzle.root)
+    def get_part(self, part):
+        if (isinstance(part, basestring)):
+            k = part
+        else:
+            k = part.basekind().lower()
+        return self._parts[k] if k in self._parts else None
+    
+    def after_load(self):
+        self._parts = {}
+        for part in grumble.Query(UserPart, keys_only = False, include_subclasses = True).set_parent(self):
+            k = part.basekind().lower()            
+            self._parts[k] = part
+            setattr(self, k, part)
 
     def is_active(self):
         """

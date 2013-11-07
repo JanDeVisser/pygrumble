@@ -63,4 +63,4 @@ users = request_json_data("/json/user", cookie, {})
 assert users, "Expected at least one user"
 user = users[0]
 user_data = request_json_data("/json/user/%s" % user["key"], cookie, 
-    {"_flags": {"include_components": True }})
+    {"_flags": {"include_parts": True }})

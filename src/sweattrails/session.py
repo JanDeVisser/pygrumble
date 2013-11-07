@@ -7,125 +7,123 @@ __date__ ="$3-Oct-2013 8:37:08 AM$"
 
 from datetime import datetime
 import json
-import logging
 import webapp2
 
+import gripe
+import grizzle
 import grumble
 import grumble.geopt
-import sweattrails.profile
+import sweattrails.config
+import sweattrails.userprofile
 
+logger = gripe.get_logger(__name__)
 
-from Athlete import Athlete
-from Athlete import CriticalPowerDef
-from Athlete import get_athlete_with_id
-from Model.Config.SessionType import SessionType
-import json_util
-import Util
+@grumble.abstract
+class IntervalPart(grumble.Model):
+    def analyze(self):
+        pass
+
+class BikePart(IntervalPart):
+    average_power = grumble.IntegerProperty(default=0)    # W
+    normalized_power = grumble.IntegerProperty()          # W
+    max_power = grumble.IntegerProperty(default=0)        # W
+    average_cadence = grumble.IntegerProperty(default=0)  # rpm
+    max_cadence = grumble.IntegerProperty(default=0)      # rpm
+    average_torque = grumble.FloatProperty(default=0.0)   # Nm
+    max_torque = grumble.FloatProperty(default=0.0)       # Nm
+    max_speed = grumble.FloatProperty(default=0.0)        # m/s
+
+class RunPart(IntervalPart):
+    average_cadence = grumble.IntegerProperty(default=0)  # rpm
+    max_cadence = grumble.IntegerProperty(default=0)      # rpm
+    max_speed = grumble.FloatProperty(default=0.0)        # m/s
+
+class SwimPart(IntervalPart):
+    pass
+
+class SessionTypeReference(grumble.reference.ReferenceProperty):
+    _resolved_parts = set()
+
+    def get_interval_part_type(self, sessiontype, interval):
+        profile = interval.get_activityprofile()
+        node = profile.get_node(sweattrails.config.SessionType, sessiontype.name)
+        part = node.get_root_property("intervalpart")
+        if part not in self._resolved_parts:
+            logger.debug("sweattrails.session.SessionTypeReference.get_interval_part_type(%s): Resolving part %s", sessiontype.name, part)
+            gripe.resolve(part)
+            self._resolved_parts.add(part)
+        return grumble.Model.for_name(part)
+    
+    def after_set(self, session, old_sessiontype, new_sessiontype):
+        if not old_sessiontype or (old_sessiontype.name != new_sessiontype.name):
+            if session.intervalpart:
+                grumble.delete(session.intervalpart)
+            t = self.get_interval_part_type(new_sessiontype, session)
+            session.intervalpart = t(parent = session)
+            session.intervalpart.put()
+            for i in Interval.query(ancestor = session):
+                if i.intervalpart:
+                    grumble.delete(i.intervalpart)
+                i.intervalpart = t(parent = i)
+                i.intervalpart.put()
+        
 
 class Interval(grumble.Model):
-    interval_id = db.IntegerProperty()
-    part_of = db.SelfReferenceProperty()
-    distance = db.IntegerProperty(default=0)         # Distance in meters
-    duration = db.TimeProperty()
-    average_hr = db.IntegerProperty(default=0)       # bpm
-    max_hr = db.IntegerProperty(default=0)           # bpm
-    work = db.IntegerProperty(default=0)	     # kJ
-    num_intervals = db.IntegerProperty(default=0)
-    num_waypoints = db.IntegerProperty(default=0)
+    interval_id = grumble.IntegerProperty()
+    intervalpart = grumble.ReferenceProperty(IntervalPart)
+    distance = grumble.IntegerProperty(default=0)         # Distance in meters
+    duration = grumble.TimeProperty()
+    average_hr = grumble.IntegerProperty(default=0)       # bpm
+    max_hr = grumble.IntegerProperty(default=0)           # bpm
+    work = grumble.IntegerProperty(default=0)             # kJ
+    num_intervals = grumble.IntegerProperty(default=0)
+    num_waypoints = grumble.IntegerProperty(default=0)
+    
+    def analyze(self):
+        self.intervalpart.analyze()
+        for i in Interval.query(parent = self):
+            i.analyze()
 
     def get_session(self):
-	ret = self.parent()
-	while not isinstance(ret, Session):
-	    ret = ret.parent()
-	return ret
-
+	return self.root()
+    
+    def get_sessiontype(self):
+        return self.get_session().sessiontype    
+    
     def get_athlete(self):
-	return self.get_session().parent()
+	return self.get_session().athlete
+    
+    def get_activityprofile(self):
+        athlete = self.get_athlete()
+        return athlete.activityprofile
 
-    def toDict(self, deep = True):
-	ret = {}
-	athlete = self.get_athlete()
-	ret['key'] = str(self.key())
-	ret['type'] = self.type
-	ret['seconds'] = Util.time_to_seconds(self.duration)
-	ret['distance'] = float(Util.distance(self.distance, athlete.units, False))
-	ret['average_hr'] = self.average_hr if self.average_hr else 0
-	ret['max_hr'] = self.max_hr if self.max_hr else 0
-	ret['work'] = self.work if self.work else 0
-	ret['num_intervals'] = self.num_intervals if self.num_intervals else 0
-	ret['interval_id'] = self.interval_id if self.interval_id else 0
-        if deep:
-            ret['intervals'] = Interval.toArray(self)
-            for gd in self.geodata_set:
-                ret['geodata'] = gd.toDict()
-        if self.type == 'bike':
-            self.includeBikeData(ret, athlete, deep)
-        elif self.type == 'run':
-            self.includeRunData(ret, athlete, deep)
-	return ret
-
-#class BikeData(IntervalData):
-#    average_power = db.IntegerProperty(default=0)    # W
-#    normalized_power = db.IntegerProperty()          # W
-#    max_power = db.IntegerProperty(default=0)        # W
-#    average_cadence = db.IntegerProperty(default=0)  # rpm
-#    max_cadence = db.IntegerProperty(default=0)      # rpm
-#    average_torque = db.FloatProperty(default=0.0)   # Nm
-#    max_torque = db.FloatProperty(default=0.0)       # Nm
-#    max_speed = db.FloatProperty(default=0.0)        # m/s
-
-    def includeBikeData(self, dict, athlete, deep = True):
-	dict['average_power'] = self.average_power if self.average_power else 0
-	dict['normalized_power'] = self.normalized_power if self.normalized_power else 0
-	dict['max_power'] = self.max_power if self.max_power else 0
-	dict['average_cadence'] = self.average_cadence if self.average_cadence else 0
-	dict['max_cadence'] = self.max_cadence if self.max_cadence else 0
-	dict['average_torque'] = self.average_torque if self.average_torque else 0.0
-	dict['max_torque'] = self.max_torque if self.max_torque else 0.0
-	dict['average_speed'] = float(Util.avgspeed(self.distance, self.duration, athlete.units, False))
-	dict['max_speed'] = float(Util.speed(self.max_speed, athlete.units, False))
-        if deep:
-            dict['critical_power'] = []
-            for cp in CriticalPower.gql("WHERE interval = :1", self):
-                dict['critical_power'].append(cp.toDict())
-            dict['critical_power'].sort(key=lambda x: x['duration'])
-
-#class RunData(IntervalData):
-#    max_speed = db.FloatProperty(default=0.0)        # m/s
-
-    def includeRunData(self, dict, athlete, deep = True):
-	dict['average_speed'] = float(Util.avgspeed(self.distance, self.duration, athlete.units, False))
-	dict['max_speed'] = float(Util.speed(self.max_speed, athlete.units, False))
-	dict['average_pace'] = Util.avgpace(self.distance, self.duration, athlete.units, False)
-	dict['best_pace'] = Util.pace(self.max_speed, athlete.units, False)
-
-
-    @staticmethod
-    def toArray(obj):
-	ret = []
-	if isinstance(obj, Session):
-	    intervals = [ obj.interval ]
-	else:
-	    intervals = Interval.gql("WHERE part_of = :1 ORDER BY interval_id", obj)
-	for interval in intervals:
-	    ret.append(interval.toDict())
-	return ret
-
+    def get_interval_part_type(self):
+        sessiontype = self.get_sessiontype()
+        profile = self.get_activityprofile()
+        node = profile.get_node(sweattrails.config.SessionType, sessiontype.name)
+        part = node.get_root_property("intervalpart")
+        if part not in self._resolved_parts:
+            logger.debug("sweattrails.session.Interval.get_interval_part(%s): Resolving part %s", sessiontype.name, part)
+            gripe.resolve(part)
+            self._resolved_parts.add(part)
+        return grumble.Model.for_name(part)
+    
+    
+    # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
     def rollback(self):
-	subs = Interval.gql("WHERE ANCESTOR IS :1", self)
-	for sub in subs:
-	    sub.rollback()
+        for wp in Waypoint.gql(ancestor = self):
+            grumble.delete(wp)
 	if self.num_waypoints > 0:
 	    wps = Waypoint.gql("WHERE ANCESTOR IS :1", self)
 	    for wp in wps:
 		wp.delete()
 	self.delete()
 
-class CriticalPower(db.Model):
-    interval = db.ReferenceProperty(Interval)
-    cpdef = db.ReferenceProperty(CriticalPowerDef)
-    start_time = db.TimeProperty()
-    power = db.IntegerProperty()
+class CriticalPower(grumble.Model):
+    interval = grumble.ReferenceProperty(Interval)
+    cpdef = grumble.ReferenceProperty(sweattrails.config.CriticalPowerInterval)
+    start_time = grumble.TimeProperty()
+    power = grumble.IntegerProperty()
 
     def toDict(self):
 	best = None
@@ -156,18 +154,18 @@ class CriticalPower(db.Model):
 	    best.best = self
 	best.put()
 
-class BestCriticalPower(db.Model):
-    cpdef = db.ReferenceProperty(CriticalPowerDef)
-    best = db.ReferenceProperty(CriticalPower)
+class BestCriticalPower(grumble.Model):
+    cpdef = grumble.ReferenceProperty(sweattrails.config.CriticalPowerInterval)
+    best = grumble.ReferenceProperty(CriticalPower)
 
-class GeoData(db.Model):
-    interval = db.ReferenceProperty(Interval)
-    max_elev = db.IntegerProperty(default=-100)      # In meters
-    min_elev = db.IntegerProperty(default=10000)     # In meters
-    elev_gain = db.IntegerProperty(default=0)        # In meters
-    elev_loss = db.IntegerProperty(default=0)        # In meters
-    max_loc_ne = db.GeoPtProperty()
-    max_loc_sw = db.GeoPtProperty()
+class GeoData(grumble.Model):
+    interval = grumble.ReferenceProperty(Interval)
+    max_elev = grumble.IntegerProperty(default=-100)      # In meters
+    min_elev = grumble.IntegerProperty(default=10000)     # In meters
+    elev_gain = grumble.IntegerProperty(default=0)        # In meters
+    elev_loss = grumble.IntegerProperty(default=0)        # In meters
+    max_loc_ne = grumble.GeoPtProperty()
+    max_loc_sw = grumble.GeoPtProperty()
 
     def toDict(self):
 	ret = {}
@@ -187,32 +185,15 @@ class GeoData(db.Model):
 	    }
 	return ret
 
-class Session(db.Model):
-    athlete = db.UserProperty()
-    interval = db.ReferenceProperty(Interval)
-    description = db.StringProperty()
-    session_start = db.DateTimeProperty()
-    sessiontype = db.ReferenceProperty(SessionType)
-    notes = db.StringProperty(multiline=True)
-    posted = db.DateTimeProperty(auto_now_add=True)
-    inprogress = db.BooleanProperty(default=True)
-    device = db.StringProperty(default="")
-
-    def get_athlete(self):
-	return self.parent()
-
-    def toDict(self, deep = True):
-	ret = {}
-	ret['key'] = str(self.key())
-	ret['description'] = self.description if self.description else ''
-	ret['notes'] = self.notes if self.notes else ''
-	ret['start'] = json_util.datetime_to_dict(self.session_start)
-	ret['sessiontype'] = self.sessiontype.name if self.sessiontype else ''
-	ret['inprogress'] = self.inprogress
-	ret['posted'] = json_util.datetime_to_dict(self.posted)
-	ret['device'] = self.device if self.device else ''
-	ret['interval'] = self.interval.toDict(deep)
-	return ret
+class Session(Interval):
+    athlete = grumble.ReferenceProperty(grizzle.User)
+    description = grumble.StringProperty()
+    session_start = grumble.DateTimeProperty()
+    sessiontype = grumble.ReferenceProperty(sweattrails.config.SessionType)
+    notes = grumble.StringProperty(multiline=True)
+    posted = grumble.DateTimeProperty(auto_now_add=True)
+    inprogress = grumble.BooleanProperty(default=True)
+    device = grumble.StringProperty(default="")
 
     def analyze(self):
 	logging.info(" --- Analyze ---")
@@ -263,25 +244,22 @@ class Session(db.Model):
         athlete.put()
         return session
 
-class Waypoint(db.Model):
-    interval = db.ReferenceProperty(Interval)
-    seqnr = db.IntegerProperty()
-    location = db.GeoPtProperty()
-    speed = db.FloatProperty()		    # m/s
-    timestamp = db.TimeProperty()
-    elapsed = db.TimeProperty()
-    altitude = db.IntegerProperty()	    # meters
-    distance = db.IntegerProperty()	    # meters
-    cadence = db.IntegerProperty()
-    heartrate = db.IntegerProperty()
-    power = db.IntegerProperty()
-    torque = db.FloatProperty()
+class Waypoint(grumble.Model):
+    interval = grumble.ReferenceProperty(Interval)
+    seqnr = grumble.IntegerProperty()
+    location = grumble.GeoPtProperty()
+    speed = grumble.FloatProperty()		    # m/s
+    timestamp = grumble.TimeProperty()
+    elapsed = grumble.TimeProperty()
+    altitude = grumble.IntegerProperty()	    # meters
+    distance = grumble.IntegerProperty()	    # meters
+    cadence = grumble.IntegerProperty()
+    heartrate = grumble.IntegerProperty()
+    power = grumble.IntegerProperty()
+    torque = grumble.FloatProperty()
     
     def get_session(self):
-	ret = self.parent()
-	while not isinstance(ret, Session):
-	    ret = ret.parent()
-	return ret
+	ret = self.root()
     
     def get_athlete(self):
 	return self.get_session().get_athlete()
@@ -317,14 +295,14 @@ class Waypoint(db.Model):
 	    ret.append(wp.toDict(athlete))
 	return ret
 
-class SessionFile(db.Model):
-    athlete = db.ReferenceProperty(reference_class=Athlete)
-    next = db.SelfReferenceProperty()
-    description = db.StringProperty()
-    session_start = db.DateTimeProperty()
-    filetype = db.StringProperty()
-    blocks = db.IntegerProperty()
-    data = db.TextProperty()
+class SessionFile(grumble.Model):
+    athlete = grumble.ReferenceProperty(reference_class=Athlete)
+    next = grumble.SelfReferenceProperty()
+    description = grumble.StringProperty()
+    session_start = grumble.DateTimeProperty()
+    filetype = grumble.StringProperty()
+    blocks = grumble.IntegerProperty()
+    data = grumble.TextProperty()
 
 class JSON_Sessions(webapp2.RequestHandler):
     def get(self):
@@ -339,7 +317,7 @@ class JSON_Sessions(webapp2.RequestHandler):
                     deep = (deep != 'false')
                 else:
                     deep = False
-		sessions = db.GqlQuery("SELECT * FROM Session WHERE ANCESTOR IS :1 ORDER BY session_start DESC LIMIT 25", athlete)
+		sessions = grumble.GqlQuery("SELECT * FROM Session WHERE ANCESTOR IS :1 ORDER BY session_start DESC LIMIT 25", athlete)
                 for session in sessions:
                     ret.append(session.toDict(deep))
                 retstr = json.dumps(ret)

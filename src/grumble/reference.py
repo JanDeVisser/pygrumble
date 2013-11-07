@@ -46,7 +46,7 @@ class QueryProperty(object):
 
     def _get_query(self, instance):
         q = self.fk_kind.query()
-        q.add_filter('"%s" = ' % self.fk, instance)
+        q.add_filter(self.fk, "=", instance)
         return q
 
     def __get__(self, instance, owner):

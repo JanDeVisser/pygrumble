@@ -10,10 +10,14 @@ __date__ = "$18-Sep-2013 8:57:43 AM$"
 import gripe.pgsql
 import grumble
 
+def check_age(age):
+    assert age >= 0 and age < 120
+
 class Person(grumble.Model):
     name = grumble.TextProperty(required = True, is_label = True,
         is_key = True, scoped = True)
-    age = grumble.IntegerProperty(default = 30)
+    age = grumble.IntegerProperty(default = 30, validator = check_age)
+    
 
 
 def test():
