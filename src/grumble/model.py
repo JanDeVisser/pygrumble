@@ -70,13 +70,10 @@ class Model():
         return hash(self.id())
 
     def __eq__(self, other):
-        if not isinstance(other, Model) and callable(other.key):
-            return self.__eq__(other())
+        if not(other) or not(hasattr(other, "key") and callable(other.key)):
+            return False
         else:
-            if not other:
-                return False
-            assert isinstance(other, Model)
-            return (self.kind() == other.kind()) and (self.keyname() == other.keyname())
+            return self.key() == other.key()
 
     def __call__(self):
         return self
@@ -116,11 +113,11 @@ class Model():
             v = {}
             for (name, value) in values:
                 v[name] = value
-            parent = v["_parent"] if "_parent" in v else None
-            ancestors = v["_ancestors"] if "_ancestors" in v else None
-            self._key_name = v["_key_name"] if "_key_name" in v else None
-            self._ownerid = v["_ownerid"] if "_ownerid" in v else None
-            self._acl = gripe.acl.ACL(v["_acl"] if "_acl" in v else None)
+            parent = v.get("_parent")
+            ancestors = v.get("_ancestors")
+            self._key_name = v.get("_key_name")
+            self._ownerid = v.get("_ownerid")
+            self._acl = gripe.acl.ACL(v.get("_acl"))
             for prop in [p for p in self._properties.values() if not p.transient]:
                 prop._update_fromsql(self, v)
             self._set_ancestors(ancestors, parent)
@@ -154,15 +151,13 @@ class Model():
                 prop._on_insert(self)
             if hasattr(self, "initialize") and callable(self.initialize):
                 self.initialize()
-        include_key_name = True
+        include_key_name = not(hasattr(self, "key_prop"))
         if hasattr(self, "key_prop"):
             kp = getattr(self.__class__, self.key_prop)
-            scoped = kp.scoped
             key = getattr(self, kp.name)
             if key is None:
                 raise grumble.errors.KeyPropertyRequired(self.kind(), kp.name)
-            self._key_name = "%s/%s" % (self.parent() if self.parent() else "", key) if scoped else key
-            include_key_name = scoped
+            self._key_name = key
         elif not self._key_name:
             self._key_name = uuid.uuid1().hex
         self._id = None
