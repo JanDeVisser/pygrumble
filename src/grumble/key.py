@@ -17,6 +17,7 @@ class Key(object):
             return super(Key, cls).__new__(cls)
 
     def __init__(self, *args):
+        assert args, "Cannot construct void Key"
         if len(args) == 1:
             value = args[0]
             assert value is not None, "Cannot initialize Key from None"
@@ -26,39 +27,48 @@ class Key(object):
                 if "id" in dict:
                     self.__init__(dict[id])
                 else:
-                    self.__init__(dict["kind"], dict["name"])
+                    self.__init__(dict["kind"], dict["name"], dict.get("scope"))
             elif hasattr(value, "key") and callable(value.key):
                 k = value.key()
                 self.kind = k.kind
                 self.id = k.id
                 self.name = k.name
+                self._scope = k._scope
             else:
                 assert 0, "Cannot initialize Key from %s, type %s" % (value, type(value))
-            if not (hasattr(self, "id") and self.id) and self.name and self.kind:
-                self.id = base64.urlsafe_b64encode("%s:%s" % (self.kind, self.name))
-        elif len(args) == 2:
+            if not (hasattr(self, "id") and self.id):
+                self.id = base64.urlsafe_b64encode(str(self))
+        else:
             kind = args[0]
             assert (isinstance(kind, basestring) or
                    (hasattr(kind, "kind") and callable(kind.kind))), \
                    "First argument of Key(kind, name) must be string or model class, not %s" % type(args[0])
             assert isinstance(args[1], basestring), \
                    "Second argument of Key(%s, name) must be string, not %s" % (kind, type(args[1]))
-            self._assign("%s:%s" % (kind if isinstance(kind, basestring) else kind.kind(), args[1]))
+            if len(args) == 2:
+                self._assign("%s:%s" % (kind if isinstance(kind, basestring) else kind.kind(), urllib.quote_plus(str(args[1]))))
+            elif len(args) == 3:
+                self._assign("%s:%s:%s" % (kind if isinstance(kind, basestring) else kind.kind(), 
+                    urllib.quote_plus(str(args[1])), urllib.quote_plus(str(args[2]))))
 
     def _assign(self, value):
         value = str(value)
-        if value.count(":"):
-            s = value
-            self.id = base64.urlsafe_b64encode(value)
+        arr = value.split(":")
+        if len(arr) == 1:
+            self._assign(base64.urlsafe_b64decode(value))
         else:
-            self.id = value
-            s = base64.urlsafe_b64decode(value)
-        (k, _, n) = s.partition(":")
-        self.name = urllib.unquote_plus(n)
-        self.kind = grumble.meta.Registry.get(k).kind()
+            self.id = base64.urlsafe_b64encode(value)
+            self.kind = grumble.meta.Registry.get(arr[0]).kind()
+            assert self.kind, "Cannot parse key %s: unknown kind %s" % (value, arr[0])
+            self.name = urllib.unquote_plus(arr[-1])
+            if len(arr) == 3:
+                self._scope = urllib.unquote_plus(arr[1])
+                k = Key(self._scope)
 
     def __str__(self):
-        return self.kind + ":" + urllib.quote_plus(self.name)
+        return (
+            "%s:%s:%s" % (self.kind, urllib.quote_plus(self._scope), urllib.quote_plus(self.name)) if self._scope
+            else "%s:%s" % (self.kind, urllib.quote_plus(self.name)))
 
     def __call__(self):
         return self.get()
@@ -66,16 +76,22 @@ class Key(object):
     def key(self):
         return self
     
+    def deref(self):
+        return self.get()
+    
     def basekind(self):
         (_, _, k) = self.kind.rpartition(".")
         return k
     
     def modelclass(self):
         return grumble.meta.Registry.get(self.kind)
-
+    
+    def scope(self):
+        return Key(self._scope)
+    
     def __eq__(self, other):
         if not isinstance(other, Key) and hasattr(other, "key") and callable(other.key):
-            return self.__eq__(other.key())
+            return self == other.key()
         else:
             if not other:
                 return False
