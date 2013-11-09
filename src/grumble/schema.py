@@ -50,12 +50,9 @@ class ModelManager(object):
         self.key_col = None
         for c in self._prep_columns:
             if c.is_key:
-                if not c.scoped:
-                    logger.debug("%s._set_columns: found key_col: %s", self.name, c.name)
-                    self.key_col = c
-                    c.required = True
-                else:
-                    logger.debug("%s._set_columns: found scoped key_col: %s", self.name, c.name)                    
+                logger.debug("%s._set_columns: found key_col: %s", self.name, c.name)
+                self.key_col = c
+                c.required = True
         self.columns = []
         if not self.key_col:
             logger.debug("%s.set_columns: Adding synthetic key_col", self.name)
@@ -158,7 +155,7 @@ class ModelManager(object):
                     self.columns.remove(column)
         for c in self.columns:
             vars = []
-            sql = 'ALTER TABLE ' + self.tablename + ' ADD COLUMN "' + c.name + '" ' + c.data_type
+            sql = 'ALTER TABLE %s ADD COLUMN "%s" %s' % (self.tablename, c.name, c.data_type)
             if c.required:
                 sql += " NOT NULL"
             if c.defval:
@@ -171,6 +168,7 @@ class ModelManager(object):
                 cur.execute('CREATE INDEX "%s_%s" ON %s ( "%s" )' % (self.table, c.name, self.tablename, c.name))
             if c.is_key and c.scoped:
                 cur.execute('CREATE UNIQUE INDEX "%s_%s" ON %s ( "_parent", "%s" )' % (self.table, c.name, self.tablename, c.name))
+                #cur.execute('ALTER TABLE %s ADD PRIMARY KEY ( "_parent", "%s" )' % (self.tablename, c.name))
 
     modelmanagers_byname = {}
     @classmethod

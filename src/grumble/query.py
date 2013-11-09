@@ -36,42 +36,41 @@ class ModelQuery(object):
     def _reset_state(self):
         pass
 
-    def set_keyname(self, keyname, kind = None):
+    def set_key(self, key, kind = None):
         self._reset_state()
         assert not (self.has_parent() or self.has_ancestor()), \
-            "Cannot query for ancestor or parent and keyname at the same time"
-        assert ((keyname is None) or isinstance(keyname, (basestring, grumble.key.Key))), \
-                "Must specify an string, Key, or None in ModelQuery.set_keyname"
-        if isinstance(keyname, basestring):
+            "Cannot query for ancestor or parent and key at the same time"
+        assert ((key is None) or isinstance(key, (basestring, grumble.key.Key))), \
+                "Must specify an string, Key, or None in ModelQuery.set_key"
+        if isinstance(key, basestring):
             try:
-                keyname = grumble.key.Key(keyname)
+                key = grumble.key.Key(key)
             except:
-                keyname = grumble.key.Key(kind, keyname)
-        logger.debug("Q: Setting keyname to %s", keyname)
-        if keyname is None:
-            self.unset_keyname()
+                key = grumble.key.Key(kind, key)
+        if key is None:
+            self.unset_key()
         else:
-            self._keyname = keyname
+            self._key = key
         return self
 
-    def unset_keyname(self):
+    def unset_key(self):
         self._reset_state()
-        if hasattr(self, "_keyname"):
-            del self._keyname
+        if hasattr(self, "_key"):
+            del self._key
         return self
 
-    def has_keyname(self):
-        return hasattr(self, "_keyname")
+    def has_key(self):
+        return hasattr(self, "_key")
 
-    def keyname(self):
-        assert self.has_keyname(), \
-            "Cannot call keyname() on ModelQuery with no keyname set"
-        return self._keyname
+    def key(self):
+        assert self.has_key(), \
+            "Cannot call key() on ModelQuery with no key set"
+        return self._key
 
     def set_ancestor(self, ancestor):
         self._reset_state()
-        assert not (self.has_parent() or self.has_keyname()), \
-            "Cannot query for ancestor and keyname or parent at the same time"
+        assert not (self.has_parent() or self.has_key()), \
+            "Cannot query for ancestor and key or parent at the same time"
         if isinstance(ancestor, basestring):
             ancestor = grumble.key.Key(ancestor) if ancestor != "/" else None
         elif hasattr(ancestor, "key") and callable(ancestor.key):
@@ -99,7 +98,7 @@ class ModelQuery(object):
 
     def set_parent(self, parent):
         self._reset_state()
-        assert not (self.has_ancestor() or self.has_keyname()), \
+        assert not (self.has_ancestor() or self.has_key()), \
             "Cannot query for ancestor or keyname and parent at the same time"
         if isinstance(parent, basestring):
             parent = grumble.key.Key(parent) if parent else None
@@ -108,7 +107,6 @@ class ModelQuery(object):
             assert parent, "ModelQuery.set_parent: not-None ancestor with key() == None. Is the Model stored"
         assert (parent is None) or isinstance(parent, grumble.key.Key), \
                 "Must specify a parent object or None in ModelQuery.set_parent"
-        logger.debug("Q: Setting parent to %s", parent)
         self._parent = parent
         return self
 
@@ -119,11 +117,14 @@ class ModelQuery(object):
         return self
 
     def has_parent(self):
-        return hasattr(self, "_parent")
+        return hasattr(self, "_parent") or (self.has_key() and self.key() and self.key().scope())
 
     def parent(self):
         assert self.has_parent(), "Cannot call parent() on ModelQuery with no parent set"
-        return self._parent
+        if hasattr(self, "_parent"):
+            return self._parent
+        else:
+            return self.key().scope()
 
     def owner(self, o = None):
         if o is not None:
@@ -150,8 +151,7 @@ class ModelQuery(object):
         else:
             assert 0, "Could not interpret %s arguments to add_filter" % len(args)
         if hasattr(value, "key") and callable(value.key):
-            value = value.key().name
-        logger.debug("Q: Adding filter %s %s", expr, value)
+            value = str(value.key())
         self._filters.append((expr, value))
         return self
 
@@ -169,17 +169,19 @@ class ModelQuery(object):
     def sortorder(self):
         return self._sortorder
 
-    def execute(self, kind, type):
+    def execute(self, kind, t):
         if isinstance(type, bool):
-            type = QueryType.KeyName if type else QueryType.Columns
+            t = QueryType.KeyName if t else QueryType.Columns
         with gripe.pgsql.Tx.begin():
             r = ModelQueryRenderer(kind, self)
-            return r.execute(type)
+            return r.execute(t)
 
     def _count(self, kind):
-        """Executes this query and returns the number of matching rows. Note
-        that the actual results of the query are not available; these need to
-        be obtained by executing the query again"""
+        """
+            Executes this query and returns the number of matching rows. Note
+            that the actual results of the query are not available; these need to
+            be obtained by executing the query again
+        """
         with gripe.pgsql.Tx.begin():
             r = ModelQueryRenderer(kind, self)
             return r.execute(QueryType.Count).singleton()
@@ -196,7 +198,7 @@ class ModelQuery(object):
                 key = grumble.key.Key(key)
             else:
                 assert isinstance(key, grumble.key.Key), "ModelQuery.get requires a valid key object"
-            q = ModelQuery().set_keyname(key)
+            q = ModelQuery().set_key(key)
             r = ModelQueryRenderer(key.kind, q)
             return r.execute(QueryType.Columns).single_row_bycolumns()
 
@@ -211,7 +213,7 @@ class ModelQuery(object):
                 key = key.key()
             else:
                 assert isinstance(key, grumble.key.Key), "ModelQuery.get requires a valid key object, not a %s" % type(key)
-            q = ModelQuery().set_keyname(key)
+            q = ModelQuery().set_key(key)
             r = ModelQueryRenderer(key.kind, q)
             r.execute(QueryType.Insert if insert else QueryType.Update, values)
 
@@ -257,12 +259,12 @@ class ModelQueryRenderer(object):
     def key_column(self):
         return self._manager.key_col
 
-    def has_keyname(self):
-        return self._query.has_keyname()
+    def has_key(self):
+        return self._query.has_key()
 
-    def keyname(self):
-        return self._query.keyname()
-
+    def key(self):
+        return self._query.key()
+    
     def has_ancestor(self):
         return self._query.has_ancestor()
 
@@ -344,35 +346,31 @@ class ModelQueryRenderer(object):
                 assert 0, "Huh? Unrecognized query type %s in query for table '%s'" % (type, self.name())
             if type != QueryType.Insert:
                 glue = ' WHERE '
-                if self.has_keyname():
-                    logger.debug("QR: has_keyname")
+                if self.has_key():
                     glue = ' AND '
                     sql += ' WHERE ("%s" = %%s)' % self.key_column().name
-                    vals.append(str(self.keyname().name))
+                    vals.append(str(self.key().name))
                 if self.has_ancestor() and self.ancestor():
-                    logger.debug("QR: has_ancestor")
                     assert not self.flat(), "Cannot perform ancestor queries on flat table '%s'" % self.name()
                     glue = ' AND '
                     sql += ' WHERE ("_ancestors" LIKE %s)'
                     vals.append(str(self.ancestor().get().path()) + "%")
                 if self.has_parent():
-                    logger.debug("QR: has_parent")
                     assert not self.flat(), "Cannot perform parent queries on flat table '%s'" % self.name()
                     sql += glue + '("_parent" '
                     glue = ' AND '
-                    if self.parent():
+                    p = self.parent()
+                    if p:
                         sql += " = %s"
-                        vals.append(str(self.parent()))
+                        vals.append(str(p))
                     else:
                         sql += " IS NULL"
                     sql += ")"
                 if self.owner():
-                    logger.debug("QR: has owner")
                     sql += glue + '("_ownerid" = %s)'
                     glue = ' AND '
                     vals.append(self.owner())
                 for (e, v) in self.filters():
-                    logger.debug("QR: Filter %s %s", e, v)
                     if v is not None:
                         sql += glue + '(%s %%s)' % e
                         vals.append(v)

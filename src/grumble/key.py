@@ -36,20 +36,21 @@ class Key(object):
                 self._scope = k._scope
             else:
                 assert 0, "Cannot initialize Key from %s, type %s" % (value, type(value))
-            if not (hasattr(self, "id") and self.id):
-                self.id = base64.urlsafe_b64encode(str(self))
         else:
             kind = args[0]
             assert (isinstance(kind, basestring) or
                    (hasattr(kind, "kind") and callable(kind.kind))), \
                    "First argument of Key(kind, name) must be string or model class, not %s" % type(args[0])
-            assert isinstance(args[1], basestring), \
-                   "Second argument of Key(%s, name) must be string, not %s" % (kind, type(args[1]))
+            assert isinstance(args[-1], basestring), \
+                   "Last argument of Key(%s, ..., name) must be string, not %s" % (kind, type(args[1]))
             if len(args) == 2:
                 self._assign("%s:%s" % (kind if isinstance(kind, basestring) else kind.kind(), urllib.quote_plus(str(args[1]))))
             elif len(args) == 3:
                 self._assign("%s:%s:%s" % (kind if isinstance(kind, basestring) else kind.kind(), 
-                    urllib.quote_plus(str(args[1])), urllib.quote_plus(str(args[2]))))
+                    urllib.quote_plus(str(args[1])) if args[1] else "", 
+                    urllib.quote_plus(str(args[2]))))
+        if not (hasattr(self, "id") and self.id):
+            self.id = base64.urlsafe_b64encode(str(self))
 
     def _assign(self, value):
         value = str(value)
@@ -63,11 +64,12 @@ class Key(object):
             self.name = urllib.unquote_plus(arr[-1])
             if len(arr) == 3:
                 self._scope = urllib.unquote_plus(arr[1])
-                k = Key(self._scope)
+            else:
+                self._scope = None
 
     def __str__(self):
         return (
-            "%s:%s:%s" % (self.kind, urllib.quote_plus(self._scope), urllib.quote_plus(self.name)) if self._scope
+            "%s:%s:%s" % (self.kind, urllib.quote_plus(self._scope), urllib.quote_plus(self.name)) if self._scope is not None
             else "%s:%s" % (self.kind, urllib.quote_plus(self.name)))
 
     def __call__(self):
@@ -87,16 +89,16 @@ class Key(object):
         return grumble.meta.Registry.get(self.kind)
     
     def scope(self):
-        return Key(self._scope)
+        return Key(self._scope) if self._scope else None
     
     def __eq__(self, other):
-        if not isinstance(other, Key) and hasattr(other, "key") and callable(other.key):
+        if not(isinstance(other, Key)) and hasattr(other, "key") and callable(other.key):
             return self == other.key()
         else:
-            if not other:
+            if not(other or isinstance(other, Key)):
                 return False
-            assert isinstance(other, Key), "Can't compare key '%s' and %s '%s'" % (self, other.__class__, other)
-            return (self.kind == other.kind) and (self.name == other.name)
+            else:
+                return (self.kind == other.kind) and (self.name == other.name)
 
     def __hash__(self):
         return hash(str(self))

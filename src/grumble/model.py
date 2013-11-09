@@ -51,6 +51,12 @@ class Model():
             cls._sealed = True
             if not cls._abstract:
                 cls.modelmanager.reconcile()
+            if hasattr(cls, "key_prop"):
+                cls._key_propdef = getattr(cls, cls.key_prop)
+                cls._key_scoped = cls._key_propdef.scoped
+            else:
+                cls._key_propdef = None
+                cls._key_scoped = False
 
     def __repr__(self):
         return str(self.key())
@@ -153,12 +159,11 @@ class Model():
                 prop._on_insert(self)
             if hasattr(self, "initialize") and callable(self.initialize):
                 self.initialize()
-        include_key_name = not(hasattr(self, "key_prop"))
-        if hasattr(self, "key_prop"):
-            kp = getattr(self.__class__, self.key_prop)
-            key = getattr(self, kp.name)
+        include_key_name = not(self._key_propdef)
+        if self._key_propdef:
+            key = getattr(self, self.key_prop)
             if key is None:
-                raise grumble.errors.KeyPropertyRequired(self.kind(), kp.name)
+                raise grumble.errors.KeyPropertyRequired(self.kind(), self.key_prop)
             self._key_name = key
         elif not self._key_name:
             self._key_name = uuid.uuid1().hex
@@ -216,7 +221,8 @@ class Model():
             Returns the parent Model of this Model, as a Key, or None if this
             Model does not have a parent.
         """
-        self._load()
+        if not(hasattr(self, "_parent")):
+            self._load()
         return self._parent
 
     def set_parent(self, parent):
@@ -240,7 +246,11 @@ class Model():
             are combined into the Model's id, which is also part of a Key
             object.
         """
-        return grumble.key.Key(self.kind(), self._key_name) if self._key_name else None
+        if not self._key_name:
+            return None
+        else:
+            return (grumble.key.Key(self.kind(), self.parent(), self._key_name) if self._key_scoped
+                    else grumble.key.Key(self.kind(), self._key_name))
 
     def path(self):
         a = self.ancestors()
@@ -474,6 +484,8 @@ class Model():
                 assert (cls.kind().endswith(k.kind)) or not k.kind, "%s.get(%s.%s) -> wrong key kind" % (cls.kind(), k.kind, k.name)
                 ret._id = k.id
                 ret._key_name = k.name
+                if ret._key_scoped:
+                    ret._set_ancestors_from_parent(k.scope())
                 if values:
                     ret._populate(values)
             else:
@@ -494,6 +506,8 @@ class Model():
             assert (cls.kind().endswith(k.kind)) or not k.kind, "%s.get_by_key(%s:%s) -> wrong key kind" % (cls.kind(), k.kind, k.name)
             ret._id = k.id
             ret._key_name = k.name
+            if ret._key_scoped:
+                ret._set_ancestors_from_parent(k.scope())
         return ret
 
     @classmethod
@@ -603,6 +617,14 @@ def delete(model):
 
 def abstract(cls):
     cls._abstract = True
+    return cls
+
+def flat(cls):
+    cls._flat = True
+    return cls
+
+def unaudited(cls):
+    cls._audit = False
     return cls
 
 class Query(grumble.query.ModelQuery):
