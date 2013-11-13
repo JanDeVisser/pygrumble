@@ -30,6 +30,34 @@ if (typeof(Object.create) !== 'function') {
     };
 }
 
+com.sweattrails.api.internal.dumpobj = function(indent, name, o) {
+    if (typeof(o) === "object") {
+        console.log(indent + name + ":");
+        com.sweattrails.api.internal.dump(indent + "  ", o);
+    } else {
+        console.log(indent + name + ": " + o);
+    }
+};
+
+com.sweattrails.api.internal.dump = function(indent, o) {
+    if (Array.isArray(o)) {
+        console.log(indent + "[ length " + o.length);
+        for (var ix in o) {
+            com.sweattrails.api.internal.dumpobj(indent + "  ", ix, o[ix]);
+        }
+        console.log(indent + "]");
+    } else {
+        for (var k in o) {
+            com.sweattrails.api.internal.dumpobj(indent, k, o[k]);
+        }
+    }
+};
+
+com.sweattrails.api.dump = function(o) {
+    com.sweattrails.api.internal.dump("  ", o);
+    console.log("----");
+};
+
 com.sweattrails.api.Manager = function() {
     this.id = "APIManager";
     this.type = "manager";

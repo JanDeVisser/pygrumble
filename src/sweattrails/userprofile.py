@@ -21,3 +21,21 @@ class UserProfile(grizzle.UserPart):
     uploads = grumble.IntegerProperty(default = 0)
     last_upload = grumble.DateTimeProperty()
 
+def get_bmi(hinst):
+    user = hinst.parent()
+    profile = user.get_part(UserProfile)
+    h_m = float(profile.height) / 100
+    return hinst.weight / (h_m * h_m)
+
+class History(grumble.Model):
+    snapshotdate = grumble.DateProperty(auto_now_add=True)
+    weight = grumble.FloatProperty(default = 0.0)		# in kg
+    bmi = grumble.FloatProperty(transient = True, getter = get_bmi)
+    bfPercentage = grumble.FloatProperty(default = 0.0)
+    waist = grumble.FloatProperty(default = 0.0)		# in cm
+    bpHigh = grumble.IntegerProperty(default = 120)
+    bpLow = grumble.IntegerProperty(default = 80)
+    temperature = grumble.FloatProperty(default = 37.0)
+    sleep = grumble.FloatProperty(default = 0.0)
+    health = grumble.StringProperty(default = '')
+    

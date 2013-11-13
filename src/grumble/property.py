@@ -118,25 +118,33 @@ class ModelProperty(object):
             values[self.column_name] = self._to_sqlvalue(self.__get__(instance))
 
     def __get__(self, instance, owner = None):
-        if not instance:
-            return self
-        if self.transient and self.getter:
-            return self.getter(instance)
-        else:
-            instance._load()
-            return instance._values[self.name] if self.name in instance._values else None
+        try:
+            if not instance:
+                return self
+            if self.transient and self.getter:
+                return self.getter(instance)
+            else:
+                instance._load()
+                return instance._values[self.name] if self.name in instance._values else None
+        except:
+            logger.exception("Exception getting property '%s'", self.name)
+            raise
 
     def __set__(self, instance, value):
-        if self.is_key and not hasattr(instance, "_brandnew"):
-            return
-        if self.transient and self.setter:
-            self.setter(instance, value)
-        else:
-            instance._load()
-            old = instance._values[self.name] if self.name in instance._values else None
-            instance._values[self.name] = self.convert(value) if value is not None else None
-            new = instance._values[self.name] if self.name in instance._values else None
-            self.after_set and self.after_set(instance, old, new)
+        try:
+            if self.is_key and not hasattr(instance, "_brandnew"):
+                return
+            if self.transient and self.setter:
+                self.setter(instance, value)
+            else:
+                instance._load()
+                old = instance._values[self.name] if self.name in instance._values else None
+                instance._values[self.name] = self.convert(value) if value is not None else None
+                new = instance._values[self.name] if self.name in instance._values else None
+                self.after_set and self.after_set(instance, old, new)
+        except:
+            logger.exception("Exception setting property '%s' to value '%s'", self.name, value)
+            raise
 
     def __delete__(self, instance):
         return NotImplemented
@@ -150,29 +158,24 @@ class ModelProperty(object):
     def _from_sqlvalue(self, sqlvalue):
         return self.converter.from_sqlvalue(sqlvalue)
 
-    def from_json_value(self, instance, values):
-        v = values.get(self.name, None)
+    def _from_json_value(self, value):
         try:
-            v = self.datatype.from_dict(v)
+            return self.datatype.from_dict(value)
         except:
             try:
-                v = self.converter.from_jsonvalue(v)
+                return self.converter.from_jsonvalue(value)
             except:
-                logger.exception("ModelProperty<%s>.from_json_value(%s [%s])", self.__class__.__name__, v, type(v))
-                pass
-        setattr(instance, self.name, v)
-
-    def to_json_value(self, instance, values):
-        v = getattr(instance, self.name)
+                logger.exception("ModelProperty<%s>.from_json_value(%s [%s])", self.__class__, value, type(value))
+                return value
+            
+    def _to_json_value(self, instance, value):
         try:
-            v = v.to_dict()
+            return value.to_dict()
         except:
             try:
-                v = self.converter.to_jsonvalue(v)
+                return self.converter.to_jsonvalue(value)
             except:
-                pass
-        values[self.name] = v
-        return values
+                return value
 
 
 class CompoundProperty(object):
@@ -254,14 +257,11 @@ class CompoundProperty(object):
     def convert(self, value):
         return tuple(p.convert(v) for (p, v) in zip(self.compound, value))
 
-    def from_json_value(self, instance, values):
-        for p in filter(lambda p: not p.private, self.compound):
-            p.from_json_value(instance, values)
+    def _from_json_value(self, value):
+        raise gripe.NotSerializableError(self.name)
 
-    def to_json_value(self, instance, values):
-        for p in filter(lambda p: not p.private, self.compound):
-            values = p.to_json_value(instance, values)
-        return values
+    def _to_json_value(self, instance, value):
+        raise gripe.NotSerializableError(self.name)
 
 class StringProperty(ModelProperty):
     datatype = str

@@ -25,12 +25,14 @@ com.sweattrails.api.getHttpRequest = function(jsonRequest) {
     httpRequest.onreadystatechange = function() {
         if (this.readyState === 4) {
             this.request.log("Received response. Status " + this.status);
-            var object = {};
+            var object = [];
             if (this.responseText !== "") {
                 try {
                     object = JSON.parse(this.responseText);
                 } catch (e) {
-                    console.log("Exception parsing JSON text " + this.responseText)
+                    console.log("Exception parsing JSON text " + this.responseText);
+                    object = this.responseText;
+                    this.status = -1;
                 }
             }
             if ((this.status >= 200 && this.status <= 200) || this.status === 304) {
@@ -188,6 +190,8 @@ com.sweattrails.api.internal.DataSource.prototype.processData = function() {
     	this.view = [];
     }
     this.runCallbacks("onData", [this.data]);
+    console.log("*** this.data:");
+    ST.dump(this.data);
     if (!this.data || (Array.isArray(this.data) && !this.data.length)) {
         this.runCallbacks("noData", []);
     } else {
@@ -213,17 +217,7 @@ com.sweattrails.api.internal.DataSource.prototype.next = function() {
             }
             if (this.debug && this.object) {
                 $$.log(this, "next(): " + this.object);
-                var dump = function(indent, o) {
-                    for (var k in o) {
-                        if (typeof(o[k]) === "object") {
-                            console.log(indent + k + ":");
-                            dump(indent + "  ", o[k]);
-                        } else {
-                            console.log(indent + k + ": " + o[k]);
-                        }
-                    }                    
-                };
-                dump("  ", this.object);
+                ST.dump(this.object);
             }
             return this.object;
         }

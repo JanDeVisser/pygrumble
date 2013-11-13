@@ -102,7 +102,7 @@ class ModelBridge(object):
             ret = [ self.object() ]
         else:
             ret = self.query()
-        ret = filter(lambda o: o.can_read(), ret)
+        ret = [ o for o in filter(lambda o: o.can_read(), ret) ]
         logger.debug("get_objects: returning %s", [ o.id() for o in ret ])
         return ret
 
@@ -248,6 +248,9 @@ class ImageHandler(PropertyBridgedHandler):
             self.error(401)
 
 class JSONHandler(BridgedHandler):
+    def get_parent(self):
+        return self._query.get("parent")
+
     def update(self, d, **flags):
         self.object() and self.can_update() and self.object().update(d, **flags)
 

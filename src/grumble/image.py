@@ -22,15 +22,15 @@ class BinaryConverter(grumble.converter.PropertyConverter):
         # test in the base convert method doesn't work.
         return self.datatype(value)
 
-    def to_jsonvalue(self, value):
-        raise gripe.NotSerializableError(self.name)
-
-    def from_jsonvalue(self, value):
-        raise gripe.NotSerializableError(self.name)
-
 class BinaryProperty(grumble.property.ModelProperty):
     datatype = psycopg2.Binary
     sqltype = "BYTEA"
+
+    def _to_json_value(self, instance, value):
+        raise gripe.NotSerializableError(self.name)
+
+    def _from_json_value(self, value):
+        raise gripe.NotSerializableError(self.name)
 
 class ImageProperty(grumble.property.CompoundProperty):
     def __init__(self, **kwargs):

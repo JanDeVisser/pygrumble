@@ -317,38 +317,79 @@ class Model():
                     return getattr(self, "to_dict_" + name)(ret)
                 else:
                     try:
-                        return prop.to_json_value(self, ret)
+                        ret[name] = prop._to_json_value(self, getattr(self, name))
                     except gripe.NotSerializableError:
                         pass
+                    return ret
 
-            ret = reduce(serialize, self.properties().items(), ret)
+            ret = reduce(serialize, self._allproperties.items(), ret)
             ret = reduce(serialize, self._query_properties.items(), ret)
             hasattr(self, "sub_to_dict") and callable(self.sub_to_dict) and self.sub_to_dict(ret, **flags)
             return ret
 
     def _update(self, d):
         pass
+    
+    @classmethod
+    def _deserialize(cls, descriptor):
+        for name, prop in filter(lambda (name, prop): (not prop.private) and (name in descriptor), cls._allproperties.items()):
+            value = descriptor[name]
+            try:
+                descriptor[name] = prop._from_json_value(value)
+            except:
+                logger.exception("Could not deserialize value '%s' for property '%s'", value, name)
+                del descriptor[name]
+        return descriptor
 
-    def update(self, descriptor, **flags):
+    def _update_deserialized(self, descriptor, **flags):
         self._load()
         logger.info("Updating model %s.%s using descriptor %s", self.kind(), self.keyname(), descriptor)
-        for b in self.__class__.__bases__:
-            if hasattr(b, "_update") and callable(b._update):
-                b._update(self, descriptor)
-        for name, prop in filter(lambda (name, prop): (not prop.private) and (name in descriptor), self.properties().items()):
-            newval = descriptor[name]
-            logger.debug("Updating %s.%s to %s", self.kind(), name, newval)
-            if hasattr(self, "update_" + name) and callable(getattr(self, "update_" + name)):
-                getattr(self, "update_" + name)(descriptor)
-            else:
+        try:
+            for b in self.__class__.__bases__:
+                if hasattr(b, "_update") and callable(b._update):
+                    b._update(self, descriptor)
+            for prop in filter(lambda prop: (not prop.private) and (prop.name in descriptor), self.properties().values()):
+                name = prop.name
                 try:
-                    prop.from_json_value(self, descriptor)
-                except gripe.NotSerializableError:
-                    pass
-        self.put()
-        if hasattr(self, "on_update") and callable(self.on_update):
-            self.on_update(descriptor, **flags)
+                    value = descriptor[name]
+                    logger.debug("Updating %s.%s to %s", self.kind(), name, value)
+                    if hasattr(self, "update_" + name) and callable(getattr(self, "update_" + name)):
+                        logger.debug("Using update hook update_%s", name)
+                        getattr(self, "update_" + name)(descriptor)
+                    else:
+                        setattr(self, name, value)
+                except:
+                    logger.exception("Could not assign value '%s' to property '%s'", value, name)
+                    raise
+            self.put()
+            if hasattr(self, "on_update") and callable(self.on_update):
+                self.on_update(descriptor, **flags)
+        except:
+            logger.exception("Could not update model %s.%s using descriptor %s", self.kind(), self.keyname(), descriptor)
+            raise
         return self.to_dict(**flags)
+
+    def update(self, descriptor, **flags):
+        return self._update_deserialized(self._deserialize(descriptor), **flags)
+
+    @classmethod
+    def create(cls, descriptor = None, parent = None, **flags):
+        if descriptor is None:
+            descriptor = {}
+        logger.info("Creating new %s model from descriptor %s", cls.__name__, descriptor)
+        obj = None
+        try:
+            kwargs = { "parent": parent }
+            descriptor = cls._deserialize(descriptor)
+            kwargs.update(descriptor)
+            obj = cls(**kwargs)
+            obj._update_deserialized(descriptor, **flags)
+        except:
+            logger.info("Could not create new %s model from descriptor %s", cls.__name__, descriptor)
+            raise
+        if hasattr(obj, "on_create") and callable(obj.on_create):
+            obj.on_create(descriptor, **flags) and obj.put()
+        return obj
 
     def invoke(self, method, args, kwargs):
         self._load()
@@ -527,12 +568,14 @@ class Model():
         q = cls.query('"%s" = ' % property, value, **kwargs)
         return q.get()
 
-    def children(self):
-        q = self.query(parent = self)
+    def children(self, cls = None):
+        cls = cls or self
+        q = cls.query(parent = self)
         return q
 
-    def descendents(self):
-        q = self.query(ancestor = self)
+    def descendents(self, cls = None):
+        cls = cls or self
+        q = cls.query(ancestor = self)
         return q
 
     @classmethod
@@ -556,19 +599,6 @@ class Model():
             q.add_filter(args[ix], args[ix + 1])
             ix += 2
         return q
-
-    @classmethod
-    def create(cls, descriptor = None, parent = None, **flags):
-        if descriptor is None:
-            descriptor = {}
-        logger.info("Creating new %s model from descriptor %s", cls.__name__, descriptor)
-        kwargs = { "parent": parent }
-        kwargs.update(descriptor)
-        obj = cls(**kwargs)
-        obj.update(descriptor, **flags)
-        if hasattr(obj, "on_create") and callable(obj.on_create):
-            obj.on_create(descriptor, **flags) and obj.put()
-        return obj
 
     @classmethod
     def all(cls, **kwargs):

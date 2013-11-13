@@ -5,6 +5,7 @@
 __author__="jan"
 __date__ ="$17-Sep-2013 4:20:49 PM$"
 
+import gripe
 import grumble.converter
 import grumble.model
 
@@ -60,11 +61,11 @@ class QueryProperty(object):
     def __delete__(self, instance):
         return NotImplemented
 
-    def from_json_value(self, instance, values):
-        pass
+    def _from_json_value(self, value):
+        return gripe.NotSerializableError(self.name)
 
-    def to_json_value(self, instance, values):
-        values[self.name] = [obj.to_dict() if self.serialize else obj.id() for obj in self._get_query(instance)]
+    def _to_json_value(self, instance, value):
+        return [obj.to_dict() if self.serialize else obj.id() for obj in self._get_query(instance)]
 
 class ReferenceProperty(grumble.property.ModelProperty):
     datatype = grumble.model.Model

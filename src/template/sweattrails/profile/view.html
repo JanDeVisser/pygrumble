@@ -34,5 +34,25 @@
     </st:form>
 </st:tab>
 
-{% endblock tabs %}
+<st:tab code="history" label="Health History">
+    <st:table name="history" url="/json/history">
+        <st:parameter name="parent" value="{{key}}"/>
+        <st:column label="Date" type="date" property="snapshotdate" select="true"/>
+        <st:column label="Weight" type="weight" property="weight"/>
+        <st:column label="Bodyfat %" property="bfPercentage" type="float" digits="1"/>
+        <st:column label="Waist" type="length" property="waist"/>
+        <st:column label="BMI" property="bmi" type="float" digits="2"/>
+        <st:dataform>
+            <st:field id="snapshotdate" type="date" property="snapshotdate" label="Date"/>
+            <st:field id="weight" type="weight" property="weight" label="Weight"/>
+            <st:field id="bodyfat" type="text" size="4" maxlength="5" property="bfPercentage" label="Bodyfat %"/>
+            <st:field id="waist" type="length" property="waist" label="Waist"/>
+            <st:action mode="view" label="Edit" action="edit"/>
+            <st:action mode="new;edit" label="Save" action="save"/>
+            <st:action mode="view;new;edit" label="Cancel" action="cancel"/>
+        </st:dataform>
+        <st:action label="Add" action="new"/>
+    </st:table>
+</st:tab>
 
+{% endblock tabs %}
