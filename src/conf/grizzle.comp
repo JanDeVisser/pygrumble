@@ -6,7 +6,12 @@
         { "path": "/users/?|/users/.+", "app": "grizzle.app", "roles": [ "admin" ]}
     ],
     "grizzle": {
-        "userparts": [ "sweattrails.userprofile.UserProfile", "sweattrails.config.ActivityProfile" ],
+        "userparts": [
+            { "part": "sweattrails.userprofile.UserProfile", "default": true, "configurable": false },
+            { "part": "sweattrails.config.ActivityProfile", "default": true, "configurable": false },
+            { "part": "sweattrails.userprofile.WeightMgmt", "default": true, "configurable": true },
+            { "part": "sweattrails.userprofile.SeizureMgmt", "default": true, "configurable": true }
+        ],
         "root": "root@sweattrails.com"
     },
     "sweattrails": {

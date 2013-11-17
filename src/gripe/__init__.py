@@ -58,7 +58,7 @@ def resolve(funcname, default = None):
             (module, dot, fnc) = funcname.rpartition(".")
             logger.debug("resolve(%s): Importing module %s and getting function %s", funcname, module, fnc)
             mod = importlib.import_module(module)
-            return getattr(mod, fnc) if hasattr(mod, fnc) else default
+            return getattr(mod, fnc) if hasattr(mod, fnc) and callable(getattr(mod, fnc)) else default
         except Exception, exc:
             logger.error("Exception in gripe.resolve(%s): %s %s", funcname, exc.__class__.__name__, exc)
             raise

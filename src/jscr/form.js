@@ -105,7 +105,9 @@ com.sweattrails.api.Form.prototype.setDataSource = function(ds) {
 com.sweattrails.api.Form.prototype.addField = function(fld) {
     this.fields.push(fld);
     fld.form = this;
-    this.$[fld.id] = fld;
+    if (typeof(fld.id) !== "undefined") {
+        this.$[fld.id] = fld;
+    }
 };
 
 com.sweattrails.api.Form.prototype.addAction = function(action) {
@@ -113,11 +115,7 @@ com.sweattrails.api.Form.prototype.addAction = function(action) {
 };
 
 com.sweattrails.api.Form.field = function(fld) {
-    for (var fix in this.fields) {
-        var f = this.fields[fix];
-        if (f.id === fld) return f;
-    }
-    return null;
+    return this.$[fld];
 };
 
 com.sweattrails.api.Form.prototype.newTR = function() {
@@ -156,7 +154,6 @@ com.sweattrails.api.Form.prototype.render = function() {
         }
     }
 };
-
 
 com.sweattrails.api.Form.prototype.renderData = function(obj) {
     this.header.erase();
@@ -317,8 +314,8 @@ com.sweattrails.api.FormBuilder.prototype.process = function(f) {
 com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
     form.type = 'json';
     if (elem.getAttribute("type")) {
-        form.type = elem.getAttribute("type");
-        if ("json;form".indexOf(form.type) < 0) {
+        form.type = elem.getAttribute("type").toLowerCase();
+        if (["json", "form"].indexOf(form.type) < 0) {
             console.log("Invalid form type " + form.type + " for form " + form.id);
             form.type = "json";
         }
@@ -392,16 +389,21 @@ com.sweattrails.api.FormField = function(form, f) {
 	$$.register(this);
 	this.modes = f.getAttribute("mode");
 	this.readonly = f.getAttribute("readonly") === "true";
-	this.bridge = new com.sweattrails.api.internal.DataBridge();
-	var p = f.getAttribute("property");
-	if (p) {
-	    this.bridge.get = p;
-	} else if (f.getAttribute("get")) {
-	    this.bridge.get = getfunc(f.getAttribute("get"));
-	    this.bridge.set = f.getAttribute("set");
-	} else {
-	    this.bridge.get = this.id;
-	}
+	this.setType(f.getAttribute("type"), f);
+        if ((typeof(this.impl.isMute) === "undefined") || !this.impl.isMute()) {
+            this.bridge = new com.sweattrails.api.internal.DataBridge();
+            var p = f.getAttribute("property");
+            if (p) {
+                this.bridge.get = p;
+            } else if (f.getAttribute("get")) {
+                this.bridge.get = getfunc(f.getAttribute("get"));
+                this.bridge.set = f.getAttribute("set");
+            } else {
+                this.bridge.get = this.id;
+            }
+        } else {
+            this.bridge = null;
+        }
 	var onchange = f.getAttribute("onchange");
 	if (onchange) {
 	    this.onchange = getfunc(onchange);
@@ -411,7 +413,6 @@ com.sweattrails.api.FormField = function(form, f) {
 	}
 	this.label = f.getAttribute("label");
 	this.required = f.getAttribute("required") === "true";
-	this.setType(f.getAttribute("type"), f);
 	if (f.getAttribute("value")) {
             var v = f.getAttribute("value");
             this.defval = getfunc(v) || v;
@@ -478,7 +479,12 @@ com.sweattrails.api.FormField.prototype.render = function(mode, object) {
             }
         }
         tr = this.form.newTR();
-        var lbl = this.label || this.id;
+        var lbl;
+        if (typeof(this.impl.getLabel) === "function") {
+            lbl = this.impl.getLabel();
+        } else {
+            lbl = this.label || this.id;
+        }
         if (lbl) {
             lbl = (this.required) ? "(*) " + lbl + ":" : lbl + ":";
             td = document.createElement("td");
@@ -492,8 +498,12 @@ com.sweattrails.api.FormField.prototype.render = function(mode, object) {
         }
         td = document.createElement("td");
         td.style.textAlign = "left";
-        if (!lbl) {
-            td.colspan = 2;
+        if (typeof(this.impl.colspan) !== "undefined") {
+            td.colspan = this.impl.colspan();
+        } else {
+            if (!lbl) {
+                td.colspan = 2;
+            }
         }
         td.appendChild(elem);
         tr.appendChild(td);
@@ -532,19 +542,56 @@ com.sweattrails.api.FormField.prototype.onValueChange = function() {
 
 com.sweattrails.api.FormField.prototype.setValue = function(object) {
     $$.log(this, "setValue");
-    this.impl.setValueFromControl(this.bridge, object);
+    if (this.bridge) {
+        this.impl.setValueFromControl(this.bridge, object);
+    }
 };
 
 com.sweattrails.api.FormField.prototype.getValue = function(object) {
-    var ret = this.bridge.getValue(object);
-    if (!ret && this.defval) {
-        if (typeof(this.defval) === 'function') {
-            ret = this.defval(object);
-        } else {
-            ret = this.defval;
+    var ret = null;
+    if (this.bridge) {
+        ret = this.bridge.getValue(object);
+        if (!ret && this.defval) {
+            if (typeof(this.defval) === 'function') {
+                ret = this.defval(object);
+            } else {
+                ret = this.defval;
+            }
         }
     }
     return ret;
+};
+
+/*
+ * TitleField - 
+ */
+
+com.sweattrails.api.TitleField = function(fld, elem) {
+    this.field = fld;
+    this.text = elem.getAttribute("text");
+    this.level = elem.getAttribute("level") || "3";
+};
+
+com.sweattrails.api.TitleField.prototype.renderEdit = function() {
+    this.control = document.createElement("h" + this.level);
+    this.control.innerHTML = this.text;
+    return this.control;
+};
+
+com.sweattrails.api.TitleField.prototype.renderView = function() {
+    return this.renderEdit();
+};
+
+com.sweattrails.api.TitleField.prototype.colspan = function() {
+    return 2;
+};
+
+com.sweattrails.api.TitleField.prototype.getLabel = function() {
+    return null;
+};
+
+com.sweattrails.api.TitleField.prototype.isMute = function() {
+    return true;
 };
 
 /*
@@ -975,6 +1022,8 @@ com.sweattrails.api.IconField.prototype.onDataError = function() {
     this.field.form.render();
 };
 
+com.sweattrails.api.internal.fieldtypes.text = com.sweattrails.api.TextField;
+com.sweattrails.api.internal.fieldtypes.title = com.sweattrails.api.TitleField;
 com.sweattrails.api.internal.fieldtypes.text = com.sweattrails.api.TextField;
 com.sweattrails.api.internal.fieldtypes.password = com.sweattrails.api.PasswordField;
 com.sweattrails.api.internal.fieldtypes.weight = com.sweattrails.api.WeightField;

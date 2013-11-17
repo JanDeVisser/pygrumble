@@ -54,6 +54,9 @@ com.sweattrails.api.internal.dump = function(indent, o) {
 };
 
 com.sweattrails.api.dump = function(o) {
+    if (arguments.length > 1) {
+        console.log(arguments[1]);
+    }
     com.sweattrails.api.internal.dump("  ", o);
     console.log("----");
 };
@@ -741,19 +744,19 @@ function length(len_in_cm, units, include_unit) {
 
 function weight(weight_in_kg, units, include_unit) {
     if (arguments.length < 3) include_unit = true;
-    if (!metric_imperial) metric_imperial = native_unit;
+    if (!units) units = native_unit;
     return convert(parseFloat(weight_in_kg), 'weight', units, include_unit, 0);
 }
 
 function distance(distance_in_km, units, include_unit) {
     if (arguments.length < 3) include_unit = true;
-    if (!metric_imperial) metric_imperial = native_unit;
+    if (!units) units = native_unit;
     return convert(parseFloat(distance_in_km), 'distance', units, include_unit, 2);
 }
 
 function height(height_in_cm, units, include_unit) {
     if (arguments.length < 3) include_unit = true;
-    if (!metric_imperial) metric_imperial = native_unit;
+    if (!units) units = native_unit;
     height_in_cm = parseFloat(height_in_cm);
     if (units.toLowerCase().substr(0,1) === 'm') {
 	h = (height_in_cm / 100).toFixed(2);

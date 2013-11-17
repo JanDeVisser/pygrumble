@@ -33,6 +33,7 @@ from grumble.property import PasswordProperty
 from grumble.property import JSONProperty
 from grumble.property import ListProperty
 from grumble.property import IntegerProperty
+IntProperty = IntegerProperty
 from grumble.property import FloatProperty
 from grumble.property import BooleanProperty
 from grumble.property import DateTimeProperty

@@ -142,7 +142,7 @@ com.sweattrails.api.internal.DataSource = function() {
 };
 
 com.sweattrails.api.internal.DataSource.prototype.addView = function(v) {
-    if (!this.view) {
+    if (typeof(this.view) === "undefined") {
     	this.view = [];
     }
     this.view.push(v);
@@ -152,7 +152,6 @@ com.sweattrails.api.internal.DataSource.prototype.addSort = function(column, asc
     if (typeof(this._sort) === "undefined") {
     	this._sort = [];
     }
-    console.log("addSort(" + column + ", " + ascending + ")");
     this._sort.push({"column": column, "ascending": ascending});
 };
 
@@ -167,7 +166,6 @@ com.sweattrails.api.internal.DataSource.prototype.addFlag = function(name, value
     if (typeof(this._flags) === "undefined") {
     	this._flags = {};
     }
-    console.log("addFlag(" + name + ", " + value + ")");
     this._flags[name] = value;
 };
 
@@ -179,10 +177,11 @@ com.sweattrails.api.internal.DataSource.prototype.flags = function() {
 };
     
 com.sweattrails.api.internal.DataSource.prototype.submitParameter = function(p, v) {
-    if (!this.submitparams) {
+    if (typeof(this.submitparams) === "undefined") {
         this.submitparams = {};
     }
     this.submitparams[p] = v;
+    ST.dump(this.submitparams, "Submitparams");
 };
 
 com.sweattrails.api.internal.DataSource.prototype.processData = function() {
@@ -363,7 +362,7 @@ com.sweattrails.api.JSONDataSource.prototype.addObject = function(obj, prefix) {
 };
 
 com.sweattrails.api.JSONDataSource.prototype.setJSONParameters = function(obj, submit) {
-    obj = obj || {}
+    obj = obj || {};
     var o = {};
     for (a in obj) {
         o[a] = obj[a];
@@ -391,9 +390,11 @@ com.sweattrails.api.JSONDataSource.prototype.setJSONParameters = function(obj, s
         if (this.sortorder().length) {
             o["_sortorder"] = this.sortorder();
         }
+        ST.dump(o, "setJSONParameters, not-submit");
     } else {
         if (this.key) o.key = this.key;
-        build_param_obj(this.request.submitparams, o);
+        build_param_obj(this.submitparams, o);
+        ST.dump(o, "setJSONParameters, submit");
     }
     if (this.flags()) {
         o["_flags"] = this.flags();

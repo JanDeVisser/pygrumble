@@ -86,8 +86,10 @@ class Model():
 
     def _set_ancestors_from_parent(self, parent):
         if not self._flat:
-            if parent:
+            if parent and hasattr(parent, "key") and callable(parent.key):
                 parent = parent.key()
+            elif isinstance(parent, basestring):
+                parent = grumble.key.Key(parent)
             assert parent is None or isinstance(parent, grumble.key.Key)
             self._parent = parent
             if parent:
@@ -168,33 +170,36 @@ class Model():
         elif not self._key_name:
             self._key_name = uuid.uuid1().hex
         self._id = None
-        for prop in self._properties.values():
-            prop._on_store(self)
-        if hasattr(self, "on_store") and callable(self.on_store):
-            self.on_store()
-        self._validate()
-
-        values = {}
-        for prop in self._properties.values():
-            prop._values_tosql(self, values)
-        if include_key_name:
-            values['_key_name'] = self._key_name
-        if not self._flat:
-            p = self.parent()
-            values['_parent'] = str(p) if p else None
-            values['_ancestors'] = self._ancestors
-        values["_acl"] = self._acl.to_json()
-        values["_ownerid"] = self._ownerid if hasattr(self, "_ownerid") else None
-        grumble.query.ModelQuery.set(hasattr(self, "_brandnew"), self.key(), values)
-        if hasattr(self, "_brandnew"):
-            if hasattr(self, "after_insert") and callable(self.after_insert):
-                self.after_insert()
-            del self._brandnew
-        for prop in self._properties.values():
-            prop._after_store(self)
-        if hasattr(self, "after_store") and callable(self.after_store):
-            self.after_store()
-        gripe.pgsql.Tx.put_in_cache(self)
+        self._storing = 1
+        while self._storing:
+            for prop in self._properties.values():
+                prop._on_store(self)
+            if hasattr(self, "on_store") and callable(self.on_store):
+                self.on_store()
+            self._validate()
+            values = {}
+            for prop in self._properties.values():
+                prop._values_tosql(self, values)
+            if include_key_name:
+                values['_key_name'] = self._key_name
+            if not self._flat:
+                p = self.parent()
+                values['_parent'] = str(p) if p else None
+                values['_ancestors'] = self._ancestors
+            values["_acl"] = self._acl.to_json()
+            values["_ownerid"] = self._ownerid if hasattr(self, "_ownerid") else None
+            grumble.query.ModelQuery.set(hasattr(self, "_brandnew"), self.key(), values)
+            if hasattr(self, "_brandnew"):
+                if hasattr(self, "after_insert") and callable(self.after_insert):
+                    self.after_insert()
+                del self._brandnew
+            for prop in self._properties.values():
+                prop._after_store(self)
+            if hasattr(self, "after_store") and callable(self.after_store):
+                self.after_store()
+            gripe.pgsql.Tx.put_in_cache(self)
+            self._storing -= 1
+        del self._storing
 
     def _on_delete(self):
         return self.on_delete(self) if hasattr(self, "on_delete") and getattr(cls, "on_delete") else True
@@ -285,7 +290,10 @@ class Model():
         return self._ownerid
 
     def put(self):
-        self._store()
+        if hasattr(self, "_storing"):
+            self._storing += 1
+        else:
+            self._store()
 
     def exists(self):
         if hasattr(self, "_brandnew"):

@@ -42,26 +42,46 @@ class UserPart(grumble.Model):
 UserStatus = gripe.Enum(['Unconfirmed', 'Active', 'Admin', 'Banned', 'Inactive', 'Deleted'])
 GodList = ('jan@de-visser.net',)
 
+def userpart_setter(instance, value):
+    pass
+
+def userpart_getter(instance, value):
+
+def customize_user_class(cls):
+    for partdef in gripe.Config.app.grizzle.userparts:
+        if partdef.configurable:
+            (_, _, name) = partdef.part.rpartition(".")
+            propdef = grumble.BooleanProperty(transient = True, getter = userpart_getter, setter = userpart_setter)
+            cls.add_property(name, propdef)
+
 class User(grumble.Model, gripe.auth.AbstractUser):
     _flat = True
     _resolved_parts = set()
+    _customizer = customize_user_class
     email = grumble.TextProperty(is_key = True)
     password = grumble.PasswordProperty()
     status = grumble.TextProperty(choices = UserStatus, default = 'Unconfirmed')
     display_name = grumble.TextProperty(is_label = True)
     has_roles = grumble.ListProperty()
+    active_parts = grumble.JSONProperty()
     
     def after_insert(self):
         self._parts = {}
-        for m in gripe.Config.app.grizzle.userparts:
+        for partdef in gripe.Config.app.grizzle.userparts:
+            m = partdef.part
             if m not in self._resolved_parts:
                 logger.debug("grizzle.User.after_insert(%s): Resolving user part %s", self.email, m)
                 gripe.resolve(m)
                 self._resolved_parts.add(m)
-            k = grumble.Model.for_name(m)
-            part = k(parent = self)
-            part.put()
-            self._parts[part.basekind().lower()] = part
+            if partdef.default:
+                k = grumble.Model.for_name(m)
+                part = k(parent = self)
+                part.put()
+                self._parts[part.basekind().lower()] = part
+            if partdef.configurable:
+                p = { "part": m, "active": partdef.default, "label": partdef.label }
+                self.active_parts[m] = p
+        self.put()
             
     def sub_to_dict(self, d, **flags):
         if "include_parts" in flags:
@@ -76,6 +96,7 @@ class User(grumble.Model, gripe.auth.AbstractUser):
                 part.update(p, **flags)
 
     def get_part(self, part):
+        self._load()
         if (isinstance(part, basestring)):
             k = part
         else:

@@ -21,9 +21,12 @@ class UserProfile(grizzle.UserPart):
     uploads = grumble.IntegerProperty(default = 0)
     last_upload = grumble.DateTimeProperty()
 
+class WeightMgmt(grizzle.UserPart):
+    pass
+
 def get_bmi(hinst):
-    user = hinst.parent()
-    profile = user.get_part(UserProfile)
+    user = hinst.parent().get().parent()
+    profile = user().get_part(UserProfile)
     h_m = float(profile.height) / 100
     return hinst.weight / (h_m * h_m)
 
@@ -39,3 +42,25 @@ class History(grumble.Model):
     sleep = grumble.FloatProperty(default = 0.0)
     health = grumble.StringProperty(default = '')
     
+class SeizureMgmt(grizzle.UserPart):
+    markers = grumble.ListProperty(verbose_name = "Markers")
+    triggers = grumble.ListProperty(verbose_name = "Triggers")
+
+class SeizureLog(grumble.Model):
+    timestamp = grumble.DateTimeProperty(auto_now_add=True)
+    description = grumble.TextProperty()
+    severity = grumble.IntProperty()
+    markers = grumble.JSONProperty()
+    triggers = grumble.JSONProperty()
+
+class Medication(grumble.Model):
+    medication = grumble.TextProperty(is_key = True, is_label = True)
+    description = grumble.TextProperty()
+    adverse_effects = grumble.TextProperty()
+
+class MedicationHistory(grumble.Model):
+    timestamp = grumble.DateProperty(auto_now_add = True)
+    medication = grumble.ReferenceProperty(Medication)
+    dose = grumble.TextProperty()
+    experiences = grumble.TextProperty()
+
