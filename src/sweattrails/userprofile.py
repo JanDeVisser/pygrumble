@@ -24,11 +24,16 @@ class UserProfile(grizzle.UserPart):
 class WeightMgmt(grizzle.UserPart):
     pass
 
-def get_bmi(hinst):
-    user = hinst.parent().get().parent()
-    profile = user().get_part(UserProfile)
-    h_m = float(profile.height) / 100
-    return hinst.weight / (h_m * h_m)
+
+class BMIProperty(grumble.FloatProperty):
+    def getvalue(self, instance):
+        user = instance.parent().get().parent()
+        profile = user().get_part(UserProfile)
+        h_m = float(profile.height) / 100
+        return instance.weight / (h_m * h_m)
+    
+    def setvalue(self, instance, value):
+        pass
 
 class History(grumble.Model):
     snapshotdate = grumble.DateProperty(auto_now_add=True)

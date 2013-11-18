@@ -10,18 +10,23 @@ import gripe.pgsql
 import grizzle
 import grumble
 import grumble.image
+import grumble.property
 
 logger = gripe.get_logger(__name__)
 
-def get_flag(country):
-    return "http://flagspot.net/images/{0}/{1}.gif".format(country.countrycode[0:1].lower(), country.countrycode.lower()) \
-        if country.countrycode \
-        else None
+class FlagProperty(grumble.StringProperty):
+    def getvalue(self, instance):
+        code = instance.countrycode
+        return "http://flagspot.net/images/{0}/{1}.gif".format(code[0:1].lower(), code.lower()) \
+            if code else None
+            
+    def setvalue(self, instance, value):
+        pass
 
 class Country(grumble.Model):
     countryname = grumble.StringProperty(verbose_name = "Country name", is_label = True)
     countrycode = grumble.StringProperty(verbose_name = "ISO 3166-1 code", is_key = True)
-    flag_url = grumble.StringProperty(transient = True, getter = get_flag)
+    flag_url = FlagProperty(transient = True)
 
 #
 # ============================================================================

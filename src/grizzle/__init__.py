@@ -46,6 +46,7 @@ def userpart_setter(instance, value):
     pass
 
 def userpart_getter(instance, value):
+    pass
 
 def customize_user_class(cls):
     for partdef in gripe.Config.app.grizzle.userparts:

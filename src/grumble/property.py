@@ -28,16 +28,12 @@ class ModelProperty(object):
             ret.default = prop.default
             ret.private = prop.private
             ret.transient = prop.transient
-            ret.getter = prop.getter
-            ret.setter = prop.setter
-            ret.after_set = prop.after_set
             ret.is_label = prop.is_label
             ret.is_key = prop.is_key
             ret.scoped = prop.scoped
             ret.indexed = prop.indexed
             ret.validator = prop.validator
             ret.regexp = prop.regexp
-            ret.converter = prop.converter
             ret.suffix = prop.suffix
             ret.choices = prop.choices
             ret.inherited_from = prop
@@ -50,20 +46,10 @@ class ModelProperty(object):
             ret.default = kwargs.get("default", None)
             ret.private = kwargs.get("private", False)
             ret.transient = kwargs.get("transient", False)
-            ret.getter = kwargs.get("getter", None)
-            ret.setter = kwargs.get("setter", None)
-            ret.after_set = kwargs.get("after_set", None)
             ret.is_label = kwargs.get("is_label", False)
             ret.is_key = kwargs.get("is_key", False)
             ret.scoped = kwargs.get("scoped", False) if ret.is_key else False
             ret.indexed = kwargs.get("indexed", False)
-            ret.validator = kwargs.get("validator", None)
-            assert (ret.validator is None) or callable(ret.validator), "Validator %s must be function, not %s" % (str(ret.validator), type(ret.validator))
-            ret.converter = kwargs.get("converter", \
-                cls.converter \
-                    if hasattr(cls, "converter") \
-                    else grumble.converter.Converters.get(cls.datatype)
-            )
             ret.regexp = kwargs.get("regexp", cls.regexp if hasattr(cls, "regexp") else None)
             ret.suffix = kwargs.get("suffix", None)
             ret.choices = kwargs.get("choices", None)
@@ -100,15 +86,18 @@ class ModelProperty(object):
     def _after_store(self, value):
         pass
 
-    def validate(self, value):
+    def _validate(self, value):
         if (value is None) and self.required:
             raise grumble.errors.PropertyRequired(self.name)
         if self.choices and value not in self.choices and value:
             raise grumble.errors.InvalidChoice(self.name, value)
         if self.regexp and value and not re.match(self.regexp, value):
-            raise grumble.errors.PatternNotMatched(self.name, self.value)
-        if self.validator:
-            self.validator(value)
+            raise grumble.errors.PatternNotMatched(self.name, value)
+        self.validator(value)
+        
+    def validator(self, value):
+        if hasattr(self, "validate") and callable(self.validate):
+            self.validate(instance, value)
 
     def _update_fromsql(self, instance, values):
         instance._values[self.name] = self._from_sqlvalue(values[self.column_name])
@@ -121,8 +110,8 @@ class ModelProperty(object):
         try:
             if not instance:
                 return self
-            if self.transient and self.getter:
-                return self.getter(instance)
+            if self.transient and hasattr(self, "getvalue") and callable(self.getvalue):
+                return self.getvalue(instance)
             else:
                 instance._load()
                 return instance._values[self.name] if self.name in instance._values else None
@@ -134,14 +123,15 @@ class ModelProperty(object):
         try:
             if self.is_key and not hasattr(instance, "_brandnew"):
                 return
-            if self.transient and self.setter:
-                self.setter(instance, value)
+            if self.transient and hasattr(self, "setvalue") and callable(self.setvalue):
+                return self.setvalue(instance, value)
             else:
                 instance._load()
                 old = instance._values[self.name] if self.name in instance._values else None
                 instance._values[self.name] = self.convert(value) if value is not None else None
                 new = instance._values[self.name] if self.name in instance._values else None
-                self.after_set and self.after_set(instance, old, new)
+                if hasattr(self, "after_set") and callable(self.after_set):
+                    self.after_set(instance, old, new)
         except:
             logger.exception("Exception setting property '%s' to value '%s'", self.name, value)
             raise
@@ -176,7 +166,6 @@ class ModelProperty(object):
                 return self.converter.to_jsonvalue(value)
             except:
                 return value
-
 
 class CompoundProperty(object):
     def __init__(self, *args, **kwargs):
@@ -223,11 +212,10 @@ class CompoundProperty(object):
         for p in self.compound:
             p._after_store(value)
 
-    def validate(self, value):
+    def _validate(self, value):
         for (p, v) in zip(self.compound, value):
             p.validate(v)
-        if self.validator:
-            self.validator(value)
+        self.validator(value)
 
     def _initial_value(self):
         return tuple(p._initial_value() for p in self.compound)
