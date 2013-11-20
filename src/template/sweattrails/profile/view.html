@@ -28,10 +28,8 @@
             <st:value text="Imperial" key="imperial"/>
         </st:field>
         <st:field id="components" type="title" text="Components"/>
-        {% if object.weightmgmt is defined %}
-        <st:field id="weightmgmt" type="checkbox" property="userprofile.units" label="Weight Management" >
-        {% else %}
-        {% endif %}
+        <st:field id="weightmgmt" type="checkbox" property="weightmgmt" label="Weight Management"/>
+        <st:field id="weightmgmt" type="checkbox" property="seizuremgmt" label="Seizure Management"/>
 
         <st:footer>
             <st:action mode="view" label="Edit" action="edit"/>
@@ -41,11 +39,11 @@
     </st:form>
 </st:tab>
 
-{% if object.weightmgmt is defined %}
+{% if object._weightmgmt is defined %}
 <st:tab code="weightmgmt" label="Health History">
     <st:table name="history" url="/json/history">
-        <st:parameter name="parent" value="{{object.weightmgmt.id()}}"/>
-        <st:submitparameter name="parent" value="{{object.weightmgmt.id()}}"/>
+        <st:parameter name="parent" value="{{object._weightmgmt.id()}}"/>
+        <st:submitparameter name="parent" value="{{object._weightmgmt.id()}}"/>
         <st:column label="Date" type="date" property="snapshotdate" select="true"/>
         <st:column label="Weight" type="weight" property="weight"/>
         <st:column label="Bodyfat %" property="bfPercentage" type="float" digits="1"/>
@@ -65,11 +63,11 @@
 </st:tab>
 {% endif %}
 
-{% if object.seizuremgmt is defined %}
+{% if object._seizuremgmt is defined %}
 <st:tab code="seizuremgmt" label="Seizures">
     <st:table name="seizurelog" url="/json/seizurelog">
-        <st:parameter name="parent" value="{{object.seizuremgmt.id()}}"/>
-        <st:submitparameter name="parent" value="{{object.seizuremgmt.id()}}"/>
+        <st:parameter name="parent" value="{{object._seizuremgmt.id()}}"/>
+        <st:submitparameter name="parent" value="{{object._seizuremgmt.id()}}"/>
         <st:column label="Date/Time" type="datetime" property="timestamp" select="true"/>
         <st:column label="Description" type="text" property="description"/>
         <st:column label="Severity" type="integer" property="severity"/>

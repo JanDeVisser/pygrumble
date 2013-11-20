@@ -30,6 +30,8 @@ class UserPart(grumble.Model):
     def get_userpart(cls, user):
         return user.get_part(cls)
 
+class UserPartKennel(UserPart):
+    pass
 
 """
     Banned - User is still there, content is still there, user cannot log in.
@@ -42,74 +44,91 @@ class UserPart(grumble.Model):
 UserStatus = gripe.Enum(['Unconfirmed', 'Active', 'Admin', 'Banned', 'Inactive', 'Deleted'])
 GodList = ('jan@de-visser.net',)
 
-def userpart_setter(instance, value):
-    pass
-
-def userpart_getter(instance, value):
-    pass
+class UserPartToggle(grumble.BooleanProperty):
+    transient = True
+    def __init__(self, partname, *args, **kwargs):
+        super(UserPartToggle, self).__init__(*args, **kwargs)
+        self.partname = partname
+        
+    def _init_parts(self, instance):
+        if not hasattr(instance, "_parts"):
+            instance._parts = { grumble.Model.for_name(pd.part).basekind().lower(): None for pd in gripe.Config.app.grizzle.userparts }
+    
+    def setvalue(self, instance, value):
+        self._init_parts(instance)
+        if (instance._parts[self.name] is not None) and not(value):
+            p = instance._parts[self.name]
+            instance._parts[self.name] = None
+            for kennel in grumble.Query(UserPartKennel, keys_only = True, include_subclasses = True).set_parent(instance):
+                p.set_parent(kennel)
+                p.put()
+        elif (instance._parts[self.name.lower()] is None) and value and not hasattr(instance, "_brandnew"):
+            p = None
+            for kennel in grumble.Query(UserPartKennel, keys_only = True, include_subclasses = True).set_parent(instance):
+                for p in grumble.Query(grumble.Model.for_name(self.partname), keys_only = True, include_subclasses = True).set_parent(kennel):
+                    p.set_parent(instance)
+                    p.put()
+            if p is None:
+                p = grumble.Model.for_name(self.partname)(parent = instance)
+                p.put()
+            instance._parts[self.name.lower()] = p
+        
+    def getvalue(self, instance):
+        self._init_parts(instance)
+        return instance._parts[self.name] is not None
 
 def customize_user_class(cls):
     for partdef in gripe.Config.app.grizzle.userparts:
+        m = partdef.part
+        gripe.resolve(m)
         if partdef.configurable:
             (_, _, name) = partdef.part.rpartition(".")
-            propdef = grumble.BooleanProperty(transient = True, getter = userpart_getter, setter = userpart_setter)
+            name = name.lower()
+            propdef = UserPartToggle(partdef.part, verbose_name = partdef.label, 
+                default = partdef.default)
             cls.add_property(name, propdef)
 
 class User(grumble.Model, gripe.auth.AbstractUser):
     _flat = True
-    _resolved_parts = set()
-    _customizer = customize_user_class
+    _customizer = staticmethod(customize_user_class)
     email = grumble.TextProperty(is_key = True)
     password = grumble.PasswordProperty()
     status = grumble.TextProperty(choices = UserStatus, default = 'Unconfirmed')
     display_name = grumble.TextProperty(is_label = True)
     has_roles = grumble.ListProperty()
-    active_parts = grumble.JSONProperty()
     
     def after_insert(self):
-        self._parts = {}
+        kennel = UserPartKennel(parent = self)
+        kennel.put()
         for partdef in gripe.Config.app.grizzle.userparts:
-            m = partdef.part
-            if m not in self._resolved_parts:
-                logger.debug("grizzle.User.after_insert(%s): Resolving user part %s", self.email, m)
-                gripe.resolve(m)
-                self._resolved_parts.add(m)
             if partdef.default:
-                k = grumble.Model.for_name(m)
-                part = k(parent = self)
+                part = grumble.Model.for_name(partdef.part)(parent = self)
                 part.put()
-                self._parts[part.basekind().lower()] = part
-            if partdef.configurable:
-                p = { "part": m, "active": partdef.default, "label": partdef.label }
-                self.active_parts[m] = p
-        self.put()
             
     def sub_to_dict(self, d, **flags):
         if "include_parts" in flags:
             for (k, part) in self._parts.items():
-                d[k] = part.to_dict(**flags)
+                if part:
+                    d[k] = part.to_dict(**flags)
         return d
 
     def on_update(self, d, **flags):
         for (k, part) in self._parts.items():
-            if k in d:
+            if (k in d) and part:
                 p = d[k]
                 part.update(p, **flags)
 
     def get_part(self, part):
         self._load()
-        if (isinstance(part, basestring)):
-            k = part
-        else:
-            k = part.basekind().lower()
+        k = part if (isinstance(part, basestring)) else part.basekind().lower()
         return self._parts[k] if k in self._parts else None
     
     def after_load(self):
-        self._parts = {}
+        self._parts = { grumble.Model.for_name(pd.part).basekind().lower(): None for pd in gripe.Config.app.grizzle.userparts }
         for part in grumble.Query(UserPart, keys_only = False, include_subclasses = True).set_parent(self):
             k = part.basekind().lower()            
             self._parts[k] = part
-            setattr(self, k, part)
+            setattr(self, "_" + k, part)
 
     def is_active(self):
         """

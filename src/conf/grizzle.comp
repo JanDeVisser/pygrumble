@@ -9,8 +9,8 @@
         "userparts": [
             { "part": "sweattrails.userprofile.UserProfile", "default": true, "configurable": false },
             { "part": "sweattrails.config.ActivityProfile", "default": true, "configurable": false },
-            { "part": "sweattrails.userprofile.WeightMgmt", "default": true, "configurable": true },
-            { "part": "sweattrails.userprofile.SeizureMgmt", "default": true, "configurable": true }
+            { "part": "sweattrails.userprofile.WeightMgmt", "default": true, "configurable": true, "label": "Weight Tracking" },
+            { "part": "sweattrails.userprofile.SeizureMgmt", "default": true, "configurable": true, "label": "Seizure Tracking" }
         ],
         "root": "root@sweattrails.com"
     },

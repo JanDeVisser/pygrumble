@@ -834,7 +834,7 @@ com.sweattrails.api.CheckBoxField.prototype.renderView = function(value) {
     var ret = document.createElement("span");
     if (value) {
 	var img = document.createElement("img");
-	img.src = "/images/checkmark.png";
+	img.src = "/image/checkmark.png";
 	img.height = 24;
 	img.width = 24;
 	ret.appendChild(img);

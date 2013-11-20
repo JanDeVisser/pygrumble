@@ -13,12 +13,23 @@ import grumble
 def check_age(age):
     assert age >= 0 and age < 120
 
+class CanDriveProperty(grumble.BooleanProperty):
+    transient = True
+    
+    def getvalue(self, instance):
+        return instance.age >= 16
+    
+    def setvalue(self, instance, value):
+        pass
+
+
 class Person(grumble.Model):
     name = grumble.TextProperty(required = True, is_label = True,
         is_key = True, scoped = True)
-    age = grumble.IntegerProperty(default = 30, validator = check_age)
+    age = grumble.IntegerProperty(default = 30)
+    can_drive = CanDriveProperty()
     
-
+print Person.can_drive.transient
 
 def test():
     keys = []
@@ -29,6 +40,7 @@ def test():
         assert jan.id() is None
         assert jan.name == "Jan"
         assert jan.age == 47
+        assert jan.can_drive
         jan.put()
         assert jan.id() is not None, "jan.id() is still None after put()"
         x = jan.key()

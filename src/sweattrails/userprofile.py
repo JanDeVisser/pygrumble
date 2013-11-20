@@ -26,6 +26,7 @@ class WeightMgmt(grizzle.UserPart):
 
 
 class BMIProperty(grumble.FloatProperty):
+    transient = True
     def getvalue(self, instance):
         user = instance.parent().get().parent()
         profile = user().get_part(UserProfile)
@@ -38,7 +39,7 @@ class BMIProperty(grumble.FloatProperty):
 class History(grumble.Model):
     snapshotdate = grumble.DateProperty(auto_now_add=True)
     weight = grumble.FloatProperty(default = 0.0)		# in kg
-    bmi = grumble.FloatProperty(transient = True, getter = get_bmi)
+    bmi = BMIProperty()
     bfPercentage = grumble.FloatProperty(default = 0.0)
     waist = grumble.FloatProperty(default = 0.0)		# in cm
     bpHigh = grumble.IntegerProperty(default = 120)

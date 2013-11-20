@@ -44,15 +44,11 @@ class ModelMetaClass(type):
                     kind._import_properties(base)
             for (propname, value) in dct.items():
                 kind.add_property(propname, value)
-            customize = gripe.Config.model["model"][name]["customizer"] \
+            kind.customizer = gripe.Config.model["model"][name]["customizer"] \
                 if "model" in gripe.Config.model and \
                     name in gripe.Config.model["model"] and \
                     "customizer" in gripe.Config.model["model"][name] \
                 else dct.get("_customizer")
-            if customize:
-                customizer = gripe.resolve(customize)
-                if customizer:
-                    customizer(kind)
             kind.load_template_data()
         else:
             kind._acl = gripe.acl.ACL(gripe.Config.model.get("global_acl", kind.acl))

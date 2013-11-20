@@ -36,23 +36,29 @@ class ModelProperty(object):
             ret.regexp = prop.regexp
             ret.suffix = prop.suffix
             ret.choices = prop.choices
+            ret.converter = prop.converter
             ret.inherited_from = prop
         else:
             ret = super(ModelProperty, cls).__new__(cls)
             ret.name = args[0] if args else None
-            ret.column_name = kwargs.get("column_name", None)
-            ret.verbose_name = kwargs.get("verbose_name", ret.name)
-            ret.required = kwargs.get("required", False)
-            ret.default = kwargs.get("default", None)
-            ret.private = kwargs.get("private", False)
-            ret.transient = kwargs.get("transient", False)
-            ret.is_label = kwargs.get("is_label", False)
-            ret.is_key = kwargs.get("is_key", False)
-            ret.scoped = kwargs.get("scoped", False) if ret.is_key else False
-            ret.indexed = kwargs.get("indexed", False)
+            ret.column_name = kwargs.get("column_name", cls.column_name if hasattr(cls, "column_name") else None)
+            ret.verbose_name = kwargs.get("verbose_name", cls.verbose_name if hasattr(cls, "verbose_name") else ret.name)
+            ret.required = kwargs.get("required", cls.required if hasattr(cls, "required") else False)
+            ret.default = kwargs.get("default", cls.default if hasattr(cls, "default") else None)
+            ret.private = kwargs.get("private", cls.private if hasattr(cls, "private") else False)
+            ret.transient = kwargs.get("transient", cls.transient if hasattr(cls, "transient") else False)
+            ret.is_label = kwargs.get("is_label", cls.is_label if hasattr(cls, "is_label") else False)
+            ret.is_key = kwargs.get("is_key", cls.is_key if hasattr(cls, "is_key") else False)
+            ret.scoped = kwargs.get("scoped", cls.scoped if hasattr(cls, "scoped") else False) if ret.is_key else False
+            ret.indexed = kwargs.get("indexed", cls.indexed if hasattr(cls, "indexed") else False)
             ret.regexp = kwargs.get("regexp", cls.regexp if hasattr(cls, "regexp") else None)
-            ret.suffix = kwargs.get("suffix", None)
-            ret.choices = kwargs.get("choices", None)
+            ret.suffix = kwargs.get("suffix", cls.suffix if hasattr(cls, "suffix") else None)
+            ret.choices = kwargs.get("choices", cls.choices if hasattr(cls, "choices") else None)
+            ret.converter = kwargs.get("converter", \
+                cls.converter \
+                    if hasattr(cls, "converter") \
+                    else grumble.converter.Converters.get(cls.datatype)
+            )
             ret.inherited_from = None
         return ret
 
@@ -214,8 +220,9 @@ class CompoundProperty(object):
 
     def _validate(self, value):
         for (p, v) in zip(self.compound, value):
-            p.validate(v)
-        self.validator(value)
+            p._validate(v)
+        if hasattr(self, "validate") and callable(self.validate):
+            self.validate(instance, value)
 
     def _initial_value(self):
         return tuple(p._initial_value() for p in self.compound)

@@ -54,6 +54,8 @@ def write_file(fname, data, mode = "w+"):
 
 def resolve(funcname, default = None):
     if funcname:
+        if callable(funcname):
+            return funcname
         try:
             (module, dot, fnc) = funcname.rpartition(".")
             logger.debug("resolve(%s): Importing module %s and getting function %s", funcname, module, fnc)

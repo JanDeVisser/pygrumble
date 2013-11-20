@@ -48,6 +48,10 @@ class Model():
     @classmethod
     def seal(cls):
         if not cls._sealed:
+            if cls.customizer:
+                c = gripe.resolve(cls.customizer)
+                if c:
+                    c(cls)
             cls._sealed = True
             if not cls._abstract:
                 cls.modelmanager.reconcile()
