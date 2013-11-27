@@ -108,11 +108,12 @@ class Registry(dict):
                         assert not ret, "Registry.get(%s): Already found match %s but there's a second one %s" % \
                             (name, ret.kind(), c.kind())
                         ret = c
-            if not ret:
+            if ret:
+                return ret
+            else:
                 print "Going to fail for Registry.get(%s)" % name
                 print "Current registry: %s" % reg
-            assert ret, "Registry.get(%s): No class found" % name
-            return ret
+                raise NameError("kind(%s)" % name)
 
     @classmethod
     def subclasses(cls, rootclass):

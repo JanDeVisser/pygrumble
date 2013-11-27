@@ -18,35 +18,22 @@
         "pipeline": [ "grit.pipeline.RequestLogger", "grit.pipeline.TxWrapper", "grit.Session", "grit.pipeline.Auth" ]
     },
     "logout": { "redirect": "/" },
-    "roles": [
-        { 
-        	"role": "athlete",
-        	"label": "Athlete",
-        	"has_roles": []              
-    	},
-        {
-        	"role": "coach",
-        	"label": "Coach",
-        	"has_roles": []
-    	},
-        { 
-        	"role": "user",
+    "roles": {
+        "user": { 
         	"label": "SweatTrails Member",
         	"urls": [ { "id": "logout", "label": "Logout", "url": "/logout", "level": 99 } ],
         	"has_roles": []             
     	},
-        {
-        	"role": "moderator", 
+        "moderator": {
         	"label": "Moderator",
         	"has_roles": [ "user" ]      
     	},
-        { 
-        	"role": "admin",     
+        "admin": { 
         	"label": "Administrator",
         	"urls": [ { "id": "usermgmt", "label": "User Management", "url": "/users", "level": 10 } ],
         	"has_roles": [ "moderator" ] 
     	}
-    ],
+    },
     "workflows": {
         "signup": "grit.usermgmt.UserSignup",
         "usercreate": "grit.usermgmt.UserCreate",
@@ -56,7 +43,8 @@
         { "path": "/", "app": "index.app", "roles": [] },
         { "path": "/login|/logout|/um/.+", "app": "grit.usermgmt.app", "roles": [] },
         { "path": "/image/.+|/css/.+|/jscr/.+", "roles": [] },
-        { "path": "/json/.+|/img/.+", "app": "grit.handlers.app", "roles": [ "admin" ]}
+        { "path": "/json/.+|/img/.+", "app": "grit.handlers.app", "roles": ["user"]},
+        { "path": "/schema/.+", "app": "grit.handlers.app", "roles": ["user"]}
     ],
     "components": [ "grizzle", "sweattrails" ]
 }

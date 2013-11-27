@@ -17,6 +17,8 @@ import grumble.schema
 logger = gripe.get_logger(__name__)
 
 class ModelProperty(object):
+    property_counter = 0
+    
     def __new__(cls, *args, **kwargs):
         if args and isinstance(args[0], ModelProperty):
             prop = args[0]
@@ -28,6 +30,7 @@ class ModelProperty(object):
             ret.default = prop.default
             ret.private = prop.private
             ret.transient = prop.transient
+            ret.readonly = prop.readonly
             ret.is_label = prop.is_label
             ret.is_key = prop.is_key
             ret.scoped = prop.scoped
@@ -37,9 +40,12 @@ class ModelProperty(object):
             ret.suffix = prop.suffix
             ret.choices = prop.choices
             ret.converter = prop.converter
+            ret.seq_nr = prop.seq_nr
             ret.inherited_from = prop
         else:
             ret = super(ModelProperty, cls).__new__(cls)
+            ret.seq_nr = ModelProperty.property_counter
+            ModelProperty.property_counter += 1
             ret.name = args[0] if args else None
             ret.column_name = kwargs.get("column_name", cls.column_name if hasattr(cls, "column_name") else None)
             ret.verbose_name = kwargs.get("verbose_name", cls.verbose_name if hasattr(cls, "verbose_name") else ret.name)
@@ -47,6 +53,7 @@ class ModelProperty(object):
             ret.default = kwargs.get("default", cls.default if hasattr(cls, "default") else None)
             ret.private = kwargs.get("private", cls.private if hasattr(cls, "private") else False)
             ret.transient = kwargs.get("transient", cls.transient if hasattr(cls, "transient") else False)
+            ret.readonly = kwargs.get("readonly", cls.readonly if hasattr(cls, "readonly") else False)
             ret.is_label = kwargs.get("is_label", cls.is_label if hasattr(cls, "is_label") else False)
             ret.is_key = kwargs.get("is_key", cls.is_key if hasattr(cls, "is_key") else False)
             ret.scoped = kwargs.get("scoped", cls.scoped if hasattr(cls, "scoped") else False) if ret.is_key else False
@@ -61,13 +68,13 @@ class ModelProperty(object):
             )
             ret.inherited_from = None
         return ret
-
+    
     def set_name(self, name):
         self.name = name
         if not self.column_name:
             self.column_name = name
         if not self.verbose_name:
-            self.verbose_name = name
+            self.verbose_name = name.capitalize()
 
     def set_kind(self, kind):
         self.kind = kind
@@ -91,6 +98,20 @@ class ModelProperty(object):
 
     def _after_store(self, value):
         pass
+
+    def schema(self):
+        ret = { 
+            "name": self.name, "type": self.__class__.__name__,
+            "verbose_name": self.verbose_name, "required": self.required,
+            "default": self.default, "regexp": self.regexp,
+            "choices": self.choices, "readonly": self.readonly,
+            "is_key": self.is_key, "datatype": self.datatype.__name__
+        }
+        self._schema(ret)
+        return ret;
+        
+    def _schema(self, schema):
+        return schema
 
     def _validate(self, value):
         if (value is None) and self.required:
@@ -175,17 +196,24 @@ class ModelProperty(object):
 
 class CompoundProperty(object):
     def __init__(self, *args, **kwargs):
+        self.seq_nr = ModelProperty.property_counter
+        ModelProperty.property_counter += 1
         self.compound = []
         for p in args:
             self.compound.append(p)
-        self.verbose_name = kwargs.get("verbose_name", None)
         if "name" in kwargs:
             self.set_name(kwargs["name"])
-        self.private = kwargs.get("private", False)
-        self.transient = kwargs.get("transient", False)
-        self.validator = kwargs.get("validator", None)
-        self.is_key = False
-        self.is_label = False
+        else:
+            self.name = None
+        cls = self.__class__
+        self.verbose_name = kwargs.get("verbose_name", cls.verbose_name if hasattr(cls, "verbose_name") else self.name)
+        self.required = kwargs.get("required", cls.required if hasattr(cls, "required") else False)
+        self.default = kwargs.get("default", cls.default if hasattr(cls, "default") else None)
+        self.private = kwargs.get("private", cls.private if hasattr(cls, "private") else False)
+        self.transient = kwargs.get("transient", cls.transient if hasattr(cls, "transient") else False)
+        self.readonly = kwargs.get("readonly", cls.readonly if hasattr(cls, "readonly") else False)
+        self.regexp = kwargs.get("regexp", cls.regexp if hasattr(cls, "regexp") else None)
+        self.choices = kwargs.get("choices", cls.choices if hasattr(cls, "choices") else None)
 
     def set_name(self, name):
         self.name = name

@@ -44,7 +44,14 @@ class Model():
                 setattr(ret, propname, propvalue)
         logger.debug("%s.__new__: %s", ret.kind(), ret._values)
         return ret
-
+    
+    @classmethod
+    def schema(cls):
+        cls.seal()
+        ret = { "kind": cls.kind(), "flat": cls._flat, "audit": cls._audit }
+        ret["properties"] = [ prop.schema() for prop in cls._properties_by_seqnr if not(prop.private) ]
+        return ret
+    
     @classmethod
     def seal(cls):
         if not cls._sealed:
@@ -52,6 +59,8 @@ class Model():
                 c = gripe.resolve(cls.customizer)
                 if c:
                     c(cls)
+            cls._properties_by_seqnr = [ p for p in cls._allproperties.values() ]
+            cls._properties_by_seqnr.sort(lambda p1, p2: p1.seq_nr - p2.seq_nr)
             cls._sealed = True
             if not cls._abstract:
                 cls.modelmanager.reconcile()
@@ -344,7 +353,9 @@ class Model():
     
     @classmethod
     def _deserialize(cls, descriptor):
-        for name, prop in filter(lambda (name, prop): (not prop.private) and (name in descriptor), cls._allproperties.items()):
+        logger.debug("""_deserialize: descriptor %s
+        props %s""", descriptor, cls._allproperties.keys())
+        for name, prop in filter(lambda (name, prop): ((not prop.private) and (name in descriptor)), cls._allproperties.items()):
             value = descriptor[name]
             try:
                 descriptor[name] = prop._from_json_value(value)
@@ -360,7 +371,7 @@ class Model():
             for b in self.__class__.__bases__:
                 if hasattr(b, "_update") and callable(b._update):
                     b._update(self, descriptor)
-            for prop in filter(lambda prop: (not prop.private) and (prop.name in descriptor), self.properties().values()):
+            for prop in filter(lambda prop: not(prop.private) and not(prop.readonly) and (prop.name in descriptor), self.properties().values()):
                 name = prop.name
                 try:
                     value = descriptor[name]

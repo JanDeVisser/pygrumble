@@ -191,7 +191,7 @@ class JSONObject(dict, JSON):
                     myval.extend(v)
                 continue
             elif isinstance(v, dict) and v:
-                assert isinstance(myval, dict), "Can only merge two dicts when merging JSONObjects"
+                assert isinstance(myval, dict), "Can only merge two dicts when merging JSONObjects (key = %s, myval = %s, otherval = %s)" % (k, myval, v)
                 if isinstance(myval, JSONObject) and isinstance(v, JSONObject):
                     myval.merge(v)
                 else:
@@ -224,7 +224,7 @@ if __name__ == "__main__":
 },
 "nopope_date": { "day": 28, "month": 2, "year": 2013 },
 "nopope": { "day": 28, "month": 2, "year": 2013, "hour": 18, "minute": 0, "second": 0 },
-"nopope_time": { "hour": 18, "minute": 0, "second": 0 }
+"nopope.time": { "hour": 18, "minute": 0, "second": 0 }
 }"""
     obj = json.loads(s)
  
@@ -245,7 +245,7 @@ if __name__ == "__main__":
     print o.bar.froz
     print o.nopope, type(o.nopope)
     print o.nopope_date, type(o.nopope_date)
-    print o.nopope_time, type(o.nopope_time)
+    print o["nopope.time"], type(o["nopope.time"])
 
     print o.fake
     

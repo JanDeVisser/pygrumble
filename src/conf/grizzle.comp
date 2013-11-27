@@ -6,28 +6,18 @@
         { "path": "/users/?|/users/.+", "app": "grizzle.app", "roles": [ "admin" ]}
     ],
     "grizzle": {
-        "userparts": [
-            { "part": "sweattrails.userprofile.UserProfile", "default": true, "configurable": false },
-            { "part": "sweattrails.config.ActivityProfile", "default": true, "configurable": false },
-            { "part": "sweattrails.userprofile.WeightMgmt", "default": true, "configurable": true, "label": "Weight Tracking" },
-            { "part": "sweattrails.userprofile.SeizureMgmt", "default": true, "configurable": true, "label": "Seizure Tracking" }
-        ],
-        "root": "root@sweattrails.com"
-    },
-    "sweattrails": {
-        "activityprofileparts": {
-            "sessionType": { 
-                "nodeClass": "sweattrails.config.SessionTypeNode", 
-                "refClass": "sweattrails.config.SessionType"
-            },
-            "gearType": { 
-                "nodeClass": "sweattrails.config.GearTypeNode", 
-                "refClass": "sweattrails.config.GearType"
-            },
-            "criticalPowerInterval": { 
-                "nodeClass": "sweattrails.config.CriticalPowerIntervalNode", 
-                "refClass": "sweattrails.config.CriticalPowerInterval"
+        "userparts": {
+            "sweattrails.userprofile.UserProfile": { "default": true, "configurable": false },
+            "sweattrails.config.ActivityProfile": { "default": false, "configurable": false },
+            "sweattrails.userprofile.WeightMgmt": { "default": true, "configurable": true, "label": "Weight Tracking" },
+            "sweattrails.userprofile.SeizureMgmt": {
+                "default": true, "configurable": true, 
+                "label": "Seizure Tracking",
+                "urls": [ 
+                    { "id": "medication", "label": "Medications", "url": "/medication", "level": 10 } 
+                ]
             }
-        }        
+        },
+        "root": "root@sweattrails.com"
     }
 }

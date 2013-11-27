@@ -29,6 +29,9 @@ class UserPart(grumble.Model):
     @classmethod
     def get_userpart(cls, user):
         return user.get_part(cls)
+    
+    def urls(self):
+        return self._urls if hasattr(self, "_urls") else None
 
 class UserPartKennel(UserPart):
     pass
@@ -52,7 +55,7 @@ class UserPartToggle(grumble.BooleanProperty):
         
     def _init_parts(self, instance):
         if not hasattr(instance, "_parts"):
-            instance._parts = { grumble.Model.for_name(pd.part).basekind().lower(): None for pd in gripe.Config.app.grizzle.userparts }
+            instance._parts = { grumble.Model.for_name(pn).basekind().lower(): None for pn in gripe.Config.app.grizzle.userparts }
     
     def setvalue(self, instance, value):
         self._init_parts(instance)
@@ -78,13 +81,14 @@ class UserPartToggle(grumble.BooleanProperty):
         return instance._parts[self.name] is not None
 
 def customize_user_class(cls):
-    for partdef in gripe.Config.app.grizzle.userparts:
-        m = partdef.part
-        gripe.resolve(m)
+    for (partname, partdef) in gripe.Config.app.grizzle.userparts.items():
+        (_, _, name) = partname.rpartition(".")
+        name = name.lower()
+        partcls = gripe.resolve(partname)
+        if "urls" in partdef and partdef.urls:
+            partcls._urls = gripe.url.UrlCollection(name, partdef.label, 9, partdef.urls)
         if partdef.configurable:
-            (_, _, name) = partdef.part.rpartition(".")
-            name = name.lower()
-            propdef = UserPartToggle(partdef.part, verbose_name = partdef.label, 
+            propdef = UserPartToggle(name, verbose_name = partdef.label, 
                 default = partdef.default)
             cls.add_property(name, propdef)
 
@@ -100,9 +104,9 @@ class User(grumble.Model, gripe.auth.AbstractUser):
     def after_insert(self):
         kennel = UserPartKennel(parent = self)
         kennel.put()
-        for partdef in gripe.Config.app.grizzle.userparts:
+        for (partname, partdef) in gripe.Config.app.grizzle.userparts.items():
             if partdef.default:
-                part = grumble.Model.for_name(partdef.part)(parent = self)
+                part = grumble.Model.for_name(partname)(parent = self)
                 part.put()
             
     def sub_to_dict(self, d, **flags):
@@ -124,11 +128,23 @@ class User(grumble.Model, gripe.auth.AbstractUser):
         return self._parts[k] if k in self._parts else None
     
     def after_load(self):
-        self._parts = { grumble.Model.for_name(pd.part).basekind().lower(): None for pd in gripe.Config.app.grizzle.userparts }
+        self._parts = { grumble.Model.for_name(pn).basekind().lower(): None for pn in gripe.Config.app.grizzle.userparts }
         for part in grumble.Query(UserPart, keys_only = False, include_subclasses = True).set_parent(self):
             k = part.basekind().lower()            
             self._parts[k] = part
             setattr(self, "_" + k, part)
+            
+    def urls(self, urls = None):
+        if urls is not None:
+            return super(User, self).urls(urls)
+        else:
+            ret = super(User, self).urls()
+            for part in self._parts.values():
+                if hasattr(part, "urls") and callable(part.urls):
+                    u = part.urls()
+                    if u:
+                        ret.append(u)
+            return ret
 
     def is_active(self):
         """

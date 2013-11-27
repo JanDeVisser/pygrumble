@@ -3,5 +3,34 @@
     "version": "1.0",
     "mounts": [
         { "path": "/profile", "app": "sweattrails.app", "roles": [ "user" ]}
-    ]
+    ],
+    "roles": {
+        "athlete": {
+        	"label": "Athlete",
+        	"has_roles": []              
+    	},
+        "coach": {
+        	"label": "Coach",
+        	"has_roles": []
+    	},
+        "admin": { 
+        	"urls": [ { "id": "medsmgmt", "label": "Medication Management", "url": "/medsmgmt", "level": 20 } ]
+    	}
+    },
+    "sweattrails": {
+        "activityprofileparts": {
+            "sessionType": { 
+                "nodeClass": "sweattrails.config.SessionTypeNode", 
+                "refClass": "sweattrails.config.SessionType"
+            },
+            "gearType": { 
+                "nodeClass": "sweattrails.config.GearTypeNode", 
+                "refClass": "sweattrails.config.GearType"
+            },
+            "criticalPowerInterval": { 
+                "nodeClass": "sweattrails.config.CriticalPowerIntervalNode", 
+                "refClass": "sweattrails.config.CriticalPowerInterval"
+            }
+        }        
+    }
 }

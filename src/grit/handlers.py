@@ -13,7 +13,7 @@ import webapp2
 import gripe
 import grumble
 
-from grit.requesthandler import ReqHandler
+import grit.requesthandler
 from grit.statichandler import StaticHandler
 
 logger = gripe.get_logger(__name__)
@@ -121,7 +121,7 @@ class ModelBridge(object):
     def can_query(self):
         return self.kind().can_query()
 
-class BridgedHandler(ModelBridge, ReqHandler):
+class BridgedHandler(ModelBridge, grit.requesthandler.ReqHandler):
     pass
 
 class PageHandler(BridgedHandler):
@@ -333,8 +333,12 @@ class JSONHandler(BridgedHandler):
             if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
                 self.initialize_bridge()
             objs = self.get_objects()
-            ret = [o.to_dict(**self._flags) for o in objs] if objs else None
-            ret = ret if ret is None or len(ret) > 1 else ret[0]
+            data = [o.to_dict(**self._flags) for o in objs] if objs else None
+            count = 0 if data is None else len(data)
+            data = data if data is None or len(data) > 1 else data[0]
+            schema = self.kind().schema()
+            meta = { "schema": schema, "count": count }
+            ret = { "meta": meta, "data": data }
             self.json_dump(ret)
             return
         self.error(401)
@@ -369,10 +373,17 @@ class RedirectHandler(BridgedHandler):
             self.redirect(self.get_redirect_url())
         else:
             self.error(401)
-
+            
+class SchemaHandler(grit.requesthandler.ReqHandler):
+    def get(self, kind = None):
+        logger.info("SchemaHandler.get(%s)", kind)
+        k = grumble.Model.for_name(kind)
+        self.json_dump(k.schema())
+        
 app = webapp2.WSGIApplication([
         webapp2.Route(r'/json/<kind>', handler = JSONHandler, name = 'json-update'),
         webapp2.Route(r'/json/<kind>/<key>', handler = JSONHandler, name = 'json-query'),
         webapp2.Route(r'/img/<kind>/<prop>/<key>', handler = ImageHandler, name = 'image'),
+        webapp2.Route(r'/schema/<kind>', handler = SchemaHandler, name = 'schema'),
     ], debug = True)
 

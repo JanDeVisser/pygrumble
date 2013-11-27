@@ -336,6 +336,8 @@ com.sweattrails.api.JSONDataSource.prototype.parameter = function(param, value) 
 
 com.sweattrails.api.JSONDataSource.prototype.onJSONData = function(data) {
     $$.log(this, "onJSONData(data)");
+    this.metadata = data.meta;
+    data = data.data;
     this.reset(data);
     this.processData();
 };

@@ -59,14 +59,3 @@ class SeizureLog(grumble.Model):
     markers = grumble.JSONProperty()
     triggers = grumble.JSONProperty()
 
-class Medication(grumble.Model):
-    medication = grumble.TextProperty(is_key = True, is_label = True)
-    description = grumble.TextProperty()
-    adverse_effects = grumble.TextProperty()
-
-class MedicationHistory(grumble.Model):
-    timestamp = grumble.DateProperty(auto_now_add = True)
-    medication = grumble.ReferenceProperty(Medication)
-    dose = grumble.TextProperty()
-    experiences = grumble.TextProperty()
-

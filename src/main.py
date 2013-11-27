@@ -19,7 +19,7 @@ if __name__ != '__main__':
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/logging.json'))
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/model.json'))
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/smtp.json'))
-    autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/sweattrails.json'))
+    autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/sweattrails.comp'))
 
 import grit
 app = grit.app

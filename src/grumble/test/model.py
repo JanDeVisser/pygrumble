@@ -30,6 +30,7 @@ class Person(grumble.Model):
     can_drive = CanDriveProperty()
     
 print Person.can_drive.transient
+print Person.schema()
 
 def test():
     keys = []

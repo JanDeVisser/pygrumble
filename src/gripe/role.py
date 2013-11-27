@@ -116,12 +116,12 @@ class AbstractRole(HasRoles):
 class Role(AbstractRole):
     _idattr = "_role"
 
-    def __init__(self, role):
+    def __init__(self, role, roledef):
         #self.add_role(Role(role.role, role.has_roles, role.urls))
-        self.__id__(role.role)
-        self.label(role.label)
-        self._roles = role.has_roles
-        self.urls(role.urls if role.urls is not None else {})
+        self.__id__(role)
+        self.label(roledef.label if "label" in roledef else role)
+        self._roles = roledef.has_roles if "has_roles" in roledef else []
+        self.urls(roledef.urls if roledef.urls is not None else {})
 
     def rolename(self):
         """
@@ -146,7 +146,7 @@ class RoleManager(object):
     def initialize(self):
         if gripe.Config.app and "roles" in gripe.Config.app:
             for role in gripe.Config.app.roles:
-                self.add_role(Role(role))
+                self.add_role(Role(role, gripe.Config.app.roles[role]))
         else:
             logger.warn("No roles defined in app configuration")
             
