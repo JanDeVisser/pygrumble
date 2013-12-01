@@ -2,7 +2,8 @@
     "author": "Jan de Visser",
     "version": "1.0",
     "mounts": [
-        { "path": "/profile", "app": "sweattrails.app", "roles": [ "user" ]}
+        { "path": "/profile", "app": "sweattrails.app", "roles": [ "user" ]},
+        { "path": "/weight", "app": "sweattrails.app", "roles": [ "user" ]}
     ],
     "roles": {
         "athlete": {

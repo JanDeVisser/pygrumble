@@ -81,30 +81,40 @@ com.sweattrails.api.GeocodeField = function(fld, elem) {
     this.size = elem.getAttribute("size") || 20;
 };
 
-com.sweattrails.api.GeocodeField.prototype.renderMap = function(value) {
-    loadGMaps({
-        field: this,
-        value: value,
-        run: function() {
-            if (this.value) {
-                this.field.geopt = this.value;
-                this.field.latlng = obj_to_latlng(this.value);
-                if (this.field.map) {
-                    this.field.map.setCenter(this.field.latlng);
-                } else {
-                    this.field.mapdiv.style.width = this.field.width;
-                    this.field.mapdiv.style.height = this.field.height;
-                    var mapOptions = {
-                        zoom: 16,
-                        center: this.field.latlng,
-                        mapTypeId: google.maps.MapTypeId.ROADMAP
-                    };
-                    this.field.map = new google.maps.Map(this.field.mapdiv, mapOptions);
-                }
-                var marker = new google.maps.Marker({ map: this.field.map, position: this.field.latlng });
+com.sweattrails.api.GeocodeField.prototype.renderMap = function(value, async) {
+    if (async) {
+        loadGMaps({
+            field: this,
+            value: value,
+            run: function() {
+                this.field.renderMap(this.value, false);
             }
+        });
+    } else {
+        if (value) {
+            this.geopt = value;
+            this.latlng = obj_to_latlng(value);
+            if (!this.mapdiv) {
+                this.mapdiv = document.createElement("div");
+                this.mapdiv.id = "mapedit-" + this.field.id;
+                this.mapdiv.style.width = this.width;
+                this.mapdiv.style.height = this.height;
+            }
+            this.view.appendChild(this.mapdiv);
+            this.mapdiv.hidden = false;
+            if (this.map) {
+                this.map.setCenter(this.latlng);
+            } else {
+                var mapOptions = {
+                    zoom: 16,
+                    center: this.latlng,
+                    mapTypeId: google.maps.MapTypeId.ROADMAP
+                };
+                this.map = new google.maps.Map(this.mapdiv, mapOptions);
+            }
+            var marker = new google.maps.Marker({ map: this.map, position: this.latlng });
         }
-    });    
+    }
 };
 
 com.sweattrails.api.GeocodeField.prototype.lookup = function(value) {
@@ -115,7 +125,7 @@ com.sweattrails.api.GeocodeField.prototype.lookup = function(value) {
             if (status === google.maps.GeocoderStatus.OK) {
                 var latlng = results[0].geometry.location;
                 var obj = latlng_to_obj(latlng);
-                this.field.renderMap(obj);
+                this.field.renderMap(obj, false);
             }            
         },        
         run: function() {
@@ -125,11 +135,10 @@ com.sweattrails.api.GeocodeField.prototype.lookup = function(value) {
 };
 
 com.sweattrails.api.GeocodeField.prototype.renderEdit = function(value) {
-    var ret = document.createElement("div");
-    ret.id = "edit-geocode-" + this.field.id;
-    this.map = null;
+    this.view = document.createElement("div");
+    this.view.id = "edit-geocode-" + this.field.id;
     var span = document.createElement("span");
-    ret.appendChild(span);
+    this.view.appendChild(span);
     this.search = document.createElement("input");
     this.search.id = "search-" + this.field.id;
     this.search.type = "search";
@@ -144,13 +153,10 @@ com.sweattrails.api.GeocodeField.prototype.renderEdit = function(value) {
         this.field.lookup(this.field.search.value);
     };
     span.appendChild(this.button);
-    this.mapdiv = document.createElement("div");
-    this.mapdiv.id = "mapedit-" + this.field.id;
-    ret.appendChild(this.mapdiv);
     if (value) {
-        this.renderMap(value);
+        this.renderMap(value, true);
     }
-    return ret;
+    return this.view;
 };
 
 com.sweattrails.api.GeocodeField.prototype.setValueFromControl = function(bridge, object) {
@@ -159,15 +165,29 @@ com.sweattrails.api.GeocodeField.prototype.setValueFromControl = function(bridge
 
 
 com.sweattrails.api.GeocodeField.prototype.renderView = function(value) {
-    this.map = null;
-    this.mapdiv = document.createElement("div");
-    this.mapdiv.id = "mapview-" + this.field.id;
+    this.view = document.createElement("div");
+    this.view.id = "view-geocode-" + this.field.id;
     if (value) {
-        this.renderMap(value);
+        this.renderMap(value, true);
     } else {
-        this.mapdiv.innerHTML = /* "&#160;"; */ "<i><small>... Location not set ...</small></i>";
+        this.view.innerHTML = /* "&#160;"; */ "<i><small>... Location not set ...</small></i>";
     }
-    return this.mapdiv;
+    return this.view;
+};
+
+com.sweattrails.api.GeocodeField.prototype.erase = function() {
+    if (this.mapdiv) {
+        this.mapdiv.hidden = true;
+        document.body.appendChild(this.mapdiv);
+    }
+};
+
+com.sweattrails.api.GeocodeField.prototype.clear = function() {
+    this.setValue("");
+};
+
+com.sweattrails.api.GeocodeField.prototype.setValue = function(value) {
+    console.log("setValue not implemented for GeocodeField...");
 };
 
 com.sweattrails.api.internal.fieldtypes.geocode = com.sweattrails.api.GeocodeField;

@@ -12,5 +12,14 @@ app = webapp2.WSGIApplication([
                 "key": '__userobjid',
                 "template": "/sweattrails/profile/view"
             }
-        )
+        ),
+        webapp2.Route(
+            r'/weight',
+            handler = "grit.handlers.PageHandler", name = 'weight-mgmt',
+            defaults = {
+                "kind": "grizzle.user",
+                "key": '__userobjid',
+                "template": "/sweattrails/weightmgmt/view"
+            }
+        ),
     ], debug = True)

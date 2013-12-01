@@ -113,14 +113,16 @@ class User(grumble.Model, gripe.auth.AbstractUser):
         if "include_parts" in flags:
             for (k, part) in self._parts.items():
                 if part:
-                    d[k] = part.to_dict(**flags)
+                    d["_" + k] = part.to_dict(**flags)
         return d
 
     def on_update(self, d, **flags):
         for (k, part) in self._parts.items():
-            if (k in d) and part:
-                p = d[k]
-                part.update(p, **flags)
+            key = "_" + k
+            if (key in d) and part:
+                p = d[key]
+                if isinstance(p, dict):
+                    part.update(p, **flags)
 
     def get_part(self, part):
         self._load()

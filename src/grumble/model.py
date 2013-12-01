@@ -59,17 +59,17 @@ class Model():
                 c = gripe.resolve(cls.customizer)
                 if c:
                     c(cls)
-            cls._properties_by_seqnr = [ p for p in cls._allproperties.values() ]
-            cls._properties_by_seqnr.sort(lambda p1, p2: p1.seq_nr - p2.seq_nr)
-            cls._sealed = True
-            if not cls._abstract:
-                cls.modelmanager.reconcile()
             if hasattr(cls, "key_prop"):
                 cls._key_propdef = getattr(cls, cls.key_prop)
                 cls._key_scoped = cls._key_propdef.scoped
             else:
                 cls._key_propdef = None
                 cls._key_scoped = False
+            cls._properties_by_seqnr = [ p for p in cls._allproperties.values() ]
+            cls._properties_by_seqnr.sort(lambda p1, p2: p1.seq_nr - p2.seq_nr)
+            cls._sealed = True
+            if not cls._abstract:
+                cls.modelmanager.reconcile()
 
     def __repr__(self):
         return str(self.key())

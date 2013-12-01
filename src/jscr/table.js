@@ -278,6 +278,7 @@ com.sweattrails.api.Table.prototype.openForm = function(object) {
         this.data = object;
         this.form.popup((!object) ? com.sweattrails.api.MODE_NEW : com.sweattrails.api.MODE_VIEW);
     }
+    return true;
 };
 
 com.sweattrails.api.Table.prototype.reset = function(data) {
@@ -290,9 +291,16 @@ com.sweattrails.api.Table.prototype.getProxyData = function() {
     return this.data;
 };
 
-com.sweattrails.api.Table.prototype.submitProxyData = function(data) {
-    this.datasource.object = data;
+com.sweattrails.api.Table.prototype.submitProxyData = function() {
     this.datasource.submit();
+};
+
+com.sweattrails.api.Table.prototype.pushProxyState = function(state) {
+    this.datasource.pushState(state);
+};
+
+com.sweattrails.api.Table.prototype.popProxyState = function() {
+    this.datasource.popState();
 };
 
 com.sweattrails.api.Table.prototype.onDataSubmitted = function() {

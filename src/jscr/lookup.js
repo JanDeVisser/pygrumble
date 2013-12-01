@@ -145,4 +145,13 @@ com.sweattrails.api.LookupField.prototype.renderView = function(value) {
     return this.span;
 };
 
+com.sweattrails.api.LookupField.prototype.clear = function() {
+    this.setValue("");
+};
+
+com.sweattrails.api.LookupField.prototype.setValue = function(value) {
+    this.value = value;
+    this.populateSelect();
+};
+
 com.sweattrails.api.internal.fieldtypes.lookup = com.sweattrails.api.LookupField;

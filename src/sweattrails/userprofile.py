@@ -24,7 +24,6 @@ class UserProfile(grizzle.UserPart):
 class WeightMgmt(grizzle.UserPart):
     pass
 
-
 class BMIProperty(grumble.FloatProperty):
     transient = True
     def getvalue(self, instance):
@@ -36,18 +35,26 @@ class BMIProperty(grumble.FloatProperty):
     def setvalue(self, instance, value):
         pass
 
-class History(grumble.Model):
+class WeightHistory(grumble.Model):
     snapshotdate = grumble.DateProperty(auto_now_add=True)
     weight = grumble.FloatProperty(default = 0.0)		# in kg
     bmi = BMIProperty()
     bfPercentage = grumble.FloatProperty(default = 0.0)
     waist = grumble.FloatProperty(default = 0.0)		# in cm
-    bpHigh = grumble.IntegerProperty(default = 120)
-    bpLow = grumble.IntegerProperty(default = 80)
-    temperature = grumble.FloatProperty(default = 37.0)
-    sleep = grumble.FloatProperty(default = 0.0)
-    health = grumble.StringProperty(default = '')
     
+class CardioVascularHistory(grumble.Model):
+    snapshotdate = grumble.DateProperty(auto_now_add=True)
+    bpHigh = grumble.IntegerProperty(default = 120, verbose_name = "Systolic (high) Blood Pressure")
+    bpLow = grumble.IntegerProperty(default = 80, verbose_name = "Diastolic (low) Blood Pressure")
+    resting_hr = grumble.IntegerProperty(default = 60, verbose_name = "Resting Heartrate")
+
+class WellnessDiary(grumble.Model):
+    snapshotdate = grumble.DateProperty(auto_now_add=True)
+    mood = grumble.IntegerProperty(minvalue = 1, maxvalue = 10)
+    sleep_time = grumble.FloatProperty(default = 0.0, verbose_name = "Sleep Time")
+    sleep_q = grumble.IntegerProperty(minvalue = 1, maxvalue = 10, verbose_name = "Sleep Quality")
+    health = grumble.TextProperty(multiline = True, verbose_name = "Health Notes")
+        
 class SeizureMgmt(grizzle.UserPart):
     markers = grumble.ListProperty(verbose_name = "Markers")
     triggers = grumble.ListProperty(verbose_name = "Triggers")

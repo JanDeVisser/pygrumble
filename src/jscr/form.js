@@ -131,9 +131,8 @@ com.sweattrails.api.Form.prototype.newTR = function() {
 };
 
 com.sweattrails.api.Form.prototype.render = function() {
-    console.log("Form[" + this.id + "].render() " + this.container.className);
+    $$.log(this, "render() class: " + this.container.className);
     if (!this.container || !this.container.hidden || (this.container.className === "tabpage")) {
-        console.log("Container visible");
         if ((arguments.length > 0) && arguments[0]) {
             this.mode = arguments[0];
         } else if (this.init_mode) {
@@ -150,7 +149,7 @@ com.sweattrails.api.Form.prototype.render = function() {
                 obj = this.initialize();
             }
             this.datasource.setObject(obj);
-            this.renderData(this.datasource.object);
+            this.renderData(this.datasource.getObject());
         }
     }
 };
@@ -158,6 +157,13 @@ com.sweattrails.api.Form.prototype.render = function() {
 com.sweattrails.api.Form.prototype.renderData = function(obj) {
     this.header.erase();
     this.footer.erase();
+    var ix;
+    if (this.renderedFields) {
+        for (ix in this.renderedFields) {
+            this.renderedFields[ix].erase();
+        }
+    }
+    this.renderedFields = [];
     if (this.form) {
     	this.container.removeChild(this.form);
     	this.form = null;
@@ -168,7 +174,6 @@ com.sweattrails.api.Form.prototype.renderData = function(obj) {
         this.table = null;
     }
     this.header.render();
-    this.renderedFields = [];
     if (this.type === "form") {
         this.form = document.createElement("form");
         this.form.name = "form-" + this.id;
@@ -176,7 +181,7 @@ com.sweattrails.api.Form.prototype.renderData = function(obj) {
         this.form.action = this.action;
         this.container.appendChild(this.form);
     }
-    for (var ix in this.fields) {
+    for (ix in this.fields) {
     	var f = this.fields[ix];
         f.element = null;
         if (f.render(this.mode, obj)) {
@@ -191,14 +196,15 @@ com.sweattrails.api.Form.prototype.applyData = function() {
         this.datasource.reset();
         this.datasource.next();
     }
+    var obj = this.datasource.getObject();
     for (var fix in this.renderedFields) {
         var f = this.renderedFields[fix];
         if (!f.readonly) {
-            f.setValue(this.datasource.object);
+            f.assignValueToObject(obj);
         }
     }
     if (typeof(this.prepare) === "function") {
-        this.prepare(this.datasource.object);
+        this.prepare(obj);
     }
 };
 
@@ -390,6 +396,9 @@ com.sweattrails.api.FormField = function(form, f) {
 	this.modes = f.getAttribute("mode");
 	this.readonly = f.getAttribute("readonly") === "true";
 	this.setType(f.getAttribute("type"), f);
+        
+        // A FormField is mute when it doesn't interact with the data bridge
+        // at all. So it doesn't get any.
         if ((typeof(this.impl.isMute) === "undefined") || !this.impl.isMute()) {
             this.bridge = new com.sweattrails.api.internal.DataBridge();
             var p = f.getAttribute("property");
@@ -432,8 +441,6 @@ com.sweattrails.api.FormField.prototype.setType = function(type, elem) {
             $$.log(this, "  " + t + "==" ? (type === t) : "!=");
         }
         factory = com.sweattrails.api.internal.fieldtypes.text;
-    } else {
-        $$.log(this, "typeof: " + type);
     }
     this.impl = new factory(this, elem);
     this.impl.field = this;
@@ -444,7 +451,7 @@ com.sweattrails.api.FormField.prototype.render = function(mode, object) {
 	return false;
     }
     this.mode = mode;
-    var val = this.getValue(object);
+    var val = this.getValueFromObject(object);
     var elem = null;
     if ((this.mode !== com.sweattrails.api.MODE_VIEW) && !this.readonly) {
         elem = this.impl.renderEdit(val);
@@ -514,6 +521,10 @@ com.sweattrails.api.FormField.prototype.render = function(mode, object) {
     return true;
 };
 
+com.sweattrails.api.FormField.prototype.erase = function() {
+    this.impl.erase && this.impl.erase();
+};
+
 Object.defineProperty(com.sweattrails.api.FormField.prototype, "hidden", {
     get: function() { return this._hidden; },
     set: function(h) {
@@ -533,6 +544,14 @@ com.sweattrails.api.FormField.prototype.validate = function() {
     return this.errors;
 };
 
+com.sweattrails.api.FormField.prototype.clear = function() {
+    this.impl.clear && this.impl.clear();
+};
+
+com.sweattrails.api.FormField.prototype.setValue = function(value) {
+    this.impl.setValue && this.impl.setValue(value);
+};
+
 com.sweattrails.api.FormField.prototype.onValueChange = function() {
     if (this.onchange) {
         var val = this.impl.getValueFromControl();
@@ -540,14 +559,14 @@ com.sweattrails.api.FormField.prototype.onValueChange = function() {
     }
 };
 
-com.sweattrails.api.FormField.prototype.setValue = function(object) {
+com.sweattrails.api.FormField.prototype.assignValueToObject = function(object) {
     $$.log(this, "setValue");
     if (this.bridge) {
         this.impl.setValueFromControl(this.bridge, object);
     }
 };
 
-com.sweattrails.api.FormField.prototype.getValue = function(object) {
+com.sweattrails.api.FormField.prototype.getValueFromObject = function(object) {
     var ret = null;
     if (this.bridge) {
         ret = this.bridge.getValue(object);
@@ -630,6 +649,16 @@ com.sweattrails.api.TextField.prototype.renderView = function(value) {
     return ret;
 };
 
+com.sweattrails.api.TextField.prototype.clear = function() {
+    this.setValue("");
+};
+
+com.sweattrails.api.TextField.prototype.setValue = function(value) {
+    if (this.control) {
+        this.control.value = value;
+    }
+};
+
 /*
  * PasswordField -
  */
@@ -669,6 +698,19 @@ com.sweattrails.api.PasswordField.prototype.validate = function() {
     }
 };
 
+com.sweattrails.api.PasswordField.prototype.clear = function() {
+    this.setValue("");
+};
+
+com.sweattrails.api.PasswordField.prototype.setValue = function(value) {
+    if (this.control) {
+        this.control.value = value;
+        if (this.confirm) {
+            this.check.value = value;
+        }
+    }
+};
+
 com.sweattrails.api.PasswordField.prototype.setValueFromControl = function(bridge, object) {
     this.value = this.control.value;
     bridge.setValue(object, this.control.value);
@@ -696,7 +738,6 @@ com.sweattrails.api.WeightField.prototype.renderEdit = function(value) {
         w = weight(parseFloat(value), native_unit, false);
     }
     this.control.value = w || "";
-    this.control.value = value || "";
     this.control.name = this.field.id;
     this.control.id = this.field.id;
     this.control.type = "text";
@@ -707,6 +748,7 @@ com.sweattrails.api.WeightField.prototype.renderEdit = function(value) {
     this.unitSelector = document.createElement("select");
     this.unitSelector.name = this.field.id + "-units";
     this.unitSelector.id = this.unitSelector.name;
+    this.nativeUnitIndex = (native_unit === "m") ? 0 : 1;
     var option = document.createElement("option");
     option.selected = (native_unit === "m");
     option.value = "1.0";
@@ -737,6 +779,26 @@ com.sweattrails.api.WeightField.prototype.renderView = function(value) {
     return ret;
 };
 
+com.sweattrails.api.WeightField.prototype.clear = function() {
+    if (this.control) {
+        this.control.value = "";
+    }
+    if (this.unitSelector) {
+        this.unitSelector.selectedIndex = this.nativeUnitIndex;
+    }
+};
+
+com.sweattrails.api.WeightField.prototype.setValue = function(value) {
+    // FIXME: This assumes the value set is in the user's native unit. This is 
+    // probably wrong. It's probably in the system unit.
+    if (this.control) {
+        this.control.value = value;
+    }
+    if (this.unitSelector) {
+        this.unitSelector.selectedIndex = this.nativeUnitIndex;
+    }
+};
+
 /*
  * LengthField -
  */
@@ -760,6 +822,7 @@ com.sweattrails.api.LengthField.prototype.renderEdit = function(value) {
     this.control.size = 4; // WAG
     this.control.onchange = this.field.onValueChange.bind(this.field);
     this.span.appendChild(this.control);
+    this.nativeUnitIndex = (native_unit === "m") ? 0 : 1;
     this.unitSelector = document.createElement("select");
     this.unitSelector.name = this.field.id + "-units";
     this.unitSelector.id = this.unitSelector.name;
@@ -806,6 +869,26 @@ com.sweattrails.api.LengthField.prototype.renderView = function(value) {
     return ret;
 };
 
+com.sweattrails.api.LengthField.prototype.clear = function() {
+    if (this.control) {
+        this.control.value = "";
+    }
+    if (this.unitSelector) {
+        this.unitSelector.selectedIndex = this.nativeUnitIndex;
+    }
+};
+
+com.sweattrails.api.LengthField.prototype.setValue = function(value) {
+    // FIXME: This assumes the value set is in the user's native unit. This is 
+    // probably wrong. It's probably in the system unit.
+    if (this.control) {
+        this.control.value = value;
+    }
+    if (this.unitSelector) {
+        this.unitSelector.selectedIndex = this.nativeUnitIndex;
+    }
+};
+
 /*
  * CheckBoxField -
  */
@@ -842,6 +925,16 @@ com.sweattrails.api.CheckBoxField.prototype.renderView = function(value) {
 	ret.innerHTML = "&#160;";
     }
     return ret;
+};
+
+com.sweattrails.api.CheckBoxField.prototype.clear = function() {
+    this.setValue(false)
+};
+
+com.sweattrails.api.CheckBoxField.prototype.setValue = function(value) {
+    if (this.control) {
+        this.control.checked = value;
+    }
 };
 
 /*
@@ -888,6 +981,16 @@ com.sweattrails.api.DateTimeField.prototype.renderView = function(value) {
         ret.innerHTML = "&#160;";
     }
     return ret;
+};
+
+com.sweattrails.api.DateTimeField.prototype.clear = function() {
+    this.setValue(null);
+};
+
+com.sweattrails.api.DateTimeField.prototype.setValue = function(value) {
+    if (this.control) {
+        this.control.valueAsDate = value;
+    }
 };
 
 /*
@@ -943,6 +1046,17 @@ com.sweattrails.api.FileField.prototype.renderView = function(value) {
     var ret = document.createElement("span");
     ret.innerHTML = "<i>... File ...</i>";
     return ret;
+};
+
+com.sweattrails.api.FileField.prototype.clear = function() {
+    this.setValue(null);
+};
+
+com.sweattrails.api.FileField.prototype.setValue = function(value) {
+    // FIXME..
+    if (this.control) {
+        console.log(" FileField.setValue not implemented...");
+    }
 };
 
 /*

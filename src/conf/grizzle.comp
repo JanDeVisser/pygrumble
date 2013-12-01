@@ -9,9 +9,15 @@
         "userparts": {
             "sweattrails.userprofile.UserProfile": { "default": true, "configurable": false },
             "sweattrails.config.ActivityProfile": { "default": false, "configurable": false },
-            "sweattrails.userprofile.WeightMgmt": { "default": true, "configurable": true, "label": "Weight Tracking" },
-            "sweattrails.userprofile.SeizureMgmt": {
+            "sweattrails.userprofile.WeightMgmt": {
                 "default": true, "configurable": true, 
+                "label": "Weight Tracking",
+                "urls": [ 
+                    { "id": "weighttracking", "label": "Weight Tracking", "url": "/weight", "level": 10 } 
+                ]
+            },
+            "sweattrails.userprofile.SeizureMgmt": {
+                "default": false, "configurable": true, 
                 "label": "Seizure Tracking",
                 "urls": [ 
                     { "id": "medication", "label": "Medications", "url": "/medication", "level": 10 } 

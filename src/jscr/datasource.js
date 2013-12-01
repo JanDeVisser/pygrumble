@@ -189,8 +189,10 @@ com.sweattrails.api.internal.DataSource.prototype.processData = function() {
     	this.view = [];
     }
     this.runCallbacks("onData", [this.data]);
-    console.log("*** this.data:");
-    ST.dump(this.data);
+    if (this.debug) {
+        console.log("*** this.data:");
+        ST.dump(this.data);
+    }
     if (!this.data || (Array.isArray(this.data) && !this.data.length)) {
         this.runCallbacks("noData", []);
     } else {
@@ -231,6 +233,7 @@ com.sweattrails.api.internal.DataSource.prototype.reset = function() {
     }
     this.ix = 0;
     this.object = null;
+    this.key = null;
 };
 
 com.sweattrails.api.internal.DataSource.prototype.execute = function() {
@@ -244,6 +247,40 @@ com.sweattrails.api.internal.DataSource.prototype.getObject = function() {
 
 com.sweattrails.api.internal.DataSource.prototype.setObject = function(obj) {
     this.object = obj || {};
+    this.key = this.object.key || null;
+};
+
+com.sweattrails.api.internal.DataSource.prototype.getState = function() {
+    var state = { object: this.object, key: this.key, ix: this.ix, data: this.data };
+    if (typeof(this.extendState) === "function") {
+        this.extendState(state)
+    }
+    return state;
+};
+
+com.sweattrails.api.internal.DataSource.prototype.setState = function(state) {
+    this.object = state.object;
+    this.key = state.key;
+    this.ix = state.ix;
+    this.data = state.data;
+    if (typeof(this.restoreState) === "function") {
+        this.restoreState(state)
+    }
+};
+
+com.sweattrails.api.internal.DataSource.prototype.pushState = function(state) {
+    if (typeof(this.states) === "undefined") {
+    	this.states = [];
+    }
+    this.states.push(this.getState());
+    this.setState(state);
+};
+
+com.sweattrails.api.internal.DataSource.prototype.popState = function() {
+    if ((typeof(this.states) === "undefined") || (this.states.length === 0)) {
+    	throw "Cannot pop from empty state stack"
+    }
+    return this.states.pop();
 };
 
 com.sweattrails.api.internal.DataSource.prototype.createObjectFrom = function(context) {
@@ -449,7 +486,7 @@ com.sweattrails.api.JSONDataSourceBuilder.prototype.build = function(elem) {
     for (ix = 0; ix < sort.length; ix++) {
     	var s = sort[ix];
         var o = s.getAttribute("order");
-        ds.addSort(s.getAttribute("name"), o ? o.startsWith("asc") : true);
+        ds.addSort(s.getAttribute("name"), o ? (o.indexOf("asc") === 0) : true);
     }
     var flags = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "flag");
     for (ix = 0; ix < flags.length; ix++) {
@@ -600,9 +637,7 @@ com.sweattrails.api.NullDataSourceBuilder.prototype.build = function(elem) {
  * methods.
  */
 com.sweattrails.api.ProxyDataSource = function(proxy) {
-    this.view = [];
     this.proxy = proxy;
-    this.data = null;
     this.reset();
     return this;
 };
@@ -613,11 +648,13 @@ com.sweattrails.api.ProxyDataSource.prototype.reset = function() {
     this.data = this.proxy.getProxyData();
     this.ix = 0;
     this.object = null;
+    this.key = null;
 };
 
 com.sweattrails.api.ProxyDataSource.prototype.submit = function() {
-    this.data = null;
-    this.proxy.submitProxyData && this.proxy.submitProxyData(this.object);
+    this.proxy.pushProxyState(this.getState());
+    this.proxy.submitProxyData && this.proxy.submitProxyData();
+    this.proxy.popProxyState();
 };
 
 /**
