@@ -599,7 +599,13 @@ com.sweattrails.api.StaticDataSourceBuilder.prototype.build = function(elem, val
     for (var ix = 0; ix < values.length; ix++) {
     	var v = values[ix];
         var val = v.getAttribute("text");
+        if (!val) {
+            val = v.nodeValue;
+        }
         var key = v.getAttribute("key");
+        if (!key) {
+            key = val;
+        }
         ds.value(key, val);
     }
     return ds;
@@ -681,6 +687,9 @@ com.sweattrails.api.DataSourceBuilder.prototype.build = function(elem, def_ds) {
     	ret = this.custombuilder.build(elem);
     } else {
         var values = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "value");
+        if (values.length === 0) {
+            values = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "choices");
+        }
         if (values.length > 0) {
             ret = this.staticbuilder.build(elem, values);
         } else {

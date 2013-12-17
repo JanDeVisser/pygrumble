@@ -12,9 +12,9 @@ import grumble.geopt
 class UserProfile(grizzle.UserPart):
     country = grumble.StringProperty(default = "CA")
     dob = grumble.DateProperty()
-    gender = grumble.StringProperty(choices = set(['male', 'female', 'other']), default = 'other')
+    gender = grumble.StringProperty(choices = ['male', 'female', 'other'], default = 'other')
     height = grumble.IntegerProperty(default = 170)	# in cm
-    units = grumble.StringProperty(choices = set(['metric', 'imperial']), default = 'metric')
+    units = grumble.StringProperty(choices = ['metric', 'imperial'], default = 'metric')
     location = grumble.geopt.GeoPtProperty()
     whoami = grumble.StringProperty(multiline=True)
     regkey = grumble.StringProperty()

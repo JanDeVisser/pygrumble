@@ -232,7 +232,7 @@ class Model():
         return self._key_name
 
     def label(self):
-        return self.label_prop if hasattr(self, "label_prop") else str(self)
+        return getattr(self, self.label_prop) if hasattr(self, "label_prop") else str(self)
 
     def parent(self):
         """

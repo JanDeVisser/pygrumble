@@ -1,4 +1,4 @@
-/**
+  /**
  * Form -
  */
 
@@ -314,7 +314,27 @@ com.sweattrails.api.FormBuilder.prototype.process = function(f) {
     $$.log(this, "Found form " + id);
     var ds = com.sweattrails.api.dataSourceBuilder.build(f);
     var form = new com.sweattrails.api.Form(id, f.parentNode, ds);
-    this.buildForm(form, f);
+    var kind = elem.getAttribute("kind");
+    if (kind) {
+        this.buildFormForKind(form, kind, elem);
+    } else {
+        this.buildForm(form, f);
+    }
+};
+
+com.sweattrails.api.FormBuilder.prototype.buildFormForKind = function(form, kind, elem) {
+    this.buildForm(form, elem);
+    form.schemads = new com.sweattrails.api.JSONDataSource("/schema/" + kind);
+    form.schemads.async = false;
+    form.schemads.form = form;
+    form.schemads.renderData = function(obj) {
+        for (var ix in obj.properties) {
+            var p = obj.properties[ix];
+            var fld = new com.sweattrails.api.FormField(this.form, p.name);
+            fld.build(getDOMElement(p));            
+        }
+    };
+    form.schemads.execute();
 };
 
 com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
@@ -366,7 +386,9 @@ com.sweattrails.api.FormBuilder.prototype.buildForm = function(form, elem) {
     }
     var fields = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "field");
     for (var j = 0; j < fields.length; j++) {
-        new com.sweattrails.api.FormField(form, fields[j]);
+        var fld = new com.sweattrails.api.FormField(form, 
+            fields[j].getAttribute("id") || fields[j].getAttribute("property"));
+        fld.build(fields[j]);
     }
     form.footer.build(elem);
     var footer = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "footer");
@@ -387,53 +409,66 @@ new com.sweattrails.api.FormBuilder();
 
 com.sweattrails.api.internal.fieldtypes = {};
 
-com.sweattrails.api.FormField = function(form, f) {
+com.sweattrails.api.FormField = function(form, id) {
+    this.type = "formfield";
+    this.id = id;
+    $$.register(this);
     this.hidden = false;
-    if (f) {
-        this.type = "formfield";
-	this.id = f.getAttribute("id") || f.getAttribute("property");
-	$$.register(this);
-	this.modes = f.getAttribute("mode");
-	this.readonly = f.getAttribute("readonly") === "true";
-	this.setType(f.getAttribute("type"), f);
-        
-        // A FormField is mute when it doesn't interact with the data bridge
-        // at all. So it doesn't get any.
-        if ((typeof(this.impl.isMute) === "undefined") || !this.impl.isMute()) {
-            this.bridge = new com.sweattrails.api.internal.DataBridge();
-            var p = f.getAttribute("property");
-            if (p) {
-                this.bridge.get = p;
-            } else if (f.getAttribute("get")) {
-                this.bridge.get = getfunc(f.getAttribute("get"));
-                this.bridge.set = f.getAttribute("set");
-            } else {
-                this.bridge.get = this.id;
-            }
-        } else {
-            this.bridge = null;
-        }
-	var onchange = f.getAttribute("onchange");
-	if (onchange) {
-	    this.onchange = getfunc(onchange);
-	}
-	if (f.getAttribute("validate")) {
-	    this.validator = getfunc(f.getAttribute("validate"));
-	}
-	this.label = f.getAttribute("label");
-	this.required = f.getAttribute("required") === "true";
-	if (f.getAttribute("value")) {
-            var v = f.getAttribute("value");
-            this.defval = getfunc(v) || v;
-        }
-    }
     form.addField(this);
+};
+
+com.sweattrails.api.FormField.prototype.build = function(f) {
+    this.modes = f.getAttribute("mode");
+    this.readonly = f.getAttribute("readonly") === "true";
+    this.setType(f);
+
+    // A FormField is mute when it doesn't interact with the data bridge
+    // at all. So it doesn't get any.
+    if ((typeof(this.impl.isMute) === "undefined") || !this.impl.isMute()) {
+        this.bridge = new com.sweattrails.api.internal.DataBridge();
+        var p = f.getAttribute("property");
+        if (p) {
+            this.bridge.get = p;
+        } else if (f.getAttribute("get")) {
+            this.bridge.get = getfunc(f.getAttribute("get"));
+            this.bridge.set = f.getAttribute("set");
+        } else {
+            this.bridge.get = this.id;
+        }
+    } else {
+        this.bridge = null;
+    }
+    var onchange = f.getAttribute("onchange");
+    if (onchange) {
+        this.onchange = getfunc(onchange);
+    }
+    if (f.getAttribute("validate")) {
+        this.validator = getfunc(f.getAttribute("validate"));
+    }
+    this.label = f.getAttribute("label") || f.getAttribute("verbose_name");
+    this.required = f.getAttribute("required") === "true";
+    var v = f.getAttribute("value") || f.getAttribute("default");
+    if (v) {
+        this.defval = getfunc(v) || v;
+    }
+    this.placeholder = f.getAttribute("placeholder");
     return this;
 };
 
-com.sweattrails.api.FormField.prototype.setType = function(type, elem) {
-    type = type || "text";
-    var factory = com.sweattrails.api.internal.fieldtypes[type];
+com.sweattrails.api.FormField.prototype.setType = function(elem) {
+    var type = f.getAttribute("type");
+    var datatype = f.getAttribute("datatype");
+    var factory = null;
+    if (hasChildWithTagNameNS(elem, com.sweattrails.api.xmlns, "value") || hasChildWithTagNameNS(elem, com.sweattrails.api.xmlns, "choices")) {
+        factory = com.sweattrails.api.LookupField;
+    } else {
+        if (type) {
+            factory = com.sweattrails.api.internal.fieldtypes[type];
+        }
+        if (!factory && datatype) {
+            factory = com.sweattrails.api.internal.fieldtypes[datatype];
+        }
+    }
     if (!factory) {
         $$.log(this, "TYPE " + type + " NOT REGISTERED!");
         $$.log(this, "REGISTRY:");
@@ -621,6 +656,7 @@ com.sweattrails.api.TextField = function(fld, elem) {
     this.field = fld;
     this.size = elem.getAttribute("size");
     this.maxlength = elem.getAttribute("maxlength");
+    this.regexp = elem.getAttribute("regexp");
 };
 
 com.sweattrails.api.TextField.prototype.renderEdit = function(value) {
@@ -635,6 +671,11 @@ com.sweattrails.api.TextField.prototype.renderEdit = function(value) {
     if (this.maxlength) {
         this.control.maxLength = this.maxlength;
     }
+    if (this.regexp) {
+        this.control.pattern = "/" + this.regexp + "/";
+    }
+    this.control.placeholder = this.field.placeholder;
+    this.control.required = this.field.required;
     this.control.onchange = this.field.onValueChange.bind(this.field);
     return this.control;
 };
@@ -1137,15 +1178,29 @@ com.sweattrails.api.IconField.prototype.onDataError = function() {
 };
 
 com.sweattrails.api.internal.fieldtypes.text = com.sweattrails.api.TextField;
+com.sweattrails.api.internal.fieldtypes.TextProperty = com.sweattrails.api.TextField;
+com.sweattrails.api.internal.fieldtypes.StringProperty = com.sweattrails.api.TextField;
+com.sweattrails.api.internal.fieldtypes.LinkProperty = com.sweattrails.api.TextField;
 com.sweattrails.api.internal.fieldtypes.title = com.sweattrails.api.TitleField;
-com.sweattrails.api.internal.fieldtypes.text = com.sweattrails.api.TextField;
 com.sweattrails.api.internal.fieldtypes.password = com.sweattrails.api.PasswordField;
+com.sweattrails.api.internal.fieldtypes.PasswordProperty = com.sweattrails.api.TextField;
+com.sweattrails.api.internal.fieldtypes.integer = com.sweattrails.api.IntField;
+com.sweattrails.api.internal.fieldtypes.integer = com.sweattrails.api.IntField;
 com.sweattrails.api.internal.fieldtypes.weight = com.sweattrails.api.WeightField;
 com.sweattrails.api.internal.fieldtypes.length = com.sweattrails.api.LengthField;
+
 com.sweattrails.api.internal.fieldtypes.checkbox = com.sweattrails.api.CheckBoxField;
+com.sweattrails.api.internal.fieldtypes.boolean = com.sweattrails.api.CheckBoxField;
+com.sweattrails.api.internal.fieldtypes.bool = com.sweattrails.api.CheckBoxField;
+com.sweattrails.api.internal.fieldtypes.BooleanProperty = com.sweattrails.api.CheckBoxField;
+
 com.sweattrails.api.internal.fieldtypes.date = com.sweattrails.api.DateField;
+com.sweattrails.api.internal.fieldtypes.DateProperty = com.sweattrails.api.DateField;
 com.sweattrails.api.internal.fieldtypes.datetime = com.sweattrails.api.DateTimeField;
+com.sweattrails.api.internal.fieldtypes.DateTimeProperty = com.sweattrails.api.DateTimeField;
 com.sweattrails.api.internal.fieldtypes.time = com.sweattrails.api.TimeField;
+com.sweattrails.api.internal.fieldtypes.TimeProperty = com.sweattrails.api.TimeField;
+
 com.sweattrails.api.internal.fieldtypes.file = com.sweattrails.api.FileField;
 com.sweattrails.api.internal.fieldtypes.icon = com.sweattrails.api.IconField;
 com.sweattrails.api.internal.fieldtypes.geocode = com.sweattrails.api.GeocodeField;

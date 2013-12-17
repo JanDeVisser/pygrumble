@@ -428,13 +428,25 @@ function getfunc(func, ns) {
 
 function getChildrenByTagNameNS(elem, ns, tagname) {
     var ret = [];
-    for (var ix = 0; ix < elem.childNodes.length; ix++) {
-        var c = elem.childNodes[ix];
+    var nodes = elem.childNodes;
+    for (var ix = 0; ix < nodes.length; ix++) {
+        var c = nodes[ix];
         if ((c.namespaceURI === ns) && (c.localName === tagname)) {
             ret.push(c);
         }
     }
     return ret;
+};
+
+function hasChildWithTagNameNS(elem, ns, tagname) {
+    var nodes = elem.childNodes;
+    for (var ix = 0; ix < nodes.length; ix++) {
+        var c = nodes[ix];
+        if ((c.namespaceURI === ns) && (c.localName === tagname)) {
+            return true;
+        }
+    }
+    return false;
 };
 
 com.sweattrails.api.renderObject = function(elem, content) {
@@ -458,26 +470,43 @@ com.sweattrails.api.internal.DOMElementLike = function(obj, ns, tagname) {
 };
 
 com.sweattrails.api.internal.DOMElementLike.prototype.getAttribute = function(attr) {
-    ret = (attr in this.object) ? this.object[attr] : null;
-    if (["number", "string", "boolean"].indexOf(typeof(ret)) >= 0) {
-        ret = ret.toString();
+    if (typeof(this.object) !== "object") {
+        return null;
     } else {
-        ret = null;
+        ret = (attr in this.object) ? this.object[attr] : null;
+        if (["number", "string", "boolean"].indexOf(typeof(ret)) >= 0) {
+            ret = ret.toString();
+        } else {
+            ret = null;
+        }
+        return ret;
     }
-    return ret;
 };
 
 Object.defineProperty(com.sweattrails.api.internal.DOMElementLike.prototype, "childNodes", {
     get: function() {
         ret = [];
-        for (var c in this.object) {
-            var o = this.object[c];
-            if (typeof(o) === "object") {
+        if (typeof(this.object) === "object") {
+            for (var c in this.object) {
+                var o = this.object[c];
                 o = (Array.isArray(o)) ? o : [o];
                 for (var ix in o) {
-                    ret.append(new com.sweattrails.api.internal.DOMElementLike(o[ix], this._ns, c));
+                    node = new com.sweattrails.api.internal.DOMElementLike(o[ix], this._ns, c);
+                    ret.append(node);
                 }
             }
+        } else {
+            ret.append(this.object.toString());
+        }
+        return ret;
+    }
+});
+
+Object.defineProperty(com.sweattrails.api.internal.DOMElementLike.prototype, "nodeValue", {
+    get: function() {
+        var ret = null;
+        if (typeof(this.object) !== "object") {
+            ret = this.object.toString();
         }
         return ret;
     }

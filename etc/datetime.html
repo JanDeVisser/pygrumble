@@ -54,6 +54,10 @@ and open the template in the editor.
             c.min = 0;
             c.max = 10;
         };
+        
+        configure.text = function(c) {
+            c.required = false;
+        }
 
         td = function(elem, rowspan) {
             if (!rowspan) rowspan = 3;
