@@ -317,10 +317,26 @@ class GeoBox(object):
         if not(self and other):
             return False
         else:
-            return (self.sw().lat <= other.sw().lat and 
+            """
+               /**
+               / * Check if two rectangles collide
+                * x_1, y_1, width_1, and height_1 define the boundaries of the first rectangle
+                * x_2, y_2, width_2, and height_2 define the boundaries of the second rectangle
+                */
+               boolean rectangle_collision(float x_1, float y_1, float width_1, float height_1, float x_2, float y_2, float width_2, float height_2)
+               {
+                 return !(x_1 > x_2+width_2 || x_1+width_1 < x_2 || y_1 > y_2+height_2 || y_1+height_1 < y_2);
+               }
+            """
+            return not(self.sw().lat <= other.sw().lat and 
                     self.sw().lon <= other.sw().lon and
                     self.ne().lat >= other.ne().lat and
                     self.ne().lat >= other.ne().lat)
+                    
+    def span(self):
+        return GeoPt(
+            self.ne().lat - self.sw().lat, 
+            self.ne().lon - self.sw().lon) if self else None
 
     def __repr__(self):
         if self:
@@ -333,6 +349,17 @@ class GeoBox(object):
             return "(%s, %s)" % self.tuple()
         else:
             return ""
+        
+    def __eq__(self, *other):
+        try:
+            box = GeoBox(*other)
+            if self:
+                return ((self.sw() == box.sw()) and (self.ne() == box.ne()) 
+                    if other else False)
+            else:
+                return not(bool(box))
+        except:
+            return False
         
     def __nonzero__(self):
         return bool(self._sw)
