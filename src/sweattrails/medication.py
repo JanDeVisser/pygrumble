@@ -43,7 +43,7 @@ class MedicationHistory(grumble.Model):
 @grudge.OnAdd("confirmed", "activate_user")
 @grudge.OnAdd("user_activated", grudge.Stop())
 @grudge.Process()
-class UserSignup(grumble.Model):
+class MedicationRequest(grumble.Model):
     medication = grumble.TextProperty(is_label = True)
     manufacturer = grumble.TextProperty()
     remarks = grumble.TextProperty()
