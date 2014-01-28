@@ -7,14 +7,11 @@ __date__ = "$16-Nov-2012 10:01:52 PM$"
 import json
 import traceback
 import urllib
-
 import webapp2
 
 import gripe
 import grumble
-
 import grit.requesthandler
-from grit.statichandler import StaticHandler
 
 logger = gripe.get_logger(__name__)
 

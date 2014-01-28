@@ -44,7 +44,8 @@
         { "path": "/login|/logout|/um/.+", "app": "grit.usermgmt.app", "roles": [] },
         { "path": "/image/.+|/css/.+|/jscr/.+", "roles": [] },
         { "path": "/json/.+|/img/.+", "app": "grit.handlers.app", "roles": ["user"]},
-        { "path": "/schema/.+", "app": "grit.handlers.app", "roles": ["user"]}
+        { "path": "/schema/.+", "app": "grit.handlers.app", "roles": ["user"]},
+        { "path": "/test/.+", "roles": [] }
     ],
     "components": [ "grizzle", "sweattrails" ]
 }

@@ -82,7 +82,7 @@ com.sweattrails.api.LookupField.prototype.clear = function() {
 
 com.sweattrails.api.LookupField.prototype.setValue = function(value) {
     this.value = value;
-    this.populateSelect();
+    this.impl.setValue();
 };
 
 com.sweattrails.api.internal.fieldtypes.lookup = com.sweattrails.api.LookupField;
@@ -125,7 +125,8 @@ com.sweattrail.api.internal.lookup.Select.prototype.renderData = function(obj) {
     this.control.appendChild(option);
 };
 
-com.sweattrail.api.internal.lookup.Select.prototype.setValue = function(value) {
+com.sweattrail.api.internal.lookup.Select.prototype.setValue = function() {
+    var value = this.control.value;
     for (var ix = 0; ix < this.control.length; ix++) {
         var option = this.control.options[ix];
         if (option.value === value) {
@@ -134,7 +135,6 @@ com.sweattrail.api.internal.lookup.Select.prototype.setValue = function(value) {
         }
     }
 };
-
 
 com.sweattrail.api.internal.lookup.Select.prototype.getValue = function() {
     return this.control.value;
@@ -175,14 +175,25 @@ com.sweattrail.api.internal.lookup.Radio.prototype.renderData = function(obj) {
     this.radiobuttons.push(option);
 };
 
-com.sweattrail.api.internal.lookup.Select.prototype.getValue = function() {
+com.sweattrail.api.internal.lookup.Radio.prototype.getValue = function() {
     for (ix = 0; ix < this.radiobuttons.length; ix++) {
         var rb = this.radiobuttons[ix];
         if (rb.checked) {
             return rb.value;
         }
-    };
+    }
     return null;
+};
+
+com.sweattrail.api.internal.lookup.Radio.prototype.setValue = function() {
+    var value = this.control.value;
+    for (ix = 0; ix < this.radiobuttons.length; ix++) {
+        var rb = this.radiobuttons[ix];
+        if (rb.value === value) {
+            rb.checked = true;
+            return;
+        }
+    }
 };
 
 /*
@@ -195,8 +206,8 @@ com.sweattrail.api.internal.lookup.DataList = function(lookup, elem) {
 };
 
 com.sweattrail.api.internal.lookup.DataList.prototype.renderEdit = function() {
-    this.control = document.createElement("input");
-    this.control.oninput = this.onInput;
+    this.control = com.sweattrails.api.internal.buildInput("text", this.lookup.field.id, this.lookup.elem, this.lookup.value);
+    this.lookup.setControl(this.control);
 };
 
 com.sweattrail.api.internal.lookup.DataList.prototype.getValue = function() {
