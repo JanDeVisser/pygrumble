@@ -1,0 +1,19 @@
+{
+    "author": "Jan de Visser",
+    "version": "1.0",
+    "postgresql": {
+        "user": {
+            "user_id": "jan",
+            "password": "wbw417"
+        },
+        "admin": {
+            "user_id": "jan",
+            "password": "wbw417"
+        },
+	"host": "localhost",
+        "database": "jan",
+        "schema": "grumble",
+        "wipe_schema": true,
+        "wipe_database": false
+    }
+}

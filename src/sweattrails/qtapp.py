@@ -5,7 +5,12 @@
 from PySide.QtGui import QApplication
 from PySide.QtGui import QMainWindow
 from PySide.QtGui import QTableView
+
+import grumble
+import grumble.qt
 import grumble.geopt
+import sweattrails.config
+import sweattrails.session
 import gripe.sessionbridge
 
 class Settings(grumble.Model):
@@ -27,7 +32,7 @@ class STMainWindow(QMainWindow):
         tv = QTableView()
 
         # set the table model
-        tm = GrumbleTableModel(grumble.Query(User, False), ["display_name", "email"])
+        tm = grumble.qt.GrumbleTableModel(grumble.Query(User, False), ["display_name", "email"])
         tv.setModel(tm)
 
         # set the minimum size

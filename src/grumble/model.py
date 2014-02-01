@@ -219,7 +219,7 @@ class Model():
 
     def _validate(self):
         for prop in self._properties.values():
-            prop._validate(prop.__get__(self, None))
+            prop._validate(self, prop.__get__(self, None))
         if hasattr(self, "validate") and callable(self.validate):
             self.validate()
 

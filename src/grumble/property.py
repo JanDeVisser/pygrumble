@@ -7,6 +7,7 @@ __date__ ="$17-Sep-2013 1:24:18 PM$"
 
 import datetime
 import hashlib
+import re
 
 import gripe
 import grumble.converter
@@ -16,8 +17,48 @@ import grumble.schema
 
 logger = gripe.get_logger(__name__)
 
+class Validator(object):
+    def property(self, prop = None):
+        if prop:
+            self.prop = prop
+        return prop
+        
+
+class RequiredValidator(Validator):
+    def __call__(self, instance, value):
+        if value is None:
+            raise grumble.errors.PropertyRequired(self.prop.name)
+        
+class ChoiceValidator(Validator, set):
+    def __init__(self, choices = None):
+        if choices:
+            if isinstance(choices, (list, set, tuple)):
+                for c in choices:
+                    self.append(c)
+            else:
+                self.add(choices)
+
+    def __call__(self, instance, value):
+        if (value is not None) and (value not in self):
+            raise grumble.errors.InvalidChoice(self.prop.name, value)
+
+class RegExpValidator(Validator):
+    def __init__(self, pat = None):
+        self._pattern = None
+        self.pattern(pat)
+        
+    def pattern(self, pat):
+        if pat is not None:
+            self._pattern = pat
+        return self._pattern
+        
+    def __call__(self, instance, value):
+        if value and not re.match(self.pattern(), value):
+            raise grumble.errors.PatternNotMatched(self.prop.name, value)
+
 class ModelProperty(object):
     property_counter = 0
+    _default_validators = []
     
     def __new__(cls, *args, **kwargs):
         if args and isinstance(args[0], ModelProperty):
@@ -26,20 +67,24 @@ class ModelProperty(object):
             ret.name = prop.name
             ret.column_name = prop.column_name
             ret.verbose_name = prop.verbose_name
-            ret.required = prop.required
             ret.default = prop.default
             ret.private = prop.private
             ret.transient = prop.transient
-            ret.readonly = prop.readonly
             ret.is_label = prop.is_label
             ret.is_key = prop.is_key
             ret.scoped = prop.scoped
             ret.indexed = prop.indexed
-            ret.validator = prop.validator
-            ret.regexp = prop.regexp
             ret.suffix = prop.suffix
-            ret.choices = prop.choices
+
             ret.converter = prop.converter
+            ret.getvalue = prop.getvalue
+            ret.setvalue = prop.setvalue
+            ret.validators = []
+            for v in prop.validators:
+                ret.validators.append(v)
+            ret.on_assign = prop.on_assign
+            ret.assigned = prop.assigned
+
             ret.seq_nr = prop.seq_nr
             ret.inherited_from = prop
         else:
@@ -53,18 +98,51 @@ class ModelProperty(object):
             ret.default = kwargs.get("default", cls.default if hasattr(cls, "default") else None)
             ret.private = kwargs.get("private", cls.private if hasattr(cls, "private") else False)
             ret.transient = kwargs.get("transient", cls.transient if hasattr(cls, "transient") else False)
-            ret.readonly = kwargs.get("readonly", cls.readonly if hasattr(cls, "readonly") else False)
             ret.is_label = kwargs.get("is_label", cls.is_label if hasattr(cls, "is_label") else False)
             ret.is_key = kwargs.get("is_key", cls.is_key if hasattr(cls, "is_key") else False)
             ret.scoped = kwargs.get("scoped", cls.scoped if hasattr(cls, "scoped") else False) if ret.is_key else False
             ret.indexed = kwargs.get("indexed", cls.indexed if hasattr(cls, "indexed") else False)
-            ret.regexp = kwargs.get("regexp", cls.regexp if hasattr(cls, "regexp") else None)
             ret.suffix = kwargs.get("suffix", cls.suffix if hasattr(cls, "suffix") else None)
-            ret.choices = kwargs.get("choices", cls.choices if hasattr(cls, "choices") else None)
             ret.converter = kwargs.get("converter", \
                 cls.converter \
                     if hasattr(cls, "converter") \
                     else grumble.converter.Converters.get(cls.datatype)
+            )
+            ret.getvalue = kwargs.get("getvalue", \
+                cls.getvalue \
+                    if hasattr(cls, "getvalue") \
+                    else None
+            )
+            ret.setvalue = kwargs.get("setvalue", \
+                cls.setvalue \
+                    if hasattr(cls, "setvalue") \
+                    else None
+            )
+            ret.validators = []
+            if kwargs.get("readonly", False):
+                ret.validator(RequiredValidator())
+            regexp = kwargs.get("regexp", None)
+            if regexp:
+                ret.validator(RegExpValidator(regexp))
+            choices = kwargs.get("choices", None)
+            if choices:
+                ret.validator(ChoicesValidator(choices))
+            v = kwargs.get("validator")
+            if v is not None:
+                ret.validator(v)
+            validators = kwargs.get("validators")
+            if validators is not None:
+                for v in validators:
+                    ret.validator(v)
+            ret.on_assign = kwargs.get("on_assign", \
+                cls.on_assign \
+                    if hasattr(cls, "on_assign") \
+                    else None
+            )
+            ret.assigned = kwargs.get("assigned", \
+                cls.assigned \
+                    if hasattr(cls, "assigned") \
+                    else None
             )
             ret.inherited_from = None
         return ret
@@ -84,6 +162,14 @@ class ModelProperty(object):
         ret.is_key = self.is_key
         ret.scoped = self.scoped
         return [ret]
+    
+    def validator(self, v):
+        assert callable(v) or (hasattr(v, "validate") and callable(v.validate)), "Cannot add non-callable validator %s" % v
+        if v is not None:
+            if hasattr(v, "property") and callable(v.property):
+                v.property(self)
+            self.validators.append(v)
+        return self
 
     def _on_insert(self, instance):
         value = self.__get__(instance)
@@ -113,19 +199,10 @@ class ModelProperty(object):
     def _schema(self, schema):
         return schema
 
-    def _validate(self, value):
-        if (value is None) and self.required:
-            raise grumble.errors.PropertyRequired(self.name)
-        if self.choices and value not in self.choices and value:
-            raise grumble.errors.InvalidChoice(self.name, value)
-        if self.regexp and value and not re.match(self.regexp, value):
-            raise grumble.errors.PatternNotMatched(self.name, value)
-        self.validator(value)
+    def _validate(self, instance, value):
+        for v in self.__class__._default_validators + self.validators:
+            v(instance, value) if callable(v) else v.validate(instance, value)
         
-    def validator(self, value):
-        if hasattr(self, "validate") and callable(self.validate):
-            self.validate(instance, value)
-
     def _update_fromsql(self, instance, values):
         instance._values[self.name] = self._from_sqlvalue(values[self.column_name])
 
@@ -137,7 +214,7 @@ class ModelProperty(object):
         try:
             if not instance:
                 return self
-            if self.transient and hasattr(self, "getvalue") and callable(self.getvalue):
+            if self.transient and self.getvalue:
                 return self.getvalue(instance)
             else:
                 instance._load()
@@ -150,15 +227,17 @@ class ModelProperty(object):
         try:
             if self.is_key and not hasattr(instance, "_brandnew"):
                 return
-            if self.transient and hasattr(self, "setvalue") and callable(self.setvalue):
+            if self.transient and self.setvalue:
                 return self.setvalue(instance, value)
             else:
                 instance._load()
                 old = instance._values[self.name] if self.name in instance._values else None
-                instance._values[self.name] = self.convert(value) if value is not None else None
-                new = instance._values[self.name] if self.name in instance._values else None
+                converted = self.convert(value) if value is not None else None
+                if self.on_assign:
+                    self.on_assign(instance, old, converted)
+                instance._values[self.name] = converted
                 if hasattr(self, "after_set") and callable(self.after_set):
-                    self.after_set(instance, old, new)
+                    self.assigned(instance, old, new)
         except:
             logger.exception("Exception setting property '%s' to value '%s'", self.name, value)
             raise
@@ -195,6 +274,8 @@ class ModelProperty(object):
                 return value
 
 class CompoundProperty(object):
+    _default_validators = []
+    
     def __init__(self, *args, **kwargs):
         self.seq_nr = ModelProperty.property_counter
         ModelProperty.property_counter += 1
@@ -207,13 +288,14 @@ class CompoundProperty(object):
             self.name = None
         cls = self.__class__
         self.verbose_name = kwargs.get("verbose_name", cls.verbose_name if hasattr(cls, "verbose_name") else self.name)
-        self.required = kwargs.get("required", cls.required if hasattr(cls, "required") else False)
-        self.default = kwargs.get("default", cls.default if hasattr(cls, "default") else None)
-        self.private = kwargs.get("private", cls.private if hasattr(cls, "private") else False)
-        self.transient = kwargs.get("transient", cls.transient if hasattr(cls, "transient") else False)
-        self.readonly = kwargs.get("readonly", cls.readonly if hasattr(cls, "readonly") else False)
-        self.regexp = kwargs.get("regexp", cls.regexp if hasattr(cls, "regexp") else None)
-        self.choices = kwargs.get("choices", cls.choices if hasattr(cls, "choices") else None)
+        self.validators = []
+        v = kwargs.get("validator")
+        if v is not None:
+            self.validator(v)
+        validators = kwargs.get("validators")
+        if validators is not None:
+            for v in validators:
+                self.validator(v)
 
     def set_name(self, name):
         self.name = name
@@ -249,8 +331,8 @@ class CompoundProperty(object):
     def _validate(self, value):
         for (p, v) in zip(self.compound, value):
             p._validate(v)
-        if hasattr(self, "validate") and callable(self.validate):
-            self.validate(instance, value)
+        for v in self.__class__._default_validators + self.validators:
+            v(instance, value) if callable(v) else v.validate(instance, value)
 
     def _initial_value(self):
         return tuple(p._initial_value() for p in self.compound)
@@ -294,7 +376,7 @@ class TextProperty(StringProperty):
     pass
 
 class LinkProperty(StringProperty):
-    regexp = "(|https?:\/\/[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?^=%&amp;:/~\+#]*[\w\-\@?^=%&amp;/~\+#])?)"
+    _default_validators.append(RegExpValidator("(|https?:\/\/[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?^=%&amp;:/~\+#]*[\w\-\@?^=%&amp;/~\+#])?)"))
 
 class PasswordProperty(StringProperty):
     def __init__(self, *args, **kwargs):
