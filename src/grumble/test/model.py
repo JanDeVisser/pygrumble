@@ -10,8 +10,13 @@ __date__ = "$18-Sep-2013 8:57:43 AM$"
 import gripe.pgsql
 import grumble
 
-def check_age(age):
-    assert age >= 0 and age < 120
+def check_age(instance, age):
+    print "check_age", age
+    if age < 0 or age >= 120:
+        print "check_age: really?"
+        raise Exception("A person cannot be %s years old" % age)
+    else:
+        print "check_age: OK"
 
 class CanDriveProperty(grumble.BooleanProperty):
     transient = True
@@ -26,7 +31,7 @@ class CanDriveProperty(grumble.BooleanProperty):
 class Person(grumble.Model):
     name = grumble.TextProperty(required = True, is_label = True,
         is_key = True, scoped = True)
-    age = grumble.IntegerProperty(default = 30)
+    age = grumble.IntegerProperty(default = 30, validator = check_age)
     can_drive = CanDriveProperty()
     
 print Person.can_drive.transient
@@ -37,10 +42,10 @@ def test():
     names = []
     with gripe.pgsql.Tx.begin():
         print ">>> Creating Person object"
-        jan = Person(name = "Jan", age = "47")
+        jan = Person(name = "Jan", age = "470")
         assert jan.id() is None
         assert jan.name == "Jan"
-        assert jan.age == 47
+        assert jan.age == 470
         assert jan.can_drive
         jan.put()
         assert jan.id() is not None, "jan.id() is still None after put()"

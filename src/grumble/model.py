@@ -319,12 +319,12 @@ class Model():
         pass
 
     def to_dict(self, **flags):
-        with gripe.LoopDetector.begin() as detector:
-            p = self.parent()
-            ret = { "key": self.id(), 'parent': p.id if p else None }
-            if self.id() in detector:
+        with gripe.LoopDetector.begin(self.id()) as detector:
+            if detector.loop:
                 logger.info("to_dict: Loop detected. %s is already serialized", self)
                 return ret
+            p = self.parent()
+            ret = { "key": self.id(), 'parent': p.id if p else None }
             detector.add(self.id())
             logger.debug("to_dict: Added %s to loop detector", self)
             for b in self.__class__.__bases__:

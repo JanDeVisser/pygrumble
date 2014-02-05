@@ -38,6 +38,10 @@ class PropertyConverter(object):
             self.datatype = datatype
 
     def convert(self, value):
+        """
+            Convert value from to the canonical internal representation. Raise 
+            an exception if value cannot be converted.
+        """
         try:
             return self.datatype(value) if not isinstance(value, self.datatype) else value
         except:
@@ -45,9 +49,18 @@ class PropertyConverter(object):
             raise
 
     def to_sqlvalue(self, value):
+        """
+                Convert value, which is guaranteed to be produced by a call to 
+                convert(), to a value suitable for storing in persistant 
+                storage.
+        """
         return value
 
     def from_sqlvalue(self, value):
+        """
+            Convert value, which was retrieved from persistant storage, to its
+            canonical internal representation.
+        """
         return value
 
     def to_jsonvalue(self, value):

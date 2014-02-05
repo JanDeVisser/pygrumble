@@ -1,5 +1,6 @@
 import sys
 
+from PySide.QtCore import QAbstractListModel
 from PySide.QtCore import QAbstractTableModel
 from PySide.QtCore import QModelIndex
 from PySide.QtCore import Qt
@@ -54,10 +55,48 @@ class GrumbleTableModel(QAbstractTableModel):
         self._query.add_sort(self._columns[colnum].name, order == Qt.AscendingOrder)
         self.layoutChanged.emit()
 
+class GrumbleListModel(QAbstractListModel):
+    def __init__(self, query, display_column):
+        QAbstractListModel.__init__(self)
+        self._query = query
+        self._query.add_sort(display_column, True)
+        self._column_name = display_column
+        self._data = None
+
+    def rowCount(self, parent = QModelIndex()):
+        if self._data:
+            return len(self._data)
+        else:
+            return self._query.count()
+
+    def headerData(self, section, orientation, role):
+        return self._display_column.verbose_name \
+            if orientation == Qt.Horizontal and role == Qt.DisplayRole \
+            else None
+
+    def _get_data(self, ix):
+        if not self._data:
+            self._data = []
+            with gripe.pgsql.Tx.begin():
+                for o in self._query:
+                    self._data.append(o)
+        return self._data[ix]
+
+    def data(self, index, role = Qt.DisplayRole):
+        if (role == Qt.DisplayRole) and (index.column() == 0):
+            r = self._get_data(index.row())
+            return getattr(r, self._column_name)
+        else:
+            return None
+        
+
 if __name__ == '__main__':
     from PySide.QtGui import QApplication
+    from PySide.QtGui import QComboBox
     from PySide.QtGui import QMainWindow
     from PySide.QtGui import QTableView
+    from PySide.QtGui import QVBoxLayout
+    from PySide.QtGui import QWidget
     import grumble.geopt
     import gripe.sessionbridge
 
@@ -94,7 +133,18 @@ if __name__ == '__main__':
             #fileMenu.addAction(Act)
             #fileMenu.addAction(openAct)
             #fileMenu.addAction(saveAct)
-            self.setCentralWidget(self.createTable())
+            window = QWidget()
+            layout = QVBoxLayout(self)
+            layout.addWidget(self.createCombo())
+            layout.addWidget(self.createTable())
+            window.setLayout(layout)
+            self.setCentralWidget(window)
+                
+        def createCombo(self):
+            combo = QComboBox()
+            view = GrumbleListModel(grumble.Query(Country, False), "countryname")
+            combo.setModel(view)
+            return combo
 
         def createTable(self):
             # create the view

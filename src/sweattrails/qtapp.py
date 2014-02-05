@@ -2,20 +2,22 @@
 # To change this template file, choose Tools | Templates
 # and open the template in the editor.
 
+from PySide.Qt import InputMethodHint
 from PySide.QtGui import QApplication
+from PySide.QtGui import QDialog
+from PySide.QtGui import QGridLayout
+from PySide.QtGui import QInputDialog
+from PySide.QtGui import QLineEdit
 from PySide.QtGui import QMainWindow
 from PySide.QtGui import QTableView
 
 import grumble
 import grumble.qt
 import grumble.geopt
+import grizzle
 import sweattrails.config
 import sweattrails.session
 import gripe.sessionbridge
-
-class Settings(grumble.Model):
-    key = grumble.TextProperty(is_key = True)
-    value = grumble.TextProperty()
 
 
 class STMainWindow(QMainWindow):
@@ -25,46 +27,37 @@ class STMainWindow(QMainWindow):
         #fileMenu.addAction(Act)
         #fileMenu.addAction(openAct)
         #fileMenu.addAction(saveAct)
-        self.setCentralWidget(self.createTable())
+        #self.setCentralWidget(self.createTable())
+        self._user_manager = grizzle.UserManager()
+            
+    def show(self):
+        super(QMainWindow, self).show()
+        user_id = Config.qtapp.settings.user.user_id
+        if user_id:
+            self.authenticate(user_id)
+        else:
+            self.select_user()
+        
+    def authenticate(self, user_id):
+        self._user = None
+        ok = True
+        while ok:
+            password, ok = QInputDialog.getText(self, "Authenticate %s" % user_id, "Password", QLineEdit.Password) 
+            if ok:
+                user = self._user_manager(user_id, password)
+                if user:
+                    self._user = user
+        if not self._user:
+            self.select_user()
+            
+    def select_user(self):
+        dialog = QDialog(self)
+        layout = QGridLayout(dialog)
+        layout.addItem(QLabel("User ID"), 0, 0)
+        cb = QComboBox(layout)
+        
+        layout.addItem(cb, 0, 1)
 
-    def createTable(self):
-        # create the view
-        tv = QTableView()
-
-        # set the table model
-        tm = grumble.qt.GrumbleTableModel(grumble.Query(User, False), ["display_name", "email"])
-        tv.setModel(tm)
-
-        # set the minimum size
-        tv.setMinimumSize(400, 300)
-
-        # hide grid
-        tv.setShowGrid(False)
-
-        # set the font
-        #font = QFont("Courier New", 8)
-        #tv.setFont(font)
-
-        # hide vertical header
-        vh = tv.verticalHeader()
-        vh.setVisible(False)
-
-        # set horizontal header properties
-        hh = tv.horizontalHeader()
-        hh.setStretchLastSection(True)
-
-        # set column width to fit contents
-        tv.resizeColumnsToContents()
-
-        # set row height
-        #nrows = len(self.tabledata)
-        #for row in xrange(nrows):
-        #    tv.setRowHeight(row, 18)
-
-        # enable sorting
-        tv.setSortingEnabled(True)
-
-        return tv
 
 class SweatTrails(QApplication):
     def __init__(self, argv):

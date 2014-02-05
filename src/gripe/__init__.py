@@ -75,6 +75,7 @@ class LoopDetector(set):
 
     def __init__(self):
         self.count = 0
+        self.loop = False
         LoopDetector._tl.detector = self
 
     def __enter__(self):
@@ -87,8 +88,14 @@ class LoopDetector(set):
             del LoopDetector._tl.detector
 
     @classmethod
-    def begin(cls):
-        return LoopDetector._tl.detector if hasattr(LoopDetector._tl, "detector") else LoopDetector()
+    def begin(cls, obj = None):
+        ret = LoopDetector._tl.detector if hasattr(LoopDetector._tl, "detector") else LoopDetector()
+        if obj is not None:
+            if obj in ret:
+                ret.loop = True
+            else:
+                ret.add(obj)
+        return ret
 
 class LoggerSwitcher(object):
     def __init__(self, packages, logger):
@@ -180,7 +187,8 @@ class Config(object):
         logger.debug("Config.resolve(get_key(%s) --> %s)", path, value)
         return resolve(value, default)
     
-    def set(self, section, config):
+    @classmethod
+    def set(cls, section, config):
         config = gripe.json.json_util.JSONObject(config) \
             if not isinstance(config, gripe.json.json_util.JSONObject) \
             else config
