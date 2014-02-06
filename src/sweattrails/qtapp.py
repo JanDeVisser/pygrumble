@@ -20,6 +20,19 @@ import sweattrails.session
 import gripe.sessionbridge
 
 
+class SelectUser(QDialog):
+    def __init__(self, window = None):
+        QDialog.__init__(self, window)
+        layout = QGridLayout(dialog)
+        layout.addItem(QLabel("User ID"), 0, 0)
+        combo = QComboBox()
+        view = GrumbleListModel(grumble.Query(User, False), "display_name")
+        cb.setModel(view)
+        layout.addItem(cb, 0, 1)
+        layout.addItem(QLabel("Password"), 1, 0)
+        pwd = QLineEdit()
+        layout.addItem(pwd, 1, 1)
+
 class STMainWindow(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
@@ -32,11 +45,9 @@ class STMainWindow(QMainWindow):
             
     def show(self):
         super(QMainWindow, self).show()
-        user_id = Config.qtapp.settings.user.user_id
-        if user_id:
-            self.authenticate(user_id)
-        else:
-            self.select_user()
+        self.user_id = Config.qtapp.settings.user.user_id
+        if not self.select_user():
+            self.close()
         
     def authenticate(self, user_id):
         self._user = None
@@ -51,12 +62,9 @@ class STMainWindow(QMainWindow):
             self.select_user()
             
     def select_user(self):
-        dialog = QDialog(self)
-        layout = QGridLayout(dialog)
-        layout.addItem(QLabel("User ID"), 0, 0)
-        cb = QComboBox(layout)
-        
-        layout.addItem(cb, 0, 1)
+        dialog = SelectUser(self)
+        self.user_id = dialog.select(self.user_id)
+        return self.user_id is not None
 
 
 class SweatTrails(QApplication):

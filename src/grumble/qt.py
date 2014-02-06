@@ -86,6 +86,10 @@ class GrumbleListModel(QAbstractListModel):
         if (role == Qt.DisplayRole) and (index.column() == 0):
             r = self._get_data(index.row())
             return getattr(r, self._column_name)
+        elif (role == Qt.UserRole):
+            print "UserRole"
+            r = self._get_data(index.row())
+            return r.key()
         else:
             return None
         
