@@ -16,13 +16,13 @@ class GrumbleTableModel(QAbstractTableModel):
         self._columns = [getattr(self._kind, n) for n in column_names]
         self._data = None
 
-    def rowCount(self, parent=QModelIndex()):
+    def rowCount(self, parent = QModelIndex()):
         if self._data:
             return len(self._data)
         else:
             return self._query.count()
 
-    def columnCount(self, parent=QModelIndex()):
+    def columnCount(self, parent = QModelIndex()):
         return len(self._columns)
 
     def headerData(self, col, orientation, role):
@@ -38,13 +38,13 @@ class GrumbleTableModel(QAbstractTableModel):
                     self._data.append(o)
         return self._data[ix]
 
-    def data(self, index, role=Qt.DisplayRole):
+    def data(self, index, role = Qt.DisplayRole):
         if role == Qt.DisplayRole:
             r = self._get_data(index.row())
             return self._columns[index.column()].__get__(r)
         else:
             return None
-        
+
     def sort(self, colnum, order):
         """
             Sort table by given column number.
@@ -91,7 +91,7 @@ class GrumbleListModel(QAbstractListModel):
             return r.key()
         else:
             return None
-        
+
 
 if __name__ == '__main__':
     from PySide.QtGui import QApplication
@@ -120,15 +120,15 @@ if __name__ == '__main__':
 
 
     class Profile(grumble.Model):
-        country =     grumble.TextProperty(default = "CA")
-        dob =         grumble.DateProperty()
-        gender =      grumble.TextProperty(choices=set(['female', 'male', 'other']), default = 'other')
-        height =      grumble.IntegerProperty(default = 170)	# in cm
-        units =       grumble.TextProperty(choices=set(['metric', 'imperial']))
-        location =    grumble.geopt.GeoPtProperty()
-        whoami =      grumble.TextProperty(multiline=True)
-        regkey =      grumble.TextProperty()
-        uploads =     grumble.IntegerProperty(default = 0)
+        country = grumble.TextProperty(default = "CA")
+        dob = grumble.DateProperty()
+        gender = grumble.TextProperty(choices = set(['female', 'male', 'other']), default = 'other')
+        height = grumble.IntegerProperty(default = 170)  # in cm
+        units = grumble.TextProperty(choices = set(['metric', 'imperial']))
+        location = grumble.geopt.GeoPtProperty()
+        whoami = grumble.TextProperty(multiline = True)
+        regkey = grumble.TextProperty()
+        uploads = grumble.IntegerProperty(default = 0)
         last_upload = grumble.DateTimeProperty()
 
 
@@ -136,9 +136,9 @@ if __name__ == '__main__':
         def __init__(self):
             QMainWindow.__init__(self)
             fileMenu = self.menuBar().addMenu(self.tr("&File"))
-            #fileMenu.addAction(Act)
-            #fileMenu.addAction(openAct)
-            #fileMenu.addAction(saveAct)
+            # fileMenu.addAction(Act)
+            # fileMenu.addAction(openAct)
+            # fileMenu.addAction(saveAct)
             window = QWidget()
             layout = QVBoxLayout(self)
             l = QHBoxLayout()
@@ -152,13 +152,13 @@ if __name__ == '__main__':
             layout.addWidget(self.createTable())
             window.setLayout(layout)
             self.setCentralWidget(window)
-            
+
         def set_user_id(self):
-            self.user_id.setText(str(self.combo.itemData(self.combo.currentIndex())))
-                
+            self.user_id.setText(self.combo.itemData(self.combo.currentIndex()).name)
+
         def createCombo(self):
             self.combo = QComboBox()
-            view = GrumbleListModel(grumble.Query(Country, False), "countryname")
+            view = GrumbleListModel(grumble.Query(User, False), "display_name")
             self.combo.setModel(view)
             return self.combo
 
@@ -167,7 +167,7 @@ if __name__ == '__main__':
             tv = QTableView()
 
             # set the table model
-            tm = GrumbleTableModel(grumble.Query(User, False), ["display_name", "email"])
+            tm = GrumbleTableModel(grumble.Query(Country, False), ["countryname", "countrycode"])
             tv.setModel(tm)
 
             # set the minimum size
@@ -177,8 +177,8 @@ if __name__ == '__main__':
             tv.setShowGrid(False)
 
             # set the font
-            #font = QFont("Courier New", 8)
-            #tv.setFont(font)
+            # font = QFont("Courier New", 8)
+            # tv.setFont(font)
 
             # hide vertical header
             vh = tv.verticalHeader()
@@ -192,8 +192,8 @@ if __name__ == '__main__':
             tv.resizeColumnsToContents()
 
             # set row height
-            #nrows = len(self.tabledata)
-            #for row in xrange(nrows):
+            # nrows = len(self.tabledata)
+            # for row in xrange(nrows):
             #    tv.setRowHeight(row, 18)
 
             # enable sorting
@@ -211,4 +211,4 @@ if __name__ == '__main__':
     w.show()
     app.exec_()
     sys.exit()
-        
+

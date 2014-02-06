@@ -2,8 +2,8 @@
 # To change this template file, choose Tools | Templates
 # and open the template in the editor.
 
-__author__="jan"
-__date__ ="$17-Sep-2013 1:24:18 PM$"
+__author__ = "jan"
+__date__ = "$17-Sep-2013 1:24:18 PM$"
 
 import datetime
 import hashlib
@@ -22,13 +22,13 @@ class Validator(object):
         if prop:
             self.prop = prop
         return prop
-        
+
 
 class RequiredValidator(Validator):
     def __call__(self, instance, value):
         if value is None:
             raise grumble.errors.PropertyRequired(self.prop.name)
-        
+
 class ChoicesValidator(Validator, set):
     def __init__(self, choices = None):
         if choices:
@@ -46,12 +46,12 @@ class RegExpValidator(Validator):
     def __init__(self, pat = None):
         self._pattern = None
         self.pattern(pat)
-        
+
     def pattern(self, pat):
         if pat is not None:
             self._pattern = pat
         return self._pattern
-        
+
     def __call__(self, instance, value):
         if value and not re.match(self.pattern(), value):
             raise grumble.errors.PatternNotMatched(self.prop.name, value)
@@ -59,7 +59,7 @@ class RegExpValidator(Validator):
 class ModelProperty(object):
     property_counter = 0
     _default_validators = []
-    
+
     def __new__(cls, *args, **kwargs):
         if args and isinstance(args[0], ModelProperty):
             prop = args[0]
@@ -146,7 +146,7 @@ class ModelProperty(object):
             )
             ret.inherited_from = None
         return ret
-    
+
     def set_name(self, name):
         self.name = name
         if not self.column_name:
@@ -162,7 +162,7 @@ class ModelProperty(object):
         ret.is_key = self.is_key
         ret.scoped = self.scoped
         return [ret]
-    
+
     def validator(self, v):
         assert callable(v) or (hasattr(v, "validate") and callable(v.validate)), "Cannot add non-callable validator %s" % v
         if v is not None:
@@ -186,7 +186,7 @@ class ModelProperty(object):
         pass
 
     def schema(self):
-        ret = { 
+        ret = {
             "name": self.name, "type": self.__class__.__name__,
             "verbose_name": self.verbose_name,
             "default": self.default, "readonly": self.readonly,
@@ -194,14 +194,14 @@ class ModelProperty(object):
         }
         self._schema(ret)
         return ret;
-        
+
     def _schema(self, schema):
         return schema
 
     def _validate(self, instance, value):
         for v in self.__class__._default_validators + self.validators:
             v(instance, value) if callable(v) else v.validate(instance, value)
-        
+
     def _update_fromsql(self, instance, values):
         instance._values[self.name] = self._from_sqlvalue(values[self.column_name])
 
@@ -262,7 +262,7 @@ class ModelProperty(object):
             except:
                 logger.exception("ModelProperty<%s>.from_json_value(%s [%s])", self.__class__, value, type(value))
                 return value
-            
+
     def _to_json_value(self, instance, value):
         try:
             return value.to_dict()
@@ -274,7 +274,7 @@ class ModelProperty(object):
 
 class CompoundProperty(object):
     _default_validators = []
-    
+
     def __init__(self, *args, **kwargs):
         self.seq_nr = ModelProperty.property_counter
         ModelProperty.property_counter += 1
@@ -287,6 +287,9 @@ class CompoundProperty(object):
             self.name = None
         cls = self.__class__
         self.verbose_name = kwargs.get("verbose_name", cls.verbose_name if hasattr(cls, "verbose_name") else self.name)
+        self.transient = kwargs.get("transient", cls.transient if hasattr(cls, "transient") else False)
+        self.private = kwargs.get("private", cls.private if hasattr(cls, "private") else False)
+        self.readonly = kwargs.get("readonly", cls.readonly if hasattr(cls, "readonly") else False)
         self.validators = []
         v = kwargs.get("validator")
         if v is not None:
@@ -327,9 +330,9 @@ class CompoundProperty(object):
         for p in self.compound:
             p._after_store(value)
 
-    def _validate(self, value):
+    def _validate(self, instance, value):
         for (p, v) in zip(self.compound, value):
-            p._validate(v)
+            p._validate(instance, v)
         for v in self.__class__._default_validators + self.validators:
             v(instance, value) if callable(v) else v.validate(instance, value)
 

@@ -6,6 +6,7 @@ import webapp2
 
 import gripe
 import gripe.smtp
+import gripe.pgsql
 import grumble
 import gripe.auth
 import gripe.role
@@ -29,7 +30,7 @@ class UserPart(grumble.Model):
     @classmethod
     def get_userpart(cls, user):
         return user.get_part(cls)
-    
+
     def urls(self):
         return self._urls if hasattr(self, "_urls") else None
 
@@ -52,11 +53,11 @@ class UserPartToggle(grumble.BooleanProperty):
     def __init__(self, partname, *args, **kwargs):
         super(UserPartToggle, self).__init__(*args, **kwargs)
         self.partname = partname
-        
+
     def _init_parts(self, instance):
         if not hasattr(instance, "_parts"):
             instance._parts = { grumble.Model.for_name(pn).basekind().lower(): None for pn in gripe.Config.app.grizzle.userparts }
-    
+
     def setvalue(self, instance, value):
         self._init_parts(instance)
         if (instance._parts[self.name] is not None) and not(value):
@@ -75,7 +76,7 @@ class UserPartToggle(grumble.BooleanProperty):
                 p = grumble.Model.for_name(self.partname)(parent = instance)
                 p.put()
             instance._parts[self.name.lower()] = p
-        
+
     def getvalue(self, instance):
         self._init_parts(instance)
         return instance._parts[self.name] is not None
@@ -88,7 +89,7 @@ def customize_user_class(cls):
         if "urls" in partdef and partdef.urls:
             partcls._urls = gripe.url.UrlCollection(name, partdef.label, 9, partdef.urls)
         if partdef.configurable:
-            propdef = UserPartToggle(name, verbose_name = partdef.label, 
+            propdef = UserPartToggle(name, verbose_name = partdef.label,
                 default = partdef.default)
             cls.add_property(name, propdef)
 
@@ -100,7 +101,7 @@ class User(grumble.Model, gripe.auth.AbstractUser):
     status = grumble.TextProperty(choices = UserStatus, default = 'Unconfirmed')
     display_name = grumble.TextProperty(is_label = True)
     has_roles = grumble.ListProperty()
-    
+
     def after_insert(self):
         kennel = UserPartKennel(parent = self)
         kennel.put()
@@ -108,7 +109,7 @@ class User(grumble.Model, gripe.auth.AbstractUser):
             if partdef.default:
                 part = grumble.Model.for_name(partname)(parent = self)
                 part.put()
-            
+
     def sub_to_dict(self, d, **flags):
         if "include_parts" in flags:
             for (k, part) in self._parts.items():
@@ -128,14 +129,14 @@ class User(grumble.Model, gripe.auth.AbstractUser):
         self._load()
         k = part if (isinstance(part, basestring)) else part.basekind().lower()
         return self._parts[k] if k in self._parts else None
-    
+
     def after_load(self):
         self._parts = { grumble.Model.for_name(pn).basekind().lower(): None for pn in gripe.Config.app.grizzle.userparts }
         for part in grumble.Query(UserPart, keys_only = False, include_subclasses = True).set_parent(self):
-            k = part.basekind().lower()            
+            k = part.basekind().lower()
             self._parts[k] = part
             setattr(self, "_" + k, part)
-            
+
     def urls(self, urls = None):
         if urls is not None:
             return super(User, self).urls(urls)
@@ -168,7 +169,7 @@ class User(grumble.Model, gripe.auth.AbstractUser):
 
     def _explicit_roles(self):
         return set(self.has_roles)
-    
+
 class GroupsForUser(grumble.Model):
     _flat = True
     user = grumble.ReferenceProperty(reference_class = User)
@@ -181,14 +182,16 @@ class UserManager(gripe.auth.AbstractUserManager):
     def login(self, userid, password):
         logger.debug("UserManager.login(%s, %s)", userid, password)
         pwdhash = grumble.PasswordProperty.hash(password)
-        user = User.query("email = ", userid, "password = ", pwdhash, ancestor = None).fetch()
-        if user:
-            assert isinstance(user, User), "Huh? More than one user with the same email and password?? %s" % type(user)
-        if user is None:
-            logger.debug("UserManager.login(%s, %s) Login failed", userid, password)
-        if user and not user.is_active():
-            logger.debug("UserManager.login(%s, %s) User not active", userid, password)
-            user = None
+        user = None
+        with gripe.pgsql.Tx.begin():
+            user = User.query("email = ", userid, "password = ", pwdhash, ancestor = None).fetch()
+            if user:
+                assert isinstance(user, User), "Huh? More than one user with the same email and password?? %s" % type(user)
+            if user is None:
+                logger.debug("UserManager.login(%s, %s) Login failed", userid, password)
+            if user and not user.is_active():
+                logger.debug("UserManager.login(%s, %s) User not active", userid, password)
+                user = None
         return user
 
     def add(self, userid, password, display_name = None):
@@ -243,6 +246,6 @@ app = webapp2.WSGIApplication([
             defaults = {
                 "kind": User
             }
-        ) # ,
+        )  # ,
         # webapp2.Route(r'/user/<key>/json', handler = JSONUser, name = 'manage-user-json', defaults = { "kind": "user" }),
     ], debug = True)
