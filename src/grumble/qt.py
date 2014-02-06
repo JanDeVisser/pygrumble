@@ -87,7 +87,6 @@ class GrumbleListModel(QAbstractListModel):
             r = self._get_data(index.row())
             return getattr(r, self._column_name)
         elif (role == Qt.UserRole):
-            print "UserRole"
             r = self._get_data(index.row())
             return r.key()
         else:
@@ -97,7 +96,10 @@ class GrumbleListModel(QAbstractListModel):
 if __name__ == '__main__':
     from PySide.QtGui import QApplication
     from PySide.QtGui import QComboBox
+    from PySide.QtGui import QHBoxLayout
+    from PySide.QtGui import QLabel
     from PySide.QtGui import QMainWindow
+    from PySide.QtGui import QPushButton
     from PySide.QtGui import QTableView
     from PySide.QtGui import QVBoxLayout
     from PySide.QtGui import QWidget
@@ -139,16 +141,26 @@ if __name__ == '__main__':
             #fileMenu.addAction(saveAct)
             window = QWidget()
             layout = QVBoxLayout(self)
-            layout.addWidget(self.createCombo())
+            l = QHBoxLayout()
+            l.addWidget(self.createCombo())
+            self.button = QPushButton("Pick Me")
+            self.button.clicked.connect(self.set_user_id)
+            l.addWidget(self.button)
+            layout.addLayout(l)
+            self.user_id = QLabel()
+            layout.addWidget(self.user_id)
             layout.addWidget(self.createTable())
             window.setLayout(layout)
             self.setCentralWidget(window)
+            
+        def set_user_id(self):
+            self.user_id.setText(str(self.combo.itemData(self.combo.currentIndex())))
                 
         def createCombo(self):
-            combo = QComboBox()
+            self.combo = QComboBox()
             view = GrumbleListModel(grumble.Query(Country, False), "countryname")
-            combo.setModel(view)
-            return combo
+            self.combo.setModel(view)
+            return self.combo
 
         def createTable(self):
             # create the view
