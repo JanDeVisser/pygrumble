@@ -13,33 +13,31 @@ __date__ = "$3-Mar-2013 10:11:27 PM$"
 
 logger = gripe.get_logger("gripe")
 
-class AuthException(gripe.Error):
-    pass
-
-class UserExists(AuthException):
+class UserExists(gripe.AuthException):
     def __init__(self, uid):
         self._uid = uid
 
     def __str__(self):
         return "User with ID %s already exists" % self._uid 
 
-class UserDoesntExists(AuthException):
+class UserDoesntExists(gripe.AuthException):
     def __init__(self, uid):
         self._uid = uid
 
     def __str__(self):
         return "User with ID %s doesn't exists" % self._uid
 
-class InvalidConfirmationCode(AuthException):
+class InvalidConfirmationCode(gripe.AuthException):
     def __str__(self):
         return "Invalid user confirmation code"
 
-class BadPassword(AuthException):
+class BadPassword(gripe.AuthException):
     def __init__(self, uid):
         self._uid = uid
 
     def __str__(self):
         return "Bad password for user with ID %s" % self._uid 
+
 
 class AbstractAuthObject(gripe.role.HasRoles):
     def role_objects(self, include_self = True):
@@ -53,11 +51,9 @@ class AbstractAuthObject(gripe.role.HasRoles):
         return s
 
 
+@gripe.abstract("gid")
 class AbstractUserGroup(AbstractAuthObject):
     _idattr = "gid"
-    
-    def gid(self):
-        gripe.abstract(self, "gid()")
 
 class UserGroup(AbstractUserGroup):
     _groups = {}
@@ -74,17 +70,28 @@ class UserGroup(AbstractUserGroup):
     def get_group(cls, id):
         return UserGroup._groups.get(id)
 
+@gripe.abstract("get", "add")
+class AbstractGroupManager(object):
+    def get(cls, id):
+        return UserGroup._groups.get(id)
 
+    def add(self, userid, password, display_name = None):
+        logger.debug("UserManager.add(%s, %s)", userid, password)
+        user = self.get(userid)
+        if user and user.exists():
+            logger.debug("UserManager.add(%s, %s) User exists", userid, password)
+            raise gripe.auth.UserExists(userid)
+        else:
+            user = User(email = userid, password = password, display_name = display_name)
+            user.put()
+            logger.debug("UserManager.add(%s, %s) OK", userid, password)
+            return user.id()
+
+
+@gripe.abstract("uid", "groups")
 class AbstractUser(AbstractAuthObject):
     _idattr = "uid"
     
-    def uid(self):
-        gripe.abstract(self, "uid()")
-        assert 0, "Abstract method AbstractUser.uid() must be implemented in class %s" % self.__class__
-
-    def groups(self):
-        assert 0, "Abstract method AbstractUser.groups() must be implemented in class %s" % self.__class__
-
     def role_objects(self, include_self = True):
         s = super(AbstractUser, self).role_objects()
         for g in self.groups():
@@ -98,9 +105,9 @@ class User(AbstractUser):
         self.display_name = user.get("display_name")
         self.password = user.get("password")
         self._roles = user.get("has_roles")
-        self._roles = self._roles or []
+        self._roles = set(self._roles or [])
         self._groups = user.get("has_groups")
-        self._groups = self._groups or []
+        self._groups = set(self._groups or [])
         User._users[self._id] = self
 
     def uid(self):
@@ -119,58 +126,13 @@ class User(AbstractUser):
         logger.info("User.get_user(%s) registry %s", id, User._users)
         return User._users.get(id)
 
+@gripe.abstract("get", "login", "add", "confirm", "changepwd")
 class AbstractUserManager(object):
-    def confirmation_code(self):
-        return uuid.uuid1().hex
-
-    def gen_password(self):
-        return "".join(random.sample("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890!@#$%^&*()_+=-", 10))
-
-    def get(self, userid):
-        assert 0, "Abstract method AbstractUserManager.get must be implemented for class %s" % self.__class__
-
-    def login(self, userid, password):
-        assert 0, "Abstract method AbstractUserManager.login must be implemented for class %s" % self.__class__
-
-    def add(self, userid, password):
-        gripe.abstract(self, "add")
-
-    def confirm(self, userid, code):
-        pass
+    def generate_password(self):
+        return "".join(random.sample("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890.,!@#$%^&*()_+=-", 10))
         
-    def uid(self, user):
-        return user.uid() if user else None
-
-    def displayname(self, user):
-        if not user:
-            return None
-        elif hasattr(user, "displayname") and callable(user.displayname):
-            return user.displayname()
-        elif hasattr(user, "display_name"):
-            return user.display_name
-        elif hasattr(user, "name"):
-            return user.name
-        else:
-            return user.uid()
-
-    def roles(self, user):
-        return user.roles() if user else set()
-
-    def has_role(self, user, roles):
-        return user.has_role(roles) if user else False
-
-    def admin_pwd_reset(self, userid):
-        assert 0, "Abstract method AbstractUserManager.admin_pwd_reset must be implemented for class %s" % self.__class__
-
-    def request_pwd_reset(self, userid):
-        assert 0, "Abstract method AbstractUserManager.request_pwd_reset must be implemented for class %s" % self.__class__
-
-    def confirm_pwd_reset(self, userid, code, newpasswd):
-        assert 0, "Abstract method AbstractUserManager.confirm_pwd_reset must be implemented for class %s" % self.__class__
 
 class UserManager(AbstractUserManager):
-    _pwd_resets = { }
-
     def __init__(self):
         logger.info("Config.users %s", gripe.Config.users)
         if gripe.Config.users and hasattr(gripe.Config.users, "groups"):
@@ -191,34 +153,34 @@ class UserManager(AbstractUserManager):
         logger.info("UserManager.login(%s, %s) -> %s", userid, password, user)
         return user if user and (user.password == password) else None
 
-    def admin_pwd_reset(self, userid):
+    def add(self, userid, password, display_name = None):
         user = self.get(userid)
         if user:
-            newpasswd = self._gen_password()
-            user.password = newpasswd
-            return newpasswd
+            logger.debug("UserManager.add(%s, %s) User exists", userid, password)
+            raise UserExists(userid)
         else:
-            return None
-
-    def request_pwd_reset(self, userid):
+            u = { "email": userid, "password": password, "display_name": display_name }
+            User(u)
+        
+    def confirm(self, userid, status = 'Active'):
+        logger.debug("UserManager.confirm(%s, %s)", userid, status)
         user = self.get(userid)
         if user:
-            code = self._confirmation_code()
-            UserManager._pwd_resets[code] = userid
-            return code
+            logger.debug("UserManager.confirm(%s, %s) OK", userid, status)
+            user.status = status
         else:
-            return None
+            logger.debug("UserManager.confirm(%s, %s) doesn't exists", userid, status)
+            raise UserDoesntExists(userid)
 
-    def confirm_pwd_reset(self, userid, code, newpasswd):
-        if userid and code:
-            if UserManager._pwd_resets.get(code) != userid:
-                return False
-            else:
-                user = self.get(userid)
-                user.password = newpasswd
-                return True
+    def changepwd(self, userid, oldpassword, newpassword):
+        logger.debug("UserManager.changepwd(%s, %s, %s)", userid, oldpassword, newpassword)
+        user = self.login(userid, oldpassword)
+        if user:
+            logger.debug("UserManager.changepwd(%s, %s, %s) login OK. Changing pwd", userid, oldpassword, newpassword)
+            user.password = newpassword
         else:
-            return False
+            raise BadPassword(userid)
+
 
 if __name__ == "__main__":
 #    groupmanager = GroupManager()

@@ -4,47 +4,53 @@
 __author__ = "jan"
 __date__ = "$3-Mar-2013 5:24:57 PM$"
 
+import gripe
 import gripe.url
 
 logger = gripe.get_logger("gripe")
 
-class HasRoles(object):
-    def role_objects(self, include_self = True):
-        assert 0, "Abstract method HasRoles.role_objects must be implemented in %s" % self.__class__
+class RoleExists(gripe.AuthException):
+    def __init__(self, role):
+        self._role = role
 
     def __str__(self):
-        return self.__id__()
+        return "Role with ID %s already exists" % self._role
+    
+class RoleDoesntExist(gripe.AuthException):
+    def __init__(self, role):
+        self._role = role
 
-    def __repr__(self):
-        return self.__id__()
+    def __str__(self):
+        return "Role with ID %s does not exists" % self._role
+    
+class AuthManagers(object):
+    _managers = { }
+    
+    @classmethod
+    def _get_manager(self, manager, default):
+        if manager not in self:
+            cls._managers[manager] = gripe.Config.resolve("app.%smanager" % manager, default)()
+        return cls._managers[manager]
 
-    def __eq__(self, other):
-        return self.__id__() == other.__id__() if self.__class__ == other.__class__ else False
+    @classmethod
+    def get_usermanager(cls):
+        return cls._get_manager("user", "gripe.auth.UserManager")
 
-    def __id__(self, id = None):
-        idattr = self._idattr if hasattr(self, "_idattr") else None
-        if id is not None and idattr is not None:
-            if hasattr(self, idattr) and callable(getattr(self, idattr)):
-                getattr(self, idattr)(id)
-            else:
-                setattr(self, idattr, id)             
-        if idattr is not None:
-            if not hasattr(self, idattr):
-                return None
-            elif callable(getattr(self, idattr)):
-                return getattr(self, idattr)()
-            else:
-                return getattr(self, idattr) 
-        else:
-            return str(hash(self))
+    @classmethod
+    def get_usermanager(cls):
+        return cls._get_manager("user", "gripe.auth.GroupManager")
 
-    def label(self, lbl = None):
-        if lbl is not None:
-            self._label = lbl
-        elif not hasattr(self, "_label"):
-            self._label = str(self)
-        return self._label
+    @classmethod
+    def get_rolemanager(cls):
+        return cls._get_manager("role", "gripe.role.RoleManager")
 
+    @classmethod
+    def get_sessionmanager(cls):
+        return cls._get_manager("session", "grit.SessionManager")
+
+
+@gripe.abstract("role_objects")
+class HasRoles(gripe.ManagedObject):
     def roles(self, explicit = False):
         """
             Returns the names of the roles self has in a set.
@@ -59,12 +65,33 @@ class HasRoles(object):
             else:
                 assert 0, "Class %s must implement either _explicit_roles() or provide a _roles attribute" % self.__class__.__name__
 
+                
+    def add_role(self, role):
+        """
+            Assigns the provided role to self. The role can be provided as a string
+            or as an AbstractRole object.
+        """
+        if isinstance(role, AbstractRole):
+            r = role
+            role = r.__id__()
+        else:
+            role = str(role)
+            r = AuthManagers.get_rolemanager().get(role)
+        if r:
+            if hasattr(self, "_add_role") and callable(self._add_role):
+                return self._add_role(role)
+            elif hasattr(self, "_roles"):
+                return self._roles.add(role)
+            else:
+                assert 0, "Class %s must implement either _add_role() or provide a _roles attribute" % self.__class__.__name__
+                
+
     def urls(self, urls = None):
         if not hasattr(self, "_urls"):
             self._urls = gripe.url.UrlCollection(str(self), self.label())
         if urls is not None:
             self._urls.clear()
-            if isinstance(urls, (list, tuple)):
+            if isinstance(urls, (list, tuple, set)):
                 self._urls.append(urls)
             elif isinstance(urls, gripe.url.UrlCollection):
                 self._urls.copy(urls)
@@ -92,15 +119,9 @@ class HasRoles(object):
         logger.info("has_role: %s & %s = %s", set(roles), myroles, set(roles) & myroles)
         return len(set(roles) & myroles) > 0
 
-class AbstractRole(HasRoles):
-    
-    def rolename(self):
-        """
-            Interface method returning the role name of self. Implementations
-            of AbstractRole should provide this method.
-        """
-        assert 0, "Abstract AbstractRole.rolename called"
 
+@gripe.abstract("rolename")
+class AbstractRole(HasRoles):
     def role_objects(self, include_self = True):
         roles = [self]
         ret = { self } if include_self else set()
@@ -114,13 +135,11 @@ class AbstractRole(HasRoles):
         return ret
 
 class Role(AbstractRole):
-    _idattr = "_role"
-
     def __init__(self, role, roledef):
         #self.add_role(Role(role.role, role.has_roles, role.urls))
         self.__id__(role)
         self.label(roledef.label if "label" in roledef else role)
-        self._roles = roledef.has_roles if "has_roles" in roledef else []
+        self._roles = set(roledef.has_roles) if "has_roles" in roledef else {}
         self.urls(roledef.urls if roledef.urls is not None else {})
 
     def rolename(self):
@@ -129,35 +148,36 @@ class Role(AbstractRole):
         """
         return self.__id__()
 
+@gripe.abstract("get", "add")
+class AbstractRoleManager(object):
+    pass
+
 class RoleManager(object):
     _rolemanager = None
     
     def __init__(self):
         self._roles = {}
-        self.__class__._rolemanager = self
         self.initialize()
 
-    def add_role(self, role):
-        self._roles[role.rolename()] = role
+    def add(self, role, **kwargs):
+        if self.get(role):
+            logger.debug("UserManager.add(%s, %s) User exists", userid, password)
+            raise RoleExists(role)
+        else:
+            role = Role(role, **kwargs)
+            self._roles[role.rolename()] = role
+            return role
 
-    def get_role(self, name):
+    def get(self, name):
         return self._roles.get(name)
-
+    
     def initialize(self):
         if gripe.Config.app and "roles" in gripe.Config.app:
             for role in gripe.Config.app.roles:
-                self.add_role(Role(role, gripe.Config.app.roles[role]))
+                self.add(role, **gripe.Config.app.roles[role])
         else:
             logger.warn("No roles defined in app configuration")
             
-    @classmethod
-    def get_rolemanager(cls):
-        ret = cls._rolemanager
-        if ret is None:
-            RoleManager()
-            ret = cls._rolemanager
-        return ret
-
 if __name__ == "__main__":
     rolemanager = RoleManager()
     print rolemanager._roles

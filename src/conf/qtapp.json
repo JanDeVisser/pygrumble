@@ -1,7 +1,1 @@
-{
-    "author": "Jan de Visser",
-    "version": "1.0",
-    "settings": {
-        "user_id": "jan"
-    }
-}
+{"version": "1.0", "author": "Jan de Visser", "settings": {"user": {"password": "wbw417", "user_id": "jan@de-visser.net"}}}

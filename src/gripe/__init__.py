@@ -11,18 +11,35 @@ import threading
 
 import gripe.json_util
 
+#############################################################################
+#
+#  E X C E P T I O N S
+#
+#############################################################################
+
 class Error(Exception):
-    """Base class for exceptions in this module."""
+    """
+        Base class for exceptions in this module.
+    """
     pass
 
 class NotSerializableError(Error):
-    """Marker exception raised when when a non-JSON serializable property is
-    serialized"""
+    """
+        Marker exception raised when when a non-JSON serializable property is
+        serialized
+    """
     def __init__(self, propname):
         self.propname = propname
 
     def __str__(self):
         return "Property %s is not serializable" % (self.propname,)
+
+class AuthException(gripe.Error):
+    pass
+
+#############################################################################
+#
+##############################################################################
 
 _root_dir = None
 def root_dir():
@@ -67,8 +84,79 @@ def resolve(funcname, default = None):
     else:
         return resolve(default, None) if isinstance(default, basestring) else default
 
-def abstract(obj, method):
-    assert 0, "Class '%s' does not implement method '%s'" % (self.__class__.__name__, method)
+class abstract(object):
+    def __init__(self, *args):
+        self._methods = args
+        
+    def __call__(self, cls):
+        for method in self._methods:
+            def wrapper(instance):
+                assert 0, "Method %s of class %s is abstract" % (method, instance.__class__.__name__)
+            setattr(cls, method, wrapper)
+        return cls
+
+_temp_mo_meta = None
+
+class ManagedObjectMetaClass(type):
+    def __init__(cls, name, bases, dct):
+        global _temp_mo_meta
+        if _temp_mo_meta is not None:
+            cls._mo_meta = _temp_mo_meta
+        else:
+            cls._mo_meta = { }
+        _temp_mo_meta = None
+            
+def _mo_meta(name, obj):
+    global _temp_mo_meta
+    if _temp_mo_meta is None:
+        _temp_mo_meta = { }
+    _temp_mo_meta[name] = obj
+    
+def idattr(method):
+    _mo_meta("id", method)
+
+def labelattr(method):
+    _mo_meta("label", method)
+
+
+class ManagedObject(object):
+    __metaclass__ = ManagedObjectMetaClass
+    
+    def __str__(self):
+        return self.__id__()
+
+    def __repr__(self):
+        return self.__id__()
+
+    def __eq__(self, other):
+        return self.__id__() == other.__id__() if self.__class__ == other.__class__ else False
+    
+    def __hash__(self):
+        return self.__id__().__hash__()
+
+    def _getset_attr_value(self, mo_attr, value):
+        attr = self._mo_meta.get(mo_attr, "_" + mo_attr)
+        a = attr
+        if isinstance(attr, basestring):
+            a = hasattr(self, attr) and getattr(self, attr)
+            a = callable(a) and a
+        def _get():
+            return self.a() if a else ((hasattr(self, attr) and getattr(self, attr)) or None)
+        if value is not None:
+            if a:
+                self.a(value)
+            else:
+                setattr(self, attr, value)
+        return _get()
+
+    def __id__(self, idval = None):
+        return self._getset_attr_value("id", idval)
+
+    id = __id__
+
+    def label(self, lbl = None):
+        return self._getset_attr_value("label", lbl)
+
 
 class LoopDetector(set):
     _tl = threading.local()
@@ -190,7 +278,7 @@ class Config(object):
     @classmethod
     def set(cls, section, config):
         config = gripe.json.json_util.JSONObject(config) \
-            if not isinstance(config, gripe.json.json_util.JSONObject) \
+            if not isinstance(config, gripe.json_util.JSONObject) \
             else config
         config.file_write("conf/%s.json" % section)
         setattr(cls, section, config)

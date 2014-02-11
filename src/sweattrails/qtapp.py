@@ -6,6 +6,7 @@ import sys
 
 from PySide.QtCore import QCoreApplication
 
+from PySide.QtGui import QAction
 from PySide.QtGui import QApplication
 from PySide.QtGui import QComboBox
 from PySide.QtGui import QDialog
@@ -16,6 +17,8 @@ from PySide.QtGui import QLabel
 from PySide.QtGui import QLineEdit
 from PySide.QtGui import QMainWindow
 from PySide.QtGui import QMessageBox
+from PySide.QtGui import QPixmap
+from PySide.QtGui import QSplashScreen
 from PySide.QtGui import QTableView
 
 import gripe
@@ -27,6 +30,10 @@ import sweattrails.config
 # import sweattrails.session
 # import gripe.sessionbridge
 
+
+class SplashScreen(QSplashScreen):
+    def __init__(self):
+        QSplashScreen.__init__(self, QPixmap("image/splash.png"))
 
 class SelectUser(QDialog):
     def __init__(self, window = None):
@@ -68,27 +75,72 @@ class SelectUser(QDialog):
 class STMainWindow(QMainWindow):
     def __init__(self):
         QMainWindow.__init__(self)
-        fileMenu = self.menuBar().addMenu(self.tr("&File"))
-        # fileMenu.addAction(Act)
-        # fileMenu.addAction(openAct)
-        # fileMenu.addAction(saveAct)
+        self.createActions()
+        self.createMenus()
         # self.setCentralWidget(self.createTable())
+        
+    def createActions(self):
+        self.switchUserAct = QAction("&Switch User", self, shortcut="Ctrl+U",statusTip="Switch User", triggered=self.switch_user)
+        self.createUserAct = QAction("&Create User", self, shortcut="Ctrl+N",statusTip="Create User", triggered=self.create_user)
+        self.importFileAct = QAction("&Import", self, shortcut="Ctrl+I",statusTip="Import Session", triggered=self.import_file)
+        self.exitAct = QAction("E&xit", self, shortcut="Ctrl+Q",statusTip="Exit SweatTrails", triggered=self.close)
+        
+        self.aboutAct = QAction("&About", self, triggered=self.about)
+        self.aboutQtAct = QAction("About &Qt", self,triggered=QApplication.aboutQt)
+
+
+    def createMenus(self):
+        self.fileMenu = self.menuBar().addMenu(self.tr("&File"))
+        self.fileMenu.addAction(self.switchUserAct)
+        self.fileMenu.addAction(self.createUserAct)
+        self.fileMenu.addSeparator()
+        self.fileMenu.addAction(self.importFileAct)
+        self.fileMenu.addSeparator()
+        self.fileMenu.addAction(self.exitAct)
+        
+        self.menuBar().addSeparator()
+        
+        self.helpMenu = self.menuBar().addMenu("&Help")
+        self.helpMenu.addAction(self.aboutAct)
+        self.helpMenu.addAction(self.aboutQtAct)
+
 
     def show(self):
         super(QMainWindow, self).show()
-        self.user_id = None  # gripe.Config.qtapp.settings.user.user_id
         if not self.select_user():
             self.close()
+            
+    def switch_user(self):
+        pass
+
+    def create_user(self):
+        pass
 
     def select_user(self):
         dialog = SelectUser(self)
         self.user_id = dialog.select()
         return self.user_id is not None
+        
+    def import_file(self):
+        pass
+        
+    def about(self):
+        QMessageBox.about(self, "About SweatTrails",
+                          "SweatTrails is a next-generation training log application")
+
 
 
 class SweatTrails(QApplication):
     def __init__(self, argv):
         super(SweatTrails, self).__init__(argv)
+        
+    def init_config(self):
+        config = gripe.Config.qtapp if hasattr(gripe.Config, "qtapp") else {}
+        if not hasattr(config, "settings"):
+            config.settings = {}
+        if not hasattr(config.settings, "user"):
+            config.settings.user = { "user_id": None, "password": None }
+        gripe.Config.set("qtapp", config)
 
     def user_manager(self):
         if not hasattr(self, "_user_manager"):
@@ -96,9 +148,15 @@ class SweatTrails(QApplication):
         return self._user_manager
 
 app = SweatTrails(sys.argv)
+splash = SplashScreen()
+splash.show()
+app.processEvents()
+app.init_config()
+app.processEvents()
 
 w = STMainWindow()
 w.show()
+splash.finish(w)
+
 app.exec_()
-sys.exit()
 
