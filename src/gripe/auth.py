@@ -16,34 +16,40 @@ logger = gripe.get_logger("gripe")
 class UserExists(gripe.AuthException):
     def __init__(self, uid):
         self._uid = uid
+        logger.debug(str(self))
 
     def __str__(self):
-        return "User with ID %s already exists" % self._uid 
+        return "User with ID %s already exists" % self._uid
 
 class UserDoesntExists(gripe.AuthException):
     def __init__(self, uid):
         self._uid = uid
+        logger.debug(str(self))
 
     def __str__(self):
         return "User with ID %s doesn't exists" % self._uid
 
 class InvalidConfirmationCode(gripe.AuthException):
+    def __init__(self):
+        logger.debug(str(self))
+
     def __str__(self):
         return "Invalid user confirmation code"
 
 class BadPassword(gripe.AuthException):
     def __init__(self, uid):
         self._uid = uid
+        logger.debug(str(self))
 
     def __str__(self):
-        return "Bad password for user with ID %s" % self._uid 
+        return "Bad password for user with ID %s" % self._uid
 
 
 class AbstractAuthObject(gripe.role.HasRoles):
     def role_objects(self, include_self = True):
         s = set()
         for rname in self.roles(explicit = True):
-            role = gripe.role.RoleManager.get_rolemanager().get_role(rname)
+            role = gripe.role.AuthManagers.get_rolemanager().get_role(rname)
             if role:
                 s |= role.role_objects()
             else:
@@ -53,55 +59,62 @@ class AbstractAuthObject(gripe.role.HasRoles):
 
 @gripe.abstract("gid")
 class AbstractUserGroup(AbstractAuthObject):
-    _idattr = "gid"
+    def gid(self):
+        return self.id()
+
 
 class UserGroup(AbstractUserGroup):
     _groups = {}
     def __init__(self, group):
-        self._id = group.get("groupid")
+        self.id(group.get("groupid"))
         self._roles = group.get("has_roles")
         self._roles = self._roles or []
-        UserGroup._groups[self._id] = self
-
-    def gid(self):
-        return self._id
+        UserGroup._groups[self.id()] = self
 
     @classmethod
-    def get_group(cls, id):
-        return UserGroup._groups.get(id)
+    def get_group(cls, g):
+        if isinstance(g, dict):
+            gid = g.get("groupid")
+        elif isinstance(g, AbstractGroup):
+            gid = g.gid()
+        else:
+            gid = str(g)
+        return UserGroup._groups.get(gid)
 
 @gripe.abstract("get", "add")
 class AbstractGroupManager(object):
-    def get(cls, id):
-        return UserGroup._groups.get(id)
+    pass
 
-    def add(self, userid, password, display_name = None):
-        logger.debug("UserManager.add(%s, %s)", userid, password)
-        user = self.get(userid)
-        if user and user.exists():
-            logger.debug("UserManager.add(%s, %s) User exists", userid, password)
-            raise gripe.auth.UserExists(userid)
+class GroupManager(AbstractGroupManager):
+    def get(cls, g):
+        return UserGroup.get_groups.get(g)
+
+    def add(self, **g):
+        logger.debug("GroupManager.add(%s)", g)
+        group = self.get(g)
+        if group:
+            raise gripe.auth.GroupExists(g)
         else:
-            user = User(email = userid, password = password, display_name = display_name)
-            user.put()
-            logger.debug("UserManager.add(%s, %s) OK", userid, password)
-            return user.id()
+            group = UserGroup(g)
+            return group.gid()
 
 
-@gripe.abstract("uid", "groups")
+@gripe.abstract("groups")
 class AbstractUser(AbstractAuthObject):
-    _idattr = "uid"
-    
     def role_objects(self, include_self = True):
         s = super(AbstractUser, self).role_objects()
         for g in self.groups():
             s |= g.role_objects()
         return s
 
+    def uid(self):
+        return self.id()
+
 class User(AbstractUser):
     _users = {}
+
     def __init__(self, user):
-        self._id = user.get("email")
+        self.id(user.get("email"))
         self.display_name = user.get("display_name")
         self.password = user.get("password")
         self._roles = user.get("has_roles")
@@ -109,9 +122,6 @@ class User(AbstractUser):
         self._groups = user.get("has_groups")
         self._groups = set(self._groups or [])
         User._users[self._id] = self
-
-    def uid(self):
-        return self._id
 
     def groups(self):
         ret = set()
@@ -122,15 +132,22 @@ class User(AbstractUser):
         return ret
 
     @classmethod
-    def get_user(cls, id):
-        logger.info("User.get_user(%s) registry %s", id, User._users)
-        return User._users.get(id)
+    def get_user(cls, u):
+        if isinstance(u, dict):
+            uid = u.get("email")
+        elif isinstance(u, AbstractUser):
+            uid = u.uid()
+        else:
+            uid = str(u)
+        logger.info("User.get_user(%s) registry %s", uid, User._users)
+        return User._users.get(uid)
+
 
 @gripe.abstract("get", "login", "add", "confirm", "changepwd")
 class AbstractUserManager(object):
     def generate_password(self):
         return "".join(random.sample("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890.,!@#$%^&*()_+=-", 10))
-        
+
 
 class UserManager(AbstractUserManager):
     def __init__(self):
@@ -144,8 +161,8 @@ class UserManager(AbstractUserManager):
         else:
             logger.warn("No users tag in users.json configuration file")
 
-    def get(self, userid):
-        return User.get_user(userid)
+    def get(self, u):
+        return User.get_user(u)
 
     def login(self, userid, password):
         logger.info("UserManager.login(%s, %s)", userid, password)
@@ -153,15 +170,14 @@ class UserManager(AbstractUserManager):
         logger.info("UserManager.login(%s, %s) -> %s", userid, password, user)
         return user if user and (user.password == password) else None
 
-    def add(self, userid, password, display_name = None):
-        user = self.get(userid)
+    def add(self, **u):
+        user = self.get(u)
         if user:
-            logger.debug("UserManager.add(%s, %s) User exists", userid, password)
-            raise UserExists(userid)
+            raise UserExists(u)
         else:
-            u = { "email": userid, "password": password, "display_name": display_name }
-            User(u)
-        
+            user = User(u)
+            return user.uid()
+
     def confirm(self, userid, status = 'Active'):
         logger.debug("UserManager.confirm(%s, %s)", userid, status)
         user = self.get(userid)

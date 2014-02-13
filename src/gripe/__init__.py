@@ -41,6 +41,7 @@ class AuthException(gripe.Error):
 #
 ##############################################################################
 
+
 _root_dir = None
 def root_dir():
     global _root_dir
@@ -53,6 +54,7 @@ def root_dir():
 #       logging.info("os.getcwd(): %s", os.getcwd())
 #   return os.getcwd()
 
+
 def read_file(fname):
     try:
         filename = os.path.join(root_dir(), fname)
@@ -64,10 +66,12 @@ def read_file(fname):
         with fp:
             return fp.read()
 
+
 def write_file(fname, data, mode = "w+"):
     filename = os.path.join(root_dir(), fname)
     with open(filename, mode) as fp:
         return fp.write(data)
+
 
 def resolve(funcname, default = None):
     if funcname:
@@ -84,14 +88,22 @@ def resolve(funcname, default = None):
     else:
         return resolve(default, None) if isinstance(default, basestring) else default
 
+
 class abstract(object):
     def __init__(self, *args):
         self._methods = args
-        
+
     def __call__(self, cls):
         for method in self._methods:
+            if isinstance(method, tuple):
+                m = method[0]
+                doc = method[1]
+            else:
+                m = str(method)
+                doc = None
             def wrapper(instance):
                 assert 0, "Method %s of class %s is abstract" % (method, instance.__class__.__name__)
+            wrapper.__doc__ = doc
             setattr(cls, method, wrapper)
         return cls
 
@@ -105,13 +117,13 @@ class ManagedObjectMetaClass(type):
         else:
             cls._mo_meta = { }
         _temp_mo_meta = None
-            
+
 def _mo_meta(name, obj):
     global _temp_mo_meta
     if _temp_mo_meta is None:
         _temp_mo_meta = { }
     _temp_mo_meta[name] = obj
-    
+
 def idattr(method):
     _mo_meta("id", method)
 
@@ -121,7 +133,7 @@ def labelattr(method):
 
 class ManagedObject(object):
     __metaclass__ = ManagedObjectMetaClass
-    
+
     def __str__(self):
         return self.__id__()
 
@@ -130,7 +142,7 @@ class ManagedObject(object):
 
     def __eq__(self, other):
         return self.__id__() == other.__id__() if self.__class__ == other.__class__ else False
-    
+
     def __hash__(self):
         return self.__id__().__hash__()
 
@@ -274,7 +286,7 @@ class Config(object):
         value = cls.get_key(path)
         logger.debug("Config.resolve(get_key(%s) --> %s)", path, value)
         return resolve(value, default)
-    
+
     @classmethod
     def set(cls, section, config):
         config = gripe.json.json_util.JSONObject(config) \
