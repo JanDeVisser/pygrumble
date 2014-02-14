@@ -5,17 +5,14 @@ __author__ = "jan"
 __date__ = "$3-Mar-2013 5:24:57 PM$"
 
 import gripe
+import gripe.managedobject
 import gripe.url
 
 logger = gripe.get_logger("gripe")
 
-class RoleExists(gripe.AuthException):
-    def __init__(self, role):
-        self._role = role
-        logger.debug(str(self))
-
-    def __str__(self):
-        return "Role with ID %s already exists" % self._role
+class RoleExists(gripe.managedobject.ObjectExists):
+    def __init__(self, cls, role):
+        super(RoleExists, self).__init__(cls, role)
 
 class RoleDoesntExist(gripe.AuthException):
     def __init__(self, role):
@@ -29,8 +26,8 @@ class AuthManagers(object):
     _managers = { }
 
     @classmethod
-    def _get_manager(self, manager, default):
-        if manager not in self._managers:
+    def _get_manager(cls, manager, default):
+        if manager not in cls._managers:
             cls._managers[manager] = gripe.Config.resolve("app.%smanager" % manager, default)()
         return cls._managers[manager]
 
@@ -44,7 +41,7 @@ class AuthManagers(object):
 
     @classmethod
     def get_rolemanager(cls):
-        return cls._get_manager("role", "gripe.role.RoleManager")
+        return cls._get_manager("role", "gripe.RoleManager")
 
     @classmethod
     def get_sessionmanager(cls):
@@ -60,18 +57,26 @@ class AuthManagers(object):
                     
                     Returns:
                         A set or list of role objects, so not role names. 
-                 """))
-class HasRoles(gripe.ManagedObject):
+                 """),
+                 ("authenticate",
+                  """
+                    Authenticates the principal.
+                    
+                    Args:
+                        **kwargs: name-value pair of data needed to 
+                          authenticate the principal.
+                          
+                    Returns:
+                        True if the authentication succeeds, False
+                        otherwise.
+                  """))
+class Principal(object):
     """
         Abstract base class for objects that have roles. In traditional
         AAA systems these are roles, groups, and users: A role can be
         assigned to other roles, i.e. an admin is a user, so the admin role
         has the user role assigned to it. In addition, roles can be assigned
         to groups and users as well.
-        
-        This class extends gripe.ManagedObject, which means it has an id() and
-        label() method, and the implementation can choose how these properties
-        are resolved.
         
         The exact role resolution depends on whether e.g. groups can be nested
         or not, and is therefore left to the actual implementations of the
@@ -140,7 +145,7 @@ class HasRoles(gripe.ManagedObject):
         """
         if isinstance(role, AbstractRole):
             r = role
-            role = r.id()
+            role = r.rolename()
         else:
             role = str(role)
             r = AuthManagers.get_rolemanager().get(role)
@@ -197,9 +202,8 @@ class HasRoles(gripe.ManagedObject):
         logger.info("has_role: %s & %s = %s", set(roles), myroles, set(roles) & myroles)
         return len(set(roles) & myroles) > 0
 
-
 @gripe.abstract("rolename")
-class AbstractRole(HasRoles):
+class AbstractRole(Principal):
 
     def role_objects(self, include_self = True):
         roles = [self]
@@ -207,11 +211,18 @@ class AbstractRole(HasRoles):
         while roles:
             role = roles.pop()
             for rname in role.roles(explicit = True):
-                has_role = RoleManager.get_rolemanager().get_role(rname)
+                has_role = AuthManagers.get_rolemanager().get(rname)
                 if has_role and has_role not in ret:
                     ret.add(has_role)
                     roles.append(has_role)
         return ret
+
+@gripe.managedobject.objectexists(RoleExists)
+class Role(AbstractRole, gripe.managedobject.ManagedObject):
+    def __init__(self, **roledef):
+        self.label(roledef["label"] if "label" in roledef else None)
+        self._roles = set(roledef["has_roles"] if "has_roles" in roledef else []) 
+        self.urls(roledef["urls"] if roledef.get("urls") is not None else {})
 
     def rolename(self):
         """
@@ -220,45 +231,7 @@ class AbstractRole(HasRoles):
         return self.id()
 
 
-class Role(AbstractRole):
-    def __init__(self, role, roledef):
-        # self.add_role(Role(role.role, role.has_roles, role.urls))
-        self.__id__(role)
-        self.label(roledef.label if "label" in roledef else role)
-        self._roles = set(roledef.has_roles) if "has_roles" in roledef else {}
-        self.urls(roledef.urls if roledef.urls is not None else {})
-
 @gripe.abstract("get", "add")
 class AbstractRoleManager(object):
     pass
 
-class RoleManager(object):
-    _rolemanager = None
-
-    def __init__(self):
-        self._roles = {}
-        self.initialize()
-
-    def add(self, role, **kwargs):
-        if self.get(role):
-            raise RoleExists(role)
-        else:
-            role = Role(role, **kwargs)
-            self._roles[role.rolename()] = role
-            return role
-
-    def get(self, name):
-        return self._roles.get(name)
-
-    def initialize(self):
-        if gripe.Config.app and "roles" in gripe.Config.app:
-            for role in gripe.Config.app.roles:
-                self.add(role, **gripe.Config.app.roles[role])
-        else:
-            logger.warn("No roles defined in app configuration")
-
-if __name__ == "__main__":
-    rolemanager = RoleManager()
-    print rolemanager._roles
-    admin = rolemanager.get_role('admin')
-    print admin.urls()

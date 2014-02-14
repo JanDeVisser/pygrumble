@@ -110,43 +110,34 @@ class AbstractUser(AbstractAuthObject):
     def uid(self):
         return self.id()
 
-class User(AbstractUser):
-    _users = {}
+@gripe.abstract("get", "login", "add", "confirm", "changepwd")
+class AbstractUserManager(object):
+    @classmethod
+    def generate_password(self):
+        return "".join(random.sample("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890.,!@#$%^&*()_+=-", 10))
 
-    def __init__(self, user):
-        self.id(user.get("email"))
+
+@gripe.managedobject.objectexists(UserExists)
+@gripe.managedobject.idattr("email")
+@gripe.managedobject.labelattr("display_name")
+@gripe.managedobject.configtag("users")
+class User(AbstractUser, gripe.managedobject.ManagedObject, AbstractUserManager):
+    def __init__(self, **user):
         self.display_name = user.get("display_name")
         self.password = user.get("password")
         self._roles = user.get("has_roles")
         self._roles = set(self._roles or [])
         self._groups = user.get("has_groups")
         self._groups = set(self._groups or [])
-        User._users[self._id] = self
 
     def groups(self):
         ret = set()
         for gid in self._groups:
-            group = UserGroup.get_group(gid)
+            group = UserGroupManager.get(gid)
             if group:
                 ret.add()
         return ret
 
-    @classmethod
-    def get_user(cls, u):
-        if isinstance(u, dict):
-            uid = u.get("email")
-        elif isinstance(u, AbstractUser):
-            uid = u.uid()
-        else:
-            uid = str(u)
-        logger.info("User.get_user(%s) registry %s", uid, User._users)
-        return User._users.get(uid)
-
-
-@gripe.abstract("get", "login", "add", "confirm", "changepwd")
-class AbstractUserManager(object):
-    def generate_password(self):
-        return "".join(random.sample("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890.,!@#$%^&*()_+=-", 10))
 
 
 class UserManager(AbstractUserManager):
@@ -169,14 +160,6 @@ class UserManager(AbstractUserManager):
         user = self.get(userid)
         logger.info("UserManager.login(%s, %s) -> %s", userid, password, user)
         return user if user and (user.password == password) else None
-
-    def add(self, **u):
-        user = self.get(u)
-        if user:
-            raise UserExists(u)
-        else:
-            user = User(u)
-            return user.uid()
 
     def confirm(self, userid, status = 'Active'):
         logger.debug("UserManager.confirm(%s, %s)", userid, status)

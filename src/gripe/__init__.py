@@ -104,71 +104,10 @@ class abstract(object):
             def wrapper(instance):
                 assert 0, "Method %s of class %s is abstract" % (method, instance.__class__.__name__)
             wrapper.__doc__ = doc
-            setattr(cls, method, wrapper)
+            setattr(cls, m, wrapper)
         return cls
 
 _temp_mo_meta = None
-
-class ManagedObjectMetaClass(type):
-    def __init__(cls, name, bases, dct):
-        global _temp_mo_meta
-        if _temp_mo_meta is not None:
-            cls._mo_meta = _temp_mo_meta
-        else:
-            cls._mo_meta = { }
-        _temp_mo_meta = None
-
-def _mo_meta(name, obj):
-    global _temp_mo_meta
-    if _temp_mo_meta is None:
-        _temp_mo_meta = { }
-    _temp_mo_meta[name] = obj
-
-def idattr(method):
-    _mo_meta("id", method)
-
-def labelattr(method):
-    _mo_meta("label", method)
-
-
-class ManagedObject(object):
-    __metaclass__ = ManagedObjectMetaClass
-
-    def __str__(self):
-        return self.__id__()
-
-    def __repr__(self):
-        return self.__id__()
-
-    def __eq__(self, other):
-        return self.__id__() == other.__id__() if self.__class__ == other.__class__ else False
-
-    def __hash__(self):
-        return self.__id__().__hash__()
-
-    def _getset_attr_value(self, mo_attr, value):
-        attr = self._mo_meta.get(mo_attr, "_" + mo_attr)
-        a = attr
-        if isinstance(attr, basestring):
-            a = hasattr(self, attr) and getattr(self, attr)
-            a = callable(a) and a
-        def _get():
-            return self.a() if a else ((hasattr(self, attr) and getattr(self, attr)) or None)
-        if value is not None:
-            if a:
-                self.a(value)
-            else:
-                setattr(self, attr, value)
-        return _get()
-
-    def __id__(self, idval = None):
-        return self._getset_attr_value("id", idval)
-
-    id = __id__
-
-    def label(self, lbl = None):
-        return self._getset_attr_value("label", lbl)
-
 
 class LoopDetector(set):
     _tl = threading.local()

@@ -1,32 +1,29 @@
 {
     "author": "Jan de Visser",
     "version": "1.0",
-    "groups": [
-    	{ "groupid": "kitchener" },
-    	{ "groupid": "moderators", "has_roles": [ "moderator" ] }
-    ],
-    "users": [
-	{
-	    "email": "jan@de-visser.net",
-	    "password": "wbw417",
-	    "display_name": "Jan de Visser",
+    "groups": {
+    	"kitchener": { "label": "Users from Kitchener" },
+    	"moderators": { "label": "Moderator group", "has_roles": [ "moderator" ] }
+    },
+    "users": {
+    	"jan@de-visser.net": {
+		    "password": "wbw417",
+		    "display_name": "Jan de Visser",
             "status": "Active",
-	    "has_roles": [ "admin" ]
-	},
-	{
-	    "email": "mod@de-visser.net",
-	    "password": "password",
-	    "display_name": "A. Moderator",
+		    "has_roles": [ "admin" ]
+		},
+		"mod@de-visser.net": {
+		    "password": "password",
+		    "display_name": "A. Moderator",
             "status": "Active",
-	    "has_groups": [ "moderators" ]
-	},
-	{
-	    "email": "user@de-visser.net",
-	    "password": "password",
-	    "display_name": "Some User",
-	    "has_roles": [ "user" ],
+		    "has_groups": [ "moderators" ]
+		},
+		"user@de-visser.net": {
+		    "password": "password",
+		    "display_name": "Some User",
+		    "has_roles": [ "user" ],
             "status": "Active",
-	    "has_groups": [ "kitchener" ]
-	}    	    	    
-    ]    
+		    "has_groups": [ "kitchener" ]
+		}    	    	    
+    }    
 }
