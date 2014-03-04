@@ -108,19 +108,16 @@ class ChangePwd(grit.requesthandler.ReqHandler):
         oldpassword = params.get("oldpassword")
         newpassword = params.get("newpassword")
 
-        um = grit.Session.get_usermanager()
-        try:
-            try:
-                um.changepwd(self.session.userid(), oldpassword, newpassword)
-            except gripe.auth.UserDoesntExists:
-                pass
-            if json_request:
-                self.json_dump({ "status": "OK" })
+        if self.user:
+            if self.user.authenticate(**{"password": oldpassword}):
+                self.user.changepwd(oldpassword, newpassword)
+                if json_request:
+                    self.json_dump({ "status": "OK" })
+                else:
+                    self.render()
             else:
-                self.render()
-        except gripe.auth.BadPassword:
-            self.response.status_int = 401
-
+                self.response.status_int = 401
+            
 
 #
 # ==========================================================================
@@ -150,7 +147,7 @@ class UserSignup(grumble.Model):
     def create_user(self):
         try:
             um = grit.Session.get_usermanager()
-            um.add(self.userid, self.password, self.display_name)
+            um.add(self.userid, **{"password": self.password, "label": self.display_name})
             logger.debug("Create User OK")
             return self.user_created
         except gripe.auth.UserExists as e:
@@ -166,9 +163,13 @@ class UserSignup(grumble.Model):
     def activate_user(self):
         um = grit.Session.get_usermanager()
         try:
-            um.confirm(self.userid)
-            logger.debug("Activate User OK")
-            return self.user_activated
+            user = um.get(self.userid)
+            if user:
+                user.confirm()
+                logger.debug("Activate User OK")
+                return self.user_activated
+            else:
+                raise gripe.auth.UserDoesntExists(self.userid)    
         except gripe.Error as e:
             logger.debug("Activate user Error: %s" % e)
             raise
@@ -219,9 +220,13 @@ class UserCreate(grumble.Model):
     def activate_user(self):
         um = grit.Session.get_usermanager()
         try:
-            um.confirm(self.userid)
-            logger.debug("Activate User OK")
-            return self.user_activated
+            user = um.get(self.userid)
+            if user:
+                user.confirm()
+                logger.debug("Activate User OK")
+                return self.user_activated
+            else:
+                raise gripe.auth.UserDoesntExists(self.userid)    
         except gripe.Error as e:
             logger.debug("Activate user Error: %s" % e)
             raise
@@ -276,7 +281,7 @@ class PasswordReset(grumble.Model):
         um = grit.Session.get_usermanager()
         try:
             user = um.get(self.userid)
-            if user is None or not user.exists():
+            if user is None:
                 logger.debug("User %s does not exist", self.userid)
                 return self.user_doesnt_exist
             user.password = self.password

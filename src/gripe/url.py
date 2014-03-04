@@ -11,20 +11,40 @@ logger = gripe.get_logger("gripe")
 
 class UrlCollectionElem(object):
 
-    def _initialize(self, ident, label, level):
-        self._ident = self._label = self._level = None
+    def _initialize(self, objid, label, level):
+        self._objid = self._label = self._level = None
+        self._ownerobj = None
         self._collection = None
-        self._ident = ident
-        self.label(label)
+        self._objid = objid
+        self.objectlabel(label)
         self.level(level)
+        
+    def _owner(self, owner):
+        assert not owner or (hasattr(owner, "objid") and hasattr(owner, "objectlabel"))
+        self._ownerobj = owner
+        self._objid = self._label = self._level = None
+        self._collection = None
+        
+    def __copy__(self, other):
+        self._ownerobj = other._ownerobj
+        self._collection = other._collection
+        self._objid = other._objid
+        self._label = other._label
+        self._level = other._level
 
-    def ident(self):
-        return self._ident
+    def objid(self):
+        if self._ownerobj:
+            return self._ownerobj.objid() 
+        else:
+            return self._objid
 
-    def label(self, l = None):
+    def objectlabel(self, l = None):
         if l is not None:
             self._label = str(l)
-        return self._label if self._label else self.ident()
+        if self._ownerobj:
+            return self._ownerobj.objectlabel()
+        else:
+            return l or self.objid()
 
     def level(self, lvl = None):
         if lvl is not None:
@@ -47,9 +67,9 @@ class Url(UrlCollectionElem):
                 self._initialize(d.get("id"), d.get("label"), d.get("level"))
                 self.url(d.get("url"))
             elif isinstance(args[0], Url):
-                u = args[0]
-                self._initialize(u.ident(), u.label(), u.level())
-                self.url(u.url())
+                self.url(args[0])
+            elif hasattr(args[0], "objid") and hasattr(args[0], "objectlabel"):
+                self._owner(args[0])
             elif isinstance(args[0], basestring):
                 self._initialize(args[0], None, 10)
             else:
@@ -61,27 +81,30 @@ class Url(UrlCollectionElem):
 
     def url(self, u = None):
         if u is not None:
+            if isinstance(u, Url):
+                self.__copy__(u)
+                u = u.url()
             self._url = u
         if self._url is None and self.collection() is not None:
-            self._url = self.collection().uri_for(self.ident())
-            assert self._url is not None, "No url found for id %s" % self.ident()
+            self._url = self.collection().uri_for(self.objid())
+            assert self._url is not None, "No url found for id %s" % self.objid()
         return self._url
 
     def __repr__(self):
-        return '<url id="%s" href="%s" level="%s">%s</url>' % (self.ident(), self.url(), self.level(), self.label())
+        return '<url id="%s" href="%s" level="%s">%s</url>' % (self.objid(), self.url(), self.level(), self.objectlabel())
 
 class UrlCollection(UrlCollectionElem, dict):
     def __init__(self, *args):
         self._factory = None
         if len(args) == 1:
             if isinstance(args[0], UrlCollection):
-                c = args[0]
-                self._initialize(c.ident(), c.label(), c.level())
-                self.copy(c)
+                self.copy(args[0])
             elif isinstance(args[0], dict):
                 d = args[0]
                 self._initialize(d.get("id"), d.get("label"), d.get("level"))
                 self.append(d.get("urls"))
+            elif hasattr(args[0], "objid") and hasattr(args[0], "objectlabel"):
+                self._owner(args[0])
             elif isinstance(args[0], basestring):
                 self._initialize(args[0], None, 10)
             else:
@@ -93,6 +116,8 @@ class UrlCollection(UrlCollectionElem, dict):
                 self.append(*args[3:])
 
     def copy(self, other):
+        if isinstance(other, UrlCollection):
+            self.__copy__(other)
         for u in other.urls():
             self.append(Url(u))
         for c in other.collections():
@@ -103,36 +128,36 @@ class UrlCollection(UrlCollectionElem, dict):
             if isinstance(u, (list, tuple)):
                 self.append(*u)
             elif isinstance(u, UrlCollection):
-                c = self.get(u.ident())
+                c = self.get(u.objid())
                 if c is not None and isinstance(c, UrlCollection):
                     c.append(u.urls())
                 else:
                     c = u
-                    self[c.ident()] = c
+                    self[c.objid()] = c
                 c.collection(self)
             elif u is not None:
                 u = Url(u)
                 u.collection(self)
-                self[u.ident()] = u
+                self[u.objid()] = u
 
     def urls(self):
-        return sorted([url for url in self.values() if isinstance(url, Url)], key = operator.attrgetter("_level", "_ident"))
+        return sorted([url for url in self.values() if isinstance(url, Url)], key = operator.attrgetter("_level", "_objid"))
 
     def collections(self):
-        return sorted([c for c in self.values() if isinstance(c, UrlCollection)], key = operator.attrgetter("_level", "_ident"))
+        return sorted([c for c in self.values() if isinstance(c, UrlCollection)], key = operator.attrgetter("_level", "_objid"))
 
     def elements(self):
-        return sorted(self.values(), key = operator.attrgetter("_level", "_ident"))
+        return sorted(self.values(), key = operator.attrgetter("_level", "_objid"))
 
     def uri_factory(self, factory = None):
         if factory is not None:
             self._factory = factory
         return self._factory if self._factory or (self.collection() is None) else self.collection().uri_factory()
 
-    def uri_for(self, ident):
+    def uri_for(self, objid):
         f = self.uri_factory()
-        return f.uri_for(ident) if f is not None else None
+        return f.uri_for(objid) if f is not None else None
 
     def __repr__(self):
-        return '<collection id="%s" label="%s" level="%s">%s</collection>' % (self.ident(), self.label(), self.level(), "".join([str(e) for e in self.elements()]))
+        return '<collection id="%s" label="%s" level="%s">%s</collection>' % (self.objid(), self.objectlabel(), self.level(), "".join([str(e) for e in self.elements()]))
 

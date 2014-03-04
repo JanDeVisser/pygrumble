@@ -172,10 +172,10 @@ class SessionManager(object):
             session.set_user(self._get_user(cookie))
         return session
 
-    def remember_user(self, cookie, uid):
+    def remember_user(self, session):
         userdata = UserData()
-        userdata.cookie = cookie
-        userdata.userid = uid
+        userdata.cookie = session.sessionid()
+        userdata.userid = session.userid()
         userdata.last_access = datetime.datetime.now()
         userdata.put()
 
@@ -199,39 +199,26 @@ class RequestCtx(object):
         self.response = response
         for k in defaults:
             setattr(self, k, defaults[k])
+            
+    def sessionid(self):
+        return self.request.cookies.get("grit")
 
-class Session(object):
+class Session(gripe.role.Guard):
     _tl = threading.local()
 
     _managers = {}
-
-    @classmethod
-    def _get_manager(cls, manager, default):
-        if manager not in Session._managers:
-            Session._managers[manager] = gripe.Config.resolve("app.%smanager" % manager, default)()
-        return Session._managers[manager]
-
-    @classmethod
-    def get_usermanager(cls):
-        return Session._get_manager("user", "gripe.auth.UserManager")
-
-    @classmethod
-    def get_rolemanager(cls):
-        return Session._get_manager("role", "gripe.role.RoleManager")
-
-    @classmethod
-    def get_sessionmanager(cls):
-        return Session._get_manager("session", "grit.SessionManager")
 
     def __init__(self, reqctx):
         request = reqctx.request
         self.count = 0
         self._request = request
-        self._data = Session.get_sessionmanager().init_session(request.cookies.get("grit"))
+        self._data = gripe.role.Guard.get_sessionmanager().init_session(reqctx.sessionid())
         if self._data is not None:
-            request.cookies["grit"] = self._data.id()
-            request.response.set_cookie("grit", self._data.id(), httponly = True, max_age = 8640000)  # 24*3600*100 = 100 days ~ 3 months
+            self._sessionid = self._data.id()
+            request.cookies["grit"] = self.sessionid()
+            request.response.set_cookie("grit", self.sessionid(), httponly = True, max_age = 8640000)  # 24*3600*100 = 100 days ~ 3 months
         else:
+            self.sessionid = None
             del request.cookies["grit"]
             request.response.delete_cookie("grit")
 
@@ -255,7 +242,7 @@ class Session(object):
     def __exit__(self, exception_type, exception_value, trace):
         self.count -= 1
         if not self.count:
-            self._end()
+            self.end_session()
         return False
 
     #
@@ -279,16 +266,26 @@ class Session(object):
 
     def __contains__(self, item):
         return item in self._data
+    
+    def sessiondata(self):
+        return self._data
 
-    def login(self, userid, password, remember_me = False):
+    def sessionid(self):
+        return self._sessionid
+
+    def login(self, userid, **ctx):
+        password = ctx.get("password")
+        remember_me = bool(ctx.get("remember_me", False))
         logger.debug("Session.login(%s, %s, %s)", userid, password, remember_me)
-        user = Session.get_usermanager().login(userid, password)
+        user = Session.get_usermanager().get(userid)
         if user:
-            self._data.set_user(user)
-            self._user = user
-            if remember_me:
-                Session.get_sessionmanager().remember_user(self._data.id(), userid)
-        return user
+            if user.authenticate(**ctx):
+                self.user(user)
+                if remember_me:
+                    Session.get_sessionmanager().remember_user(self)
+                self.user().logged_in(self)
+                return self.user()
+        return None
 
     def logout(self):
         logger.debug("Session.logout()")
@@ -299,9 +296,11 @@ class Session(object):
         Session.get_sessionmanager().logout(str(self._data.id()))
         del self._request.cookies["grit"]
         self._request.response.delete_cookie("grit")
+        if self._user:
+            self._user.logged_out(self)
 
-    def _end(self):
-        logger.debug("session._end")
+    def end_session(self):
+        logger.debug("Guard.end_session")
         Session.get_sessionmanager().persist(self._data)
         if hasattr(self._request, "session"):
             del self._request.session
@@ -310,11 +309,9 @@ class Session(object):
         if hasattr(Session._tl, "session"):
             del Session._tl.session
 
-    @staticmethod
-    def get():
-        return Session._tl.session if hasattr(Session._tl, "session") else None
-
-    def user(self):
+    def user(self, u = None):
+        if u is not None:
+            self._data.set_user(user)
         return self._data.user()
 
     def userid(self):
@@ -322,6 +319,10 @@ class Session(object):
 
     def roles(self):
         return self.user().roles() if self.user() else ()
+
+    @staticmethod
+    def get():
+        return Session._tl.session if hasattr(Session._tl, "session") else None
 
 
 class SessionBridge(object):

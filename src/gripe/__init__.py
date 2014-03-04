@@ -98,16 +98,19 @@ class abstract(object):
             if isinstance(method, tuple):
                 m = method[0]
                 doc = method[1]
+                decorator = getattr(__builtins__, method[2]) if len(method) > 2 else None
             else:
                 m = str(method)
                 doc = None
+                decorator = None
             def wrapper(instance):
-                assert 0, "Method %s of class %s is abstract" % (method, instance.__class__.__name__)
+                n = instance.__name__ if isinstance(instance, type) else instance.__class__.__name__
+                assert 0, "Method %s of class %s is abstract" % (method, n)
             wrapper.__doc__ = doc
+            if decorator:
+                wrapper = decorator(wrapper)
             setattr(cls, m, wrapper)
         return cls
-
-_temp_mo_meta = None
 
 class LoopDetector(set):
     _tl = threading.local()
@@ -201,13 +204,45 @@ HTML = ContentType(".html", "text/html", ContentType.Text)
 
 class ConfigMeta(type):
     def __getattribute__(cls, name):
+        if name == "_sections":
+            return super(ConfigMeta, cls).__getattribute__("_sections")
         if not super(ConfigMeta, cls).__getattribute__("_loaded"):
             super(ConfigMeta, cls).__getattribute__("_load")()
         return super(ConfigMeta, cls).__getattribute__(name)
+    
+    def __setattr__(cls, name, value):
+        cls._sections.add(name)
+        return super(ConfigMeta, cls).__setattr__(name, value)
+     
+    def __delattr__(cls, name):
+        cls._sections.remove(name)
+        return super(ConfigMeta, cls).__delattr__(name)
+     
+    def __len__(cls):
+        return len(cls._sections)
+     
+    def __getitem__(cls, key):
+        return getattr(cls, key)
+     
+    def __setitem__(cls, key, value):
+        return setattr(cls, key, value)
+         
+    def __delitem__(cls, key):
+        return delattr(cls, key)
+     
+    def __iter__(cls):
+        return iter(cls._sections)
+     
+    def __contains__(cls, key):
+        return key in cls._sections
+    
+    def keys(cls):
+        return cls._sections
 
 class Config(object):
     __metaclass__ = ConfigMeta
     _loaded = False
+    _sections = set([])
 
     @classmethod
     def get_key(cls, key):
@@ -228,10 +263,14 @@ class Config(object):
 
     @classmethod
     def set(cls, section, config):
-        config = gripe.json.json_util.JSONObject(config) \
+        config = gripe.json_util.JSONObject(config) \
             if not isinstance(config, gripe.json_util.JSONObject) \
             else config
-        config.file_write("conf/%s.json" % section)
+        if (not os.access("%s/conf/%s.json.backup" % (root_dir(), section), os.F_OK) and
+                os.access("%s/conf/%s.json" % (root_dir(), section), os.F_OK)):
+            print "Renaming conf/%s.json to conf/%s.json.backup" % (section, section)
+            os.rename(os.path.join(root_dir(), "conf/%s.json" % section), os.path.join(root_dir(), "conf/%s.json.backup" % section))
+        config.file_write("conf/%s.json" % section, 4)
         setattr(cls, section, config)
 
     @classmethod

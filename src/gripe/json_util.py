@@ -75,11 +75,11 @@ def dict_to_time(d):
     return datetime.time(d['hour'], d['minute'], d['second']) if d else None
 
 class JSON(object):
-    def json_str(self):
-        return json.dumps(self._convert_out(self))
+    def json_str(self, indent = None):
+        return json.dumps(self._convert_out(self), indent = indent)
         
-    def file_write(self, fname):
-        gripe.write_file(fname, self.json_str())
+    def file_write(self, fname, indent = None):
+        gripe.write_file(fname, self.json_str(indent))
         
     def _convert(self, obj):
         if isinstance(obj, dict):
@@ -208,8 +208,8 @@ class JSONObject(dict, JSON):
         assert self._id is not None
         self._db[str(self._id)] = self.json_str()
         
-    def file_write(self, fname):
-        gripe.write_file(fname, self.json_str(), "w")
+    def file_write(self, fname, indent = None):
+        gripe.write_file(fname, self.json_str(indent), "w")
         
     def id(self):
         return self._id

@@ -15,7 +15,8 @@ logger = gripe.get_logger("grizzle")
 
 class UserGroup(grumble.Model, gripe.auth.AbstractUserGroup):
     _flat = True
-    group = grumble.TextProperty(is_key = True, is_label = True)
+    group = grumble.TextProperty(is_key = True)
+    description = grumble.TextProperty(is_label = True)
     has_roles = grumble.ListProperty()
 
     def gid(self):
@@ -23,6 +24,27 @@ class UserGroup(grumble.Model, gripe.auth.AbstractUserGroup):
 
     def _explicit_roles(self):
         return set(self.has_roles)
+
+class GroupManager():
+    def get(self, gid):
+        ret = UserGroup.get_by_key(gid)
+        return ret and ret.exists() and ret
+
+    def add(self, gid, **attrs):
+        logger.debug("grizzle.UserManager.add(%s, %s)", gid, attrs)
+        g = self.get(gid)
+        if g:
+            logger.debug("grizzle.UserGroupManager.add(%s) Group exists", gid)
+            raise gripe.auth.GroupExists(userid)
+        else:
+            attrs["group"] = gid
+            if "label" in attrs:
+                attrs["description"] = attrs["label"]
+                del attrs["label"]
+            g = UserGroup(**attrs)
+            g.put()
+            logger.debug("UserGroupManager.add(%s) OK", attrs)
+            return g.gid()
 
 @grumble.abstract
 class UserPart(grumble.Model):
@@ -102,6 +124,36 @@ class User(grumble.Model, gripe.auth.AbstractUser):
     display_name = grumble.TextProperty(is_label = True)
     has_roles = grumble.ListProperty()
 
+    def uid(self):
+        return self.email
+    
+    def displayname(self):
+        return self.display_name
+
+    def groupnames(self):
+        return { gfu.group for gfu in self.groupsforuser_set }
+
+    def _explicit_roles(self):
+        return set(self.has_roles)
+
+    def authenticate(self, **kwargs):
+        password = kwargs.get("password")
+        return self.exists() and self.is_active() and self.password == password
+
+    def confirm(self, status = 'Active'):
+        logger.debug("User(%s).confirm(%s)", self, status)
+        if self.exists():
+            self.status = status
+            if 'user' not in self.has_roles:
+                self.has_roles.append('user')
+            self.put()
+
+    def changepwd(self, oldpassword, newpassword):
+        logger.debug("User(%s).changepwd(%s, %s)", self, oldpassword, newpassword)
+        if self.exists():
+            self.password = newpassword
+            self.put()
+
     def after_insert(self):
         kennel = UserPartKennel(parent = self)
         kennel.put()
@@ -161,76 +213,28 @@ class User(grumble.Model, gripe.auth.AbstractUser):
     def is_god(self):
         return self.uid() in GodList
 
-    def uid(self):
-        return self.email
-
-    def groups(self):
-        return { gfu.group for gfu in self.groupsforuser_set }
-
-    def _explicit_roles(self):
-        return set(self.has_roles)
-
 class GroupsForUser(grumble.Model):
     _flat = True
     user = grumble.ReferenceProperty(reference_class = User)
     group = grumble.ReferenceProperty(reference_class = UserGroup)
 
-class UserManager(gripe.auth.AbstractUserManager):
+class UserManager():
     def get(self, userid):
-        return User.get_by_key(userid)
+        ret = User.get_by_key(userid)
+        return ret and ret.exists() and ret
 
-    def login(self, userid, password):
-        logger.debug("UserManager.login(%s, %s)", userid, password)
-        pwdhash = grumble.PasswordProperty.hash(password)
-        user = None
-        with gripe.pgsql.Tx.begin():
-            user = User.query("email = ", userid, "password = ", pwdhash, ancestor = None).fetch()
-            if user:
-                assert isinstance(user, User), "Huh? More than one user with the same email and password?? %s" % type(user)
-            if user is None:
-                logger.debug("UserManager.login(%s, %s) Login failed", userid, password)
-            if user and not user.is_active():
-                logger.debug("UserManager.login(%s, %s) User not active", userid, password)
-                user = None
-        return user
-
-    def add(self, userid, password, display_name = None):
-        logger.debug("UserManager.add(%s, %s)", userid, password)
+    def add(self, userid, **attrs):
+        logger.debug("grizzle.UserManager.add(%s, %s)", userid, attrs)
         user = self.get(userid)
-        if user and user.exists():
-            logger.debug("UserManager.add(%s, %s) User exists", userid, password)
+        if user:
+            logger.debug("grizzle.UserManager.add(%s) User exists", userid)
             raise gripe.auth.UserExists(userid)
         else:
-            user = User(email = userid, password = password, display_name = display_name)
+            attrs["email"] = userid
+            user = User(**attrs)
             user.put()
-            logger.debug("UserManager.add(%s, %s) OK", userid, password)
-            return user.id()
-
-    def confirm(self, userid, status = 'Active'):
-        logger.debug("UserManager.confirm(%s, %s)", userid, status)
-        user = self.get(userid)
-        if user and user.exists():
-            logger.debug("UserManager.confirm(%s, %s) OK", userid, status)
-            user.status = status
-            if 'user' not in user.has_roles:
-                user.has_roles.append('user')
-            user.put()
-        else:
-            logger.debug("UserManager.confirm(%s, %s) doesn't exists", userid, status)
-            raise gripe.auth.UserDoesntExists(userid)
-
-    def changepwd(self, userid, oldpassword, newpassword):
-        logger.debug("UserManager.changepwd(%s, %s, %s)", userid, oldpassword, newpassword)
-        user = self.login(userid, oldpassword)
-        if user:
-            logger.debug("UserManager.changepwd(%s, %s, %s) login OK. Changing pwd", userid, oldpassword, newpassword)
-            user.password = newpassword
-            user.put()
-        else:
-            raise gripe.auth.BadPassword(userid)
-
-def currentuser():
-    return UserManager().get(grumble.get_sessionbridge().userid())
+            logger.debug("UserManager.add(%s) OK", attrs)
+            return user.uid()
 
 app = webapp2.WSGIApplication([
         webapp2.Route(

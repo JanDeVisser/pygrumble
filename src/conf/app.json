@@ -1,51 +1,181 @@
 {
-    "author": "Jan de Visser",
-    "version": "1.0",
-    "app_id": "grumble",
     "about": {
-        "version": "1.0",
-        "copyright": "(c) 2012-2013 finiandarcy.com",
-        "contact": "info@finiandarcy.com",
-        "contacturl": "http://www.finiandarcy.com",
-        "application_name": "Grumble test app"
-    },
-    "config": {
-        "google_api_key": "AIzaSyAGBJnvM6-HY8S_-5miEUR-uKetPVOYMRU",
-        "application_url": "http://localhost/"
-    },
-    "icon": "/ceilingcat.jpg",
+        "application_name": "Grumble test app", 
+        "version": "1.0", 
+        "contacturl": "http://www.finiandarcy.com", 
+        "copyright": "(c) 2012-2013 finiandarcy.com", 
+        "contact": "info@finiandarcy.com"
+    }, 
     "container": {
-        "pipeline": [ "grit.pipeline.RequestLogger", "grit.pipeline.TxWrapper", "grit.Session", "grit.pipeline.Auth" ]
-    },
-    "logout": { "redirect": "/" },
+        "pipeline": [
+            "grit.pipeline.RequestLogger", 
+            "grit.pipeline.TxWrapper", 
+            "grit.Session", 
+            "grit.pipeline.Auth"
+        ]
+    }, 
     "roles": {
-        "user": { 
-        	"label": "SweatTrails Member",
-        	"urls": [ { "id": "logout", "label": "Logout", "url": "/logout", "level": 99 } ],
-        	"has_roles": []             
-    	},
         "moderator": {
-        	"label": "Moderator",
-        	"has_roles": [ "user" ]      
-    	},
-        "admin": { 
-        	"label": "Administrator",
-        	"urls": [ { "id": "usermgmt", "label": "User Management", "url": "/users", "level": 10 } ],
-        	"has_roles": [ "moderator" ] 
-    	}
-    },
+            "id": "moderator", 
+            "label": "Moderator"
+        }, 
+        "admin": {
+            "id": "admin", 
+            "label": "Administrator"
+        }, 
+        "test": {
+            "id": "test", 
+            "label": "Test User"
+        }, 
+        "user": {
+            "id": "user", 
+            "label": "SweatTrails Member"
+        }
+    }, 
+    "author": "Jan de Visser", 
+    "app_id": "grumble", 
+    "version": "1.0", 
+    "logout": {
+        "redirect": "/"
+    }, 
+    "grizzle": {
+        "userparts": {
+            "sweattrails.userprofile.UserProfile": {
+                "default": true, 
+                "configurable": false
+            }, 
+            "sweattrails.userprofile.WeightMgmt": {
+                "default": true, 
+                "configurable": true, 
+                "urls": [
+                    {
+                        "url": "/weight", 
+                        "label": "Weight Tracking", 
+                        "id": "weighttracking", 
+                        "level": 10
+                    }
+                ], 
+                "label": "Weight Tracking"
+            }, 
+            "sweattrails.config.ActivityProfile": {
+                "default": false, 
+                "configurable": false
+            }, 
+            "sweattrails.userprofile.SeizureMgmt": {
+                "default": false, 
+                "configurable": true, 
+                "urls": [
+                    {
+                        "url": "/medication", 
+                        "label": "Medications", 
+                        "id": "medication", 
+                        "level": 10
+                    }
+                ], 
+                "label": "Seizure Tracking"
+            }
+        }, 
+        "root": "root@sweattrails.com"
+    }, 
     "workflows": {
-        "signup": "grit.usermgmt.UserSignup",
-        "usercreate": "grit.usermgmt.UserCreate",
+        "signup": "grit.usermgmt.UserSignup", 
+        "usercreate": "grit.usermgmt.UserCreate", 
         "pwdreset": "grit.usermgmt.PasswordReset"
-    },
+    }, 
     "mounts": [
-        { "path": "/", "app": "index.app", "roles": [] },
-        { "path": "/login|/logout|/um/.+", "app": "grit.usermgmt.app", "roles": [] },
-        { "path": "/image/.+|/css/.+|/jscr/.+", "roles": [] },
-        { "path": "/json/.+|/img/.+", "app": "grit.handlers.app", "roles": ["user"]},
-        { "path": "/schema/.+", "app": "grit.handlers.app", "roles": ["user"]},
-        { "path": "/test/.+", "roles": [] }
-    ],
-    "components": [ "grizzle", "sweattrails" ]
+        {
+            "path": "/", 
+            "app": "index.app", 
+            "roles": []
+        }, 
+        {
+            "path": "/login|/logout|/um/.+", 
+            "app": "grit.usermgmt.app", 
+            "roles": []
+        }, 
+        {
+            "path": "/image/.+|/css/.+|/jscr/.+", 
+            "roles": []
+        }, 
+        {
+            "path": "/json/.+|/img/.+", 
+            "app": "grit.handlers.app", 
+            "roles": [
+                "user"
+            ]
+        }, 
+        {
+            "path": "/schema/.+", 
+            "app": "grit.handlers.app", 
+            "roles": [
+                "user"
+            ]
+        }, 
+        {
+            "path": "/test/.+", 
+            "roles": []
+        }, 
+        {
+            "path": "/users/?|/users/.+", 
+            "app": "grizzle.app", 
+            "roles": [
+                "admin"
+            ]
+        }, 
+        {
+            "path": "/profile", 
+            "app": "sweattrails.app", 
+            "roles": [
+                "user"
+            ]
+        }, 
+        {
+            "path": "/weight", 
+            "app": "sweattrails.app", 
+            "roles": [
+                "user"
+            ]
+        }
+    ], 
+    "sweattrails": {
+        "activityprofileparts": {
+            "criticalPowerInterval": {
+                "nodeClass": "sweattrails.config.CriticalPowerIntervalNode", 
+                "refClass": "sweattrails.config.CriticalPowerInterval"
+            }, 
+            "gearType": {
+                "nodeClass": "sweattrails.config.GearTypeNode", 
+                "refClass": "sweattrails.config.GearType"
+            }, 
+            "sessionType": {
+                "nodeClass": "sweattrails.config.SessionTypeNode", 
+                "refClass": "sweattrails.config.SessionType"
+            }
+        }
+    }, 
+    "xx_roles": {
+        "admin": {
+            "urls": [
+                {
+                    "url": "/medsmgmt", 
+                    "label": "Medication Management", 
+                    "id": "medsmgmt", 
+                    "level": 20
+                }
+            ]
+        }, 
+        "athlete": {
+            "has_roles": [], 
+            "label": "Athlete"
+        }, 
+        "coach": {
+            "has_roles": [], 
+            "label": "Coach"
+        }
+    }, 
+    "config": {
+        "google_api_key": "AIzaSyAGBJnvM6-HY8S_-5miEUR-uKetPVOYMRU", 
+        "application_url": "http://localhost/"
+    }, 
+    "icon": "/ceilingcat.jpg"
 }

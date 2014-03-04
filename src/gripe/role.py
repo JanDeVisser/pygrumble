@@ -22,7 +22,7 @@ class RoleDoesntExist(gripe.AuthException):
     def __str__(self):
         return "Role with ID %s does not exists" % self._role
 
-class AuthManagers(object):
+class Guard(object):
     _managers = { }
 
     @classmethod
@@ -33,11 +33,11 @@ class AuthManagers(object):
 
     @classmethod
     def get_usermanager(cls):
-        return cls._get_manager("user", "gripe.auth.UserManager")
+        return cls._get_manager("user", "gripe.UserManager")
 
     @classmethod
     def get_groupmanager(cls):
-        return cls._get_manager("user", "gripe.auth.GroupManager")
+        return cls._get_manager("group", "gripe.UserGroupManager")
 
     @classmethod
     def get_rolemanager(cls):
@@ -46,6 +46,10 @@ class AuthManagers(object):
     @classmethod
     def get_sessionmanager(cls):
         return cls._get_manager("session", "grit.SessionManager")
+
+    @classmethod
+    def get_guard(cls):
+        return cls._get_manager("guard", "grit.Session")
 
 
 @gripe.abstract(("role_objects",
@@ -148,7 +152,7 @@ class Principal(object):
             role = r.rolename()
         else:
             role = str(role)
-            r = AuthManagers.get_rolemanager().get(role)
+            r = Guard.get_rolemanager().get(role)
         if r:
             if hasattr(self, "_add_role") and callable(self._add_role):
                 return self._add_role(role)
@@ -160,7 +164,7 @@ class Principal(object):
 
     def urls(self, urls = None):
         if not hasattr(self, "_urls"):
-            self._urls = gripe.url.UrlCollection(str(self), self.label())
+            self._urls = gripe.url.UrlCollection(self)
         if urls is not None:
             self._urls.clear()
             if isinstance(urls, (list, tuple, set)):
@@ -202,6 +206,14 @@ class Principal(object):
         logger.info("has_role: %s & %s = %s", set(roles), myroles, set(roles) & myroles)
         return len(set(roles) & myroles) > 0
 
+
+class ManagedPrincipal(Principal, gripe.managedobject.ManagedObject):
+    def __initialize__(self, **principaldef):
+        self._roles = set(principaldef.pop("has_roles") if "has_roles" in principaldef else []) 
+        self.urls(principaldef.pop("urls") if "urls" in principaldef else {})
+        return principaldef
+    
+
 @gripe.abstract("rolename")
 class AbstractRole(Principal):
 
@@ -211,24 +223,22 @@ class AbstractRole(Principal):
         while roles:
             role = roles.pop()
             for rname in role.roles(explicit = True):
-                has_role = AuthManagers.get_rolemanager().get(rname)
+                has_role = Guard.get_rolemanager().get(rname)
                 if has_role and has_role not in ret:
                     ret.add(has_role)
                     roles.append(has_role)
         return ret
 
 @gripe.managedobject.objectexists(RoleExists)
-class Role(AbstractRole, gripe.managedobject.ManagedObject):
-    def __init__(self, **roledef):
-        self.label(roledef["label"] if "label" in roledef else None)
-        self._roles = set(roledef["has_roles"] if "has_roles" in roledef else []) 
-        self.urls(roledef["urls"] if roledef.get("urls") is not None else {})
-
+class Role(AbstractRole, ManagedPrincipal):
     def rolename(self):
         """
             Implementation of AbstractRole.rolename(). Returns the role attribute.
         """
-        return self.id()
+        return self.objid()
+    
+    def authenticate(self, **kwargs):
+        return False
 
 
 @gripe.abstract("get", "add")
