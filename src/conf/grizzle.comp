@@ -1,6 +1,7 @@
 {
     "author": "Jan de Visser",
     "version": "1.0",
+    "xx_usermanager": "grizzle.UserManager",
     "mounts": [
         { "path": "/users/?|/users/.+", "app": "grizzle.app", "roles": [ "admin" ]}
     ],

@@ -5,7 +5,7 @@
         { "path": "/profile", "app": "sweattrails.app", "roles": [ "user" ]},
         { "path": "/weight", "app": "sweattrails.app", "roles": [ "user" ]}
     ],
-    "xx_roles": {
+    "roles": {
         "athlete": {
         	"label": "Athlete",
         	"has_roles": []              

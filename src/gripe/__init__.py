@@ -1,6 +1,7 @@
 __author__ = "jan"
 __date__ = "$18-Feb-2013 11:06:29 AM$"
 
+import errno
 import importlib
 import json
 import logging
@@ -72,6 +73,58 @@ def write_file(fname, data, mode = "w+"):
     with open(filename, mode) as fp:
         return fp.write(data)
 
+def exists(f):
+    p = os.path.join(root_dir(), f)
+    logger.debug("exists(%s)", p)
+    return os.access(p, os.F_OK)              
+
+def unlink(f):
+    p = os.path.join(root_dir(), f)
+    try:
+        logger.debug("rm %s", p)
+        if os.access(p, os.F_OK):              
+            if os.access(p, os.W_OK):
+                os.unlink(p)
+                if os.access(p, os.F_OK):
+                    logger.info("rm %s: File seems to be still there after os.unlink()", p)
+                else:              
+                    logger.debug("rm %s: OK", p)
+            else:
+                logger.info("rm %s: Can't unlink: No write permission", p)
+        else:
+            logger.debug("rm %s: Can't unlink: File does not exist", p)
+    except OSError as e:
+        print "OSError(%s)" % errno.errorcode[e.errno]
+        if e.errno != errno.ENOENT:
+            raise
+        else:
+            logger.info("rm %s: Can't unlink: File does not exist, but os.access said it did", p)
+
+def rename(oldname, newname):
+    o = os.path.join(root_dir(), oldname)
+    n = os.path.join(root_dir(), newname)
+    try:
+        logger.debug("mv %s %s", o, n)
+        if os.access(o, os.F_OK):
+            if os.access(o, os, W_OK):  
+                if not os.access(n, os.F_OK):
+                    os.rename(o, n)
+                    if os.access(o, os.F_OK):
+                        logger.info("mv %s %s: File seems to be still there after os.rename()", o, n)
+                    else:              
+                        logger.debug("mv %s %s OK", o, n)
+                else:
+                    logger.info("mv %s %s: Can't rename: Target exists", o, n)
+            else:
+                logger.info("mv %s %s: Can't rename: No write permission", o, n)
+        else:
+            logger.debug("mv %s %s: Can't rename: File does not exist", o, n)
+    except OSError as e:
+        print "OSError(%s)" % errno.errorcode[e.errno]
+        if e.errno != errno.ENOENT:
+            raise
+        else:
+            logger.info("mv %s %s: Can't unlink: File does not exist, but os.access said it did", o, n)
 
 def resolve(funcname, default = None):
     if funcname:
@@ -204,14 +257,15 @@ HTML = ContentType(".html", "text/html", ContentType.Text)
 
 class ConfigMeta(type):
     def __getattribute__(cls, name):
-        if name == "_sections":
-            return super(ConfigMeta, cls).__getattribute__("_sections")
+        if name in ("backup", "restore", "_sections"):
+            return super(ConfigMeta, cls).__getattribute__(name)
         if not super(ConfigMeta, cls).__getattribute__("_loaded"):
             super(ConfigMeta, cls).__getattribute__("_load")()
         return super(ConfigMeta, cls).__getattribute__(name)
     
     def __setattr__(cls, name, value):
-        cls._sections.add(name)
+        if not name.startswith("_"):
+            cls._sections.add(name)
         return super(ConfigMeta, cls).__setattr__(name, value)
      
     def __delattr__(cls, name):
@@ -266,29 +320,54 @@ class Config(object):
         config = gripe.json_util.JSONObject(config) \
             if not isinstance(config, gripe.json_util.JSONObject) \
             else config
-        if (not os.access("%s/conf/%s.json.backup" % (root_dir(), section), os.F_OK) and
-                os.access("%s/conf/%s.json" % (root_dir(), section), os.F_OK)):
+        if (not exists(os.path.join("conf", "%s.json.backup" % section), os.F_OK) and
+                exists(os.path.join("conf", "%s.json" % section, os.F_OK))):
             print "Renaming conf/%s.json to conf/%s.json.backup" % (section, section)
-            os.rename(os.path.join(root_dir(), "conf/%s.json" % section), os.path.join(root_dir(), "conf/%s.json.backup" % section))
-        config.file_write("conf/%s.json" % section, 4)
+            rename(os.path.join("conf", "%s.json" % section), 
+                   os.path.join("conf", "%s.json.backup" % section))
+        config.file_write(os.path.join("conf", "%s.json" % section), 4)
         setattr(cls, section, config)
 
     @classmethod
     def _load(cls):
-        for f in os.listdir("%s/conf" % root_dir()):
+        for f in os.listdir(os.path.join(root_dir(), "conf")):
             (section, ext) = os.path.splitext(f)
             if ext == ".json":
                 print >> sys.stderr, "Reading conf file %s.json" % section
-                config = gripe.json_util.JSON.file_read("conf/%s.json" % section)
+                config = gripe.json_util.JSON.file_read(os.path.join("conf", "%s.json" % section))
                 if config and ("components" in config) and isinstance(config.components, list):
                     for component in config.components:
-                        comp = gripe.json_util.JSON.file_read("conf/%s.comp" % component)
+                        comp = gripe.json_util.JSON.file_read(os.path.join("conf", "%s.comp" % component))
                         if comp:
                             config.merge(comp)
                     del config["components"]
                 # print >> sys.stderr, "Config.%s: %s" % (section, json.dumps(config))
                 setattr(cls, section, config)
         cls._loaded = True
+        
+    @classmethod
+    def backup(cls):
+        logger.debug("Backing up config")
+        for s in cls._sections:
+            config = getattr(cls, s)
+            unlink(os.path.join("conf", "%s.json.backup" % s))
+            if config is not None:
+                logger.debug("Backing up section %s", s)
+                config.file_write(os.path.join("conf", "%s.json.backup" % s), 4)
+
+    @classmethod
+    def restore(cls):
+        logger.debug("Restoring config - Removing existing .json files")
+        for f in os.listdir(os.path.join(root_dir(), "conf")):
+            (section, ext) = os.path.splitext(f)
+            if ext == ".json":
+                unlink(os.path.join("conf", f))
+        logger.debug("Restoring config - Renaming .json.backup files")
+        for f in os.listdir(os.path.join(root_dir(), "conf")):
+            (section, ext) = os.path.splitext(f)
+            if ext == ".backup":
+                os.rename(os.path.join(root_dir(), "conf", "%s.json.backup" % section), 
+                          os.path.join(root_dir(), "conf", "%s.json" % section))
 
 class Enum(tuple):
     """
@@ -370,3 +449,7 @@ def get_logger(name):
 _log_defaults = LogConfig(Config.logging if hasattr(Config, "logging") else None)
 logging.basicConfig(stream = sys.stderr, level = _log_defaults.log_level, datefmt = _log_date_fmt, format = _log_root_fmt)
 logger = get_logger(__name__)
+
+if __name__ == "__main__":
+    Config.backup()
+
