@@ -23,5 +23,4 @@ long_line_behaviour=1
 long_line_column=72
 
 [files]
-current_page=0
-FILE_NAME_0=0;Javascript;0;EUTF-8;0;1;0;%2Fhome%2Fjan%2FProjects%2FGrumble%2Fsrc%2Fjscr%2Fform.js;0;4
+current_page=-1

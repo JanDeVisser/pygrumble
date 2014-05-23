@@ -102,7 +102,7 @@ class Tx(object):
         self.cache = {}
         self.active = True
         self.count = 0
-        self._connect()
+        self.conn = self._connect()
         Tx._tl.tx = self
 
     @classmethod
@@ -179,8 +179,9 @@ class Tx(object):
             dsn += " host=%s" % pgsql_conf.host
         logger.debug("Connecting with role '%s' autocommit = %s",
             self.role, self.autocommit)
-        self.conn = Connection.get(dsn)
-        self.conn.autocommit = self.autocommit
+        conn = Connection.get(dsn)
+        conn.autocommit = self.autocommit
+        return conn
 
     @classmethod
     def begin(cls, role="user", database=None, autocommit=False):
