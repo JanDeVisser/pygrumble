@@ -1,19 +1,21 @@
-__author__="jan"
-__date__ ="$29-Jan-2013 11:00:39 AM$"
+'''
+Created on May 23, 2014
 
-import psycopg2
+@author: jan
+'''
+
+import sqlite3
 import gripe
 import gripe.db
 
 logger = gripe.get_logger(__name__)
 
-class Cursor(gripe.db.LoggedCursor, psycopg2.extensions.cursor):
-    def _interpolate(self, sql, args):
-        return self.mogrify(sql, args)
+class Cursor(gripe.db.LoggedCursor, sqlite3.Cursor):
+    pass
 
-class Connection(gripe.db.LoggedConnection, psycopg2.extensions.connection):
+class Connection(gripe.db.LoggedConnection, sqlite3.Connection):
     def cursor(self):
-        return super(Connection, self).cursor(cursor_factory=Cursor)
+        return super(Connection, self).cursor(Cursor)
 
 class DbAdapter(object):
     
@@ -87,6 +89,8 @@ class DbAdapter(object):
             dsn += " host=%s" % self.config.host
         logger.debug("Connecting with role '%s' autocommit = %s",
             self.role, self.autocommit)
-        conn = psycopg2.connect(dsn, connection_factory=Connection)
+        conn = sqlite3.connect(self.database, 
+           isolation_level = None if self.autocommit else 'DEFERRED',
+           factory = Connection)
         conn.autocommit = self.autocommit
         return conn
