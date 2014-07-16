@@ -126,6 +126,14 @@ def rename(oldname, newname):
         else:
             logger.info("mv %s %s: Can't unlink: File does not exist, but os.access said it did", o, n)
 
+def mkdir(dirname):
+    try:
+        os.mkdir(os.path.join(root_dir(), dirname))
+        return True
+    except:
+        return False
+
+
 def resolve(funcname, default = None):
     if funcname:
         if callable(funcname):
