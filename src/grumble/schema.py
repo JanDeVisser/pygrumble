@@ -2,11 +2,10 @@
 # To change this template file, choose Tools | Templates
 # and open the template in the editor.
 
-__author__="jan"
-__date__ ="$17-Sep-2013 11:47:03 AM$"
+__author__ = "jan"
+__date__ = "$17-Sep-2013 11:47:03 AM$"
 
-import gripe
-import gripe.pgsql
+import gripe.db
 
 logger = gripe.get_logger(__name__)
 
@@ -89,7 +88,7 @@ class ModelManager(object):
         self._set_columns()
         self._recon = self.my_config.get("reconcile", self.def_recon_policy)
         if self._recon != "none":
-            with gripe.pgsql.Tx.begin() as tx:
+            with gripe.db.Tx.begin() as tx:
                 cur = tx.get_cursor()
                 if self._recon == "drop":
                     cur.execute('DROP TABLE IF EXISTS ' + self.tablename)
@@ -168,7 +167,7 @@ class ModelManager(object):
                 cur.execute('CREATE INDEX "%s_%s" ON %s ( "%s" )' % (self.table, c.name, self.tablename, c.name))
             if c.is_key and c.scoped:
                 cur.execute('CREATE UNIQUE INDEX "%s_%s" ON %s ( "_parent", "%s" )' % (self.table, c.name, self.tablename, c.name))
-                #cur.execute('ALTER TABLE %s ADD PRIMARY KEY ( "_parent", "%s" )' % (self.tablename, c.name))
+                # cur.execute('ALTER TABLE %s ADD PRIMARY KEY ( "_parent", "%s" )' % (self.tablename, c.name))
 
     modelmanagers_byname = {}
     @classmethod

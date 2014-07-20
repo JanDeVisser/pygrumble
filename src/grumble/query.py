@@ -9,7 +9,7 @@ import datetime
 import sys
 
 import gripe
-import gripe.pgsql
+import gripe.db
 import gripe.sessionbridge
 import grumble.key
 import grumble.meta
@@ -172,7 +172,7 @@ class ModelQuery(object):
     def execute(self, kind, t):
         if isinstance(type, bool):
             t = QueryType.KeyName if t else QueryType.Columns
-        with gripe.pgsql.Tx.begin():
+        with gripe.db.Tx.begin():
             r = ModelQueryRenderer(kind, self)
             return r.execute(t)
 
@@ -182,18 +182,18 @@ class ModelQuery(object):
             that the actual results of the query are not available; these need to
             be obtained by executing the query again
         """
-        with gripe.pgsql.Tx.begin():
+        with gripe.db.Tx.begin():
             r = ModelQueryRenderer(kind, self)
             return r.execute(QueryType.Count).singleton()
 
     def _delete(self, kind):
-        with gripe.pgsql.Tx.begin():
+        with gripe.db.Tx.begin():
             r = ModelQueryRenderer(kind, self)
             return r.execute(QueryType.Delete).rowcount
 
     @classmethod
     def get(cls, key):
-        with gripe.pgsql.Tx.begin():
+        with gripe.db.Tx.begin():
             if isinstance(key, basestring):
                 key = grumble.key.Key(key)
             else:
@@ -204,7 +204,7 @@ class ModelQuery(object):
 
     @classmethod
     def set(cls, insert, key, values):
-        with gripe.pgsql.Tx.begin():
+        with gripe.db.Tx.begin():
             if isinstance(key, basestring):
                 key = grumble.key.Key(key)
             elif key is None and insert:
@@ -264,7 +264,7 @@ class ModelQueryRenderer(object):
 
     def key(self):
         return self._query.key()
-    
+
     def has_ancestor(self):
         return self._query.has_ancestor()
 
@@ -311,7 +311,7 @@ class ModelQueryRenderer(object):
     def execute(self, type, new_values = None):
         assert self._query, "Must set a Query prior to executing a ModelQueryRenderer"
         logger.debug("Rendering query")
-        with gripe.pgsql.Tx.begin() as tx:
+        with gripe.db.Tx.begin() as tx:
             key_ix = -1
             cols = ()
             vals = []

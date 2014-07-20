@@ -6,7 +6,7 @@ __author__ = "jan"
 __date__ = "$3-Oct-2013 8:40:17 AM$"
 
 import gripe
-import gripe.pgsql
+import gripe.db
 import grizzle
 import grumble
 import grumble.image
@@ -14,18 +14,18 @@ import grumble.property
 
 logger = gripe.get_logger(__name__)
 
-class FlagProperty(grumble.StringProperty):
+class FlagProperty(grumble.property.StringProperty):
     def getvalue(self, instance):
         code = instance.countrycode
         return "http://flagspot.net/images/{0}/{1}.gif".format(code[0:1].lower(), code.lower()) \
             if code else None
-            
+
     def setvalue(self, instance, value):
         pass
 
 class Country(grumble.Model):
-    countryname = grumble.StringProperty(verbose_name = "Country name", is_label = True)
-    countrycode = grumble.StringProperty(verbose_name = "ISO 3166-1 code", is_key = True)
+    countryname = grumble.property.StringProperty(verbose_name = "Country name", is_label = True)
+    countrycode = grumble.property.StringProperty(verbose_name = "ISO 3166-1 code", is_key = True)
     flag_url = FlagProperty(transient = True)
 
 #
@@ -44,12 +44,22 @@ class ProfileReference(object):
         return NodeTypeRegistry.get_by_ref_class(cls)
 
 class SessionType(grumble.Model, ProfileReference):
+    _resolved_parts = set()
     name = grumble.StringProperty(is_key = True, scoped = True)
     description = grumble.StringProperty()
     intervalpart = grumble.StringProperty()
     trackDistance = grumble.BooleanProperty()
     speedPace = grumble.StringProperty(choices = set(['Speed', 'Pace', 'Swim Pace']))
     icon = grumble.image.ImageProperty()
+
+    def get_interval_part_type(self, profile):
+        node = profile.get_node(SessionType, self.name)
+        part = node.get_root_property("intervalpart")
+        if part not in self._resolved_parts:
+            logger.debug("sweattrails.config.SessionType.get_interval_part_type(%s): Resolving part %s", self.name, part)
+            gripe.resolve(part)
+            self._resolved_parts.add(part)
+        return grumble.Model.for_name(part)
 
 class GearType(grumble.Model, ProfileReference):
     name = grumble.StringProperty(is_key = True, scoped = True)
@@ -120,7 +130,7 @@ class NodeTypeDefinition(object):
             self._link_props = {}
             for p in self.node_class().properties():
                 if isinstance(p, grumble.ReferenceProperty) and issubclass(p.reference_class, NodeBase):
-                   self._link_props[p.name] = NodeTypeRegistry.get_by_node_class(p.reference_class)
+                    self._link_props[p.name] = NodeTypeRegistry.get_by_node_class(p.reference_class)
         return self._link_props
 
     def get_reference_by_name(self, profile, key_name):
@@ -148,13 +158,16 @@ class NodeTypeDefinition(object):
         if ref.parent() == node.get_profile().parent():
             ref.update(descriptor)
         dirty = False
+        d = dict(descriptor)
         for (prop, t) in self.link_properties():
-            if prop in descriptor:
+            if prop in d:
                 n = t.get_or_create_node(self, descriptor[prop])
                 setattr(node, prop, n)
+                del d[prop]
                 dirty = True
         if dirty:
             node.put()
+        node.update(d)
         return node
 
     def get_or_create_node_for_reference(self, profile, ref, parent = None):
@@ -222,7 +235,7 @@ class NodeBase(grumble.Model):
     @classmethod
     def get_node_definition(cls):
         return NodeTypeRegistry.get_by_node_class(cls)
-    
+
     def get_reference(self):
         return getattr(self, self.get_node_definition().name())
 
@@ -257,7 +270,7 @@ class TreeNodeBase(NodeBase):
     @classmethod
     def is_tree(cls):
         return True
-    
+
     def get_root_property(self, prop):
         ref = self.get_reference()
         val = getattr(ref, prop)
@@ -289,9 +302,10 @@ class TreeNodeBase(NodeBase):
 
 class SessionTypeNode(TreeNodeBase):
     sessionType = grumble.ReferenceProperty(SessionType, serialize = False)
-    
+    defaultfor = grumble.StringProperty()
+
     def intervalpart(self):
-        return get_root_property("intervalpart")
+        return self.get_root_property("intervalpart")
 
 
 class GearTypeNode(TreeNodeBase):
@@ -333,7 +347,7 @@ class ActivityProfile(grizzle.UserPart):
             return
         # Set the profile's name. Every user has only one profile object which
         # is manipulated whenever the user selects another template profile.
-        self.name = "Activity Profile for " + self.parent()().display_name
+        self.name = "Activity Profile for " + self.root()().display_name
 
     def after_insert(self):
         # Find the default profile:
@@ -347,11 +361,11 @@ class ActivityProfile(grizzle.UserPart):
         """
             Import template activity profile data.
         """
-        with gripe.pgsql.Tx.begin():
+        with gripe.db.Tx.begin():
             if cls.all(keys_only = True).count() > 0:
                 return
         for profile in data:
-            with gripe.pgsql.Tx.begin():
+            with gripe.db.Tx.begin():
                 p = cls(name = profile.name,
                     description = profile.description,
                     isdefault = profile.isdefault)
@@ -386,7 +400,7 @@ class ActivityProfile(grizzle.UserPart):
     # This deletes the node no questions asked. This means that all relations
     # get removed. Subtypes become root types, and parts become top-level
     # assemblies.
-    #def delete_node(self, q, pointer_name, (node_class, pointer_class)):
+    # def delete_node(self, q, pointer_name, (node_class, pointer_class)):
     #    key = q[pointer_name] if pointer_name in q else None
     #    if key:
     #        node = node_class.get(key)
@@ -436,7 +450,11 @@ class ActivityProfile(grizzle.UserPart):
     def get_node(self, ref_class, key_name):
         node_type = NodeTypeRegistry.get_by_ref_class(ref_class)
         return node_type.get_node_by_reference_name(self, key_name)
-    
+
+    def get_default_SessionType(self, sessiontype):
+        nodes = SessionTypeNode.query("defaultfor", sessiontype, ancestor = self)
+        return nodes[0].sessionType if len(nodes) else None
+
     @classmethod
     def get_profile(cls, user):
         return user.get_part(cls)

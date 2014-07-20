@@ -1,6 +1,7 @@
 {
     "author": "Jan de Visser",
     "version": "1.0",
+    "dbtype": "postgresql",
     "postgresql": {
         "user": {
             "user_id": "jan",

@@ -7,7 +7,7 @@
 __author__ = "jan"
 __date__ = "$18-Sep-2013 8:57:43 AM$"
 
-import gripe.pgsql
+import gripe.db
 import grumble
 
 def check_age(instance, age):
@@ -20,10 +20,10 @@ def check_age(instance, age):
 
 class CanDriveProperty(grumble.BooleanProperty):
     transient = True
-    
+
     def getvalue(self, instance):
         return instance.age >= 16
-    
+
     def setvalue(self, instance, value):
         pass
 
@@ -33,14 +33,14 @@ class Person(grumble.Model):
         is_key = True, scoped = True)
     age = grumble.IntegerProperty(default = 30, validator = check_age)
     can_drive = CanDriveProperty()
-    
+
 print Person.can_drive.transient
 print Person.schema()
 
 def test():
     keys = []
     names = []
-    with gripe.pgsql.Tx.begin():
+    with gripe.db.Tx.begin():
         print ">>> Creating Person object"
         jan = Person(name = "Jan", age = "470")
         assert jan.id() is None
@@ -53,7 +53,7 @@ def test():
         keys.append(x)
         names.append("Jan")
 
-    with gripe.pgsql.Tx.begin():
+    with gripe.db.Tx.begin():
         print ">>> Retrieving Person object by key"
         y = Person.get(x)
         assert y.id() == x.id
@@ -63,7 +63,7 @@ def test():
         y.put()
         assert y.age == 43
 
-    with gripe.pgsql.Tx.begin():
+    with gripe.db.Tx.begin():
         print ">>> Creating Person with parent"
         tim = Person(name = "Tim", age = 9, parent = y)
         tim.put()
@@ -72,13 +72,13 @@ def test():
         names.append("Tim")
 
         print ">>> Querying all Person objects by Query"
-        gripe.pgsql.Tx.flush_cache()
+        gripe.db.Tx.flush_cache()
         q = grumble.Query(Person)
         for p in q:
             assert p.key() in keys, "Key %s not known"
 
         print ">>> Querying all Person objects by Query, keys_only == False"
-        gripe.pgsql.Tx.flush_cache()
+        gripe.db.Tx.flush_cache()
         q = grumble.Query(Person, False)
         for p in q:
             assert p.name in names, "Name %s not known"
@@ -93,7 +93,7 @@ def test():
         assert count == 2
 
         print ">>> Person.get_by_key_and_parent()"
-        gripe.pgsql.Tx.flush_cache()
+        gripe.db.Tx.flush_cache()
         tim2 = Person.get_by_key_and_parent("Tim", y)
         assert tim2, "Person.get_by_key_and_parent() returned None"
         assert tim2.name == "Tim", "Person.get_by_key_and_parent() returned %s" % tim2.name

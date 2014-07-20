@@ -12,11 +12,11 @@ from math import atan2
 from math import radians
 
 import re
-import psycopg2
 import psycopg2.extensions
+import gripe.db
 import gripe.pgsql
 import grumble.property
-        
+
 class GeoPt(object):
     def __init__(self, *args):
         self.lat = None
@@ -44,7 +44,7 @@ class GeoPt(object):
                 assert 0, "GeoPt: Cannot build GeoPt from %s, a %s" % (a, type(a))
         elif len(args) == 2:
             self._assign(args[0], args[1])
-            
+
     @staticmethod
     def _float(coord, dir):
         if coord is None:
@@ -79,7 +79,7 @@ class GeoPt(object):
                     lon = 180
                 elif a > 180:
                     lon = (lon + 360) % s * 360
-                    lon = lon if lon <= 180 else (lon + (-s)*360)
+                    lon = lon if lon <= 180 else (lon + (-s) * 360)
         self.lat = lat
         self.lon = lon
 
@@ -95,9 +95,9 @@ class GeoPt(object):
             if s:
                 parts = s.split(",", 2)
                 if len(parts) == 2:
-                    return ( GeoPt._parse_coord(parts[0], "NnSs"), GeoPt._parse_coord(parts[1], "EeWw") )
+                    return (GeoPt._parse_coord(parts[0], "NnSs"), GeoPt._parse_coord(parts[1], "EeWw"))
         return None
-    
+
     @staticmethod
     def _parse_coord(g, dir):
         g = g.strip()
@@ -111,36 +111,36 @@ class GeoPt(object):
                     frac = (int(m.group(2)) / 60.0) + (float(m.group(3)) / 3600.0)
                     return (-1 if m.group(4) and m.group(4) in "WwSs" else 1) * (deg + frac)
         return None
-            
+
     def __repr__(self):
         if self:
             return '(%s, %s)' % self.tuple()
         else:
             return ""
-        
+
     def __str__(self):
         if self:
             return "(%s, %s)" % (self._string(self.lat, False), self._string(self.lon, True))
         else:
             return ""
-        
+
     @staticmethod
     def _sign(num):
         return 1 if num >= 0 else -1
-    
+
     @staticmethod
     def _string(coord, lon = False):
         (deg, min, sec) = GeoPt._degrees(coord)
-        return "%s* %s' %s\" %s" % (abs(deg), min, sec, "WS NE"[(GeoPt._sign(deg) * (2 if lon else 1)) + 2]) if coord is not None else "" 
+        return "%s* %s' %s\" %s" % (abs(deg), min, sec, "WS NE"[(GeoPt._sign(deg) * (2 if lon else 1)) + 2]) if coord is not None else ""
 
     def __nonzero__(self):
         return self.lat is not None
-    
+
     def __eq__(self, other):
         """
             Determines if this GeoPt is the same as another. Two points are
             assumed identical if their distance according to the great-circle
-            algorith is less than 10m.
+            algorithm is less than 10m.
         """
         if self:
             if not other:
@@ -174,10 +174,10 @@ class GeoPt(object):
             c = c - (min / 60.0)
             sec = c * 3600
             return (deg, min, sec)
-    
+
     def degrees(self):
-        return ( self._degrees(self.lat), self._degrees(self.lon) )
-        
+        return (self._degrees(self.lat), self._degrees(self.lon))
+
     def distance(self, other):
         """
             Returns the distance in meters between this GeoPt object and another
@@ -191,9 +191,9 @@ class GeoPt(object):
         phi2 = radians(other.lat)
         dlambda = radians(abs(self.lon - other.lon))
         y = sqrt(
-            pow(cos(phi2)*sin(dlambda), 2) + 
-            pow(cos(phi1)*sin(phi2) - sin(phi1)*cos(phi2)*cos(dlambda), 2))
-        x = sin(phi1)*sin(phi2) + cos(phi1)*cos(phi2)*cos(dlambda)
+            pow(cos(phi2) * sin(dlambda), 2) +
+            pow(cos(phi1) * sin(phi2) - sin(phi1) * cos(phi2) * cos(dlambda), 2))
+        x = sin(phi1) * sin(phi2) + cos(phi1) * cos(phi2) * cos(dlambda)
         earth_radius_m = 6371000
         return atan2(y, x) * earth_radius_m
 
@@ -203,14 +203,14 @@ class GeoPt(object):
     @classmethod
     def from_dict(cls, d):
         return GeoPt(d)
-    
+
 class GeoBox(object):
     def __init__(self, *args):
         self._sw = None
         self._ne = None
         if args:
             self._assign(*args)
-        
+
     def _assign(self, *args):
         assert (len(args) <= 4), "Illegal GeoBox constructor args '%s'" % args
         if args[0] is None:
@@ -253,10 +253,10 @@ class GeoBox(object):
             if (isinstance(args[next], (GeoPt, basestring))):
                 ne = GeoPt(args[next])
             else:
-                assert len(args) > next+1, "Illegal GeoBox constructor args '%s'" % args
-                ne = GeoPt(args[next], args[next+1])
+                assert len(args) > next + 1, "Illegal GeoBox constructor args '%s'" % args
+                ne = GeoPt(args[next], args[next + 1])
             self.extend(ne)
-        
+
     @staticmethod
     def _parse(s):
         s = s.strip()
@@ -269,21 +269,21 @@ class GeoBox(object):
                 s = s[:-1].strip()
             parts = s.split(",", 4)
             assert len(parts) == 4
-            for ix in range(0,3):
+            for ix in range(0, 3):
                 c = parts[ix]
                 c = c.strip()
                 c = c[1:] if c.startswith("(") else c
                 c = c[:-1] if c.endswith(")") else c
                 parts[ix] = c
-            return ( GeoPt(parts[0], parts[1]), GeoPt(parts[2], parts[3]) ) 
+            return (GeoPt(parts[0], parts[1]), GeoPt(parts[2], parts[3]))
         return None
 
     def sw(self):
         return GeoPt(self._sw) if self else None
-    
+
     def ne(self):
         return GeoPt(self._ne) if self else None
-    
+
     def extend(self, *point):
         point = GeoPt(*point)
         if point:
@@ -296,7 +296,7 @@ class GeoBox(object):
                 self._sw = GeoPt(point)
                 self._ne = GeoPt(point)
         return self
-    
+
     def union(self, *other):
         other = GeoBox(*other)
         self.extend(other.sw())
@@ -307,7 +307,7 @@ class GeoBox(object):
         if not self or not other:
             return False
         else:
-            return (self.sw().lat <= point.lat and 
+            return (self.sw().lat <= point.lat and
                     self.sw().lon <= point.lon and
                     self.ne().lat >= point.lat and
                     self.ne().lon >= point.lon)
@@ -323,12 +323,12 @@ class GeoBox(object):
             return not(
                 self.sw().lon > other.ne().lon or
                 self.ne().lon < other.sw().lon or
-                self.sw().lat > other.ne().lat or 
-                self.ne().lat < other.sw().lat )
-                    
+                self.sw().lat > other.ne().lat or
+                self.ne().lat < other.sw().lat)
+
     def span(self):
         return GeoPt(
-            self.ne().lat - self.sw().lat, 
+            self.ne().lat - self.sw().lat,
             self.ne().lon - self.sw().lon) if self else None
 
     def __repr__(self):
@@ -336,24 +336,24 @@ class GeoBox(object):
             return '(%r, %r)' % self.tuple()
         else:
             return ""
-        
+
     def __str__(self):
         if self:
             return "(%s, %s)" % self.tuple()
         else:
             return ""
-        
+
     def __eq__(self, *other):
         try:
             box = GeoBox(*other)
             if self:
-                return ((self.sw() == box.sw()) and (self.ne() == box.ne()) 
+                return ((self.sw() == box.sw()) and (self.ne() == box.ne())
                     if other else False)
             else:
                 return not(bool(box))
         except:
             return False
-        
+
     def __nonzero__(self):
         return bool(self._sw)
 
@@ -403,7 +403,7 @@ def cast_box(value, cur):
     except:
         raise psycopg2.InterfaceError("bad box representation: %r" % value)
 
-with gripe.pgsql.Tx.begin() as tx:
+with gripe.db.Tx.begin() as tx:
     cur = tx.get_cursor()
     cur.execute("SELECT NULL::point, NULL::box")
     point_oid = cur.description[0][1]
@@ -416,11 +416,11 @@ psycopg2.extensions.register_type(BOX)
 
 if __name__ == "__main__":
     dunbar = (43.452601, -80.521909)
-    dunbar_deg = ( (43, 27, 9.3636), (-80, 31, 18.8724 ) )
+    dunbar_deg = ((43, 27, 9.3636), (-80, 31, 18.8724))
     avondale = (43.452614, -80.520625)
     thornhill = (43.659435, -79.489647)
     greenwich = (51.5032432, 0)
-    
+
     print "GeoPt()", GeoPt()
     dunbar_pt = GeoPt(dunbar[0], dunbar[1])
     print "tuple", dunbar
@@ -434,21 +434,21 @@ if __name__ == "__main__":
     print "GeoPt(*degrees)", GeoPt(*dunbar_deg)
     print "GeoPt(float, degrees)", GeoPt(dunbar[0], dunbar_deg[1])
     print "GeoPt(degrees, float)", GeoPt(dunbar_deg[0], dunbar[1])
-    
+
     print "GeoPt(str, str)", GeoPt(str(dunbar[0]), str(dunbar[1]))
     print "GeoPt(str, float)", GeoPt(str(dunbar[0]), dunbar[1])
     print "GeoPt(float, str)", GeoPt(dunbar[0], str(dunbar[1]))
     print "GeoPt(GeoPt)", GeoPt(dunbar_pt)
     print "GeoPt(repr())", GeoPt(repr(dunbar_pt))
     print "GeoPt(str())", GeoPt(str(dunbar_pt))
-    print "GeoPt(' %s, %s ')", GeoPt("  %s   , %s   " % ( dunbar_pt.lat, dunbar_pt.lon ) )
-    
+    print "GeoPt(' %s, %s ')", GeoPt("  %s   , %s   " % (dunbar_pt.lat, dunbar_pt.lon))
+
     avondale_pt = GeoPt(avondale)
     print "Dunbar -> Avondale", dunbar_pt.distance(avondale_pt)
     thornhill_pt = GeoPt(thornhill)
     print "Dunbar -> Thornhill", dunbar_pt.distance(thornhill_pt) / 1000
     print "Dunbar -> Greenwich", dunbar_pt.distance(GeoPt(greenwich)) / 1000
-    
+
     print GeoBox()
     box = GeoBox(avondale_pt, dunbar_pt)
     print box
@@ -467,8 +467,8 @@ if __name__ == "__main__":
     print GeoBox(str(avondale_pt), dunbar_pt)
     print GeoBox(str(avondale_pt), str(dunbar_pt))
     print GeoBox(box)
-    
-    with gripe.pgsql.Tx.begin():
+
+    with gripe.db.Tx.begin():
         class Test(grumble.Model):
             _flat = True
             label_prop = "loc_label"
@@ -476,14 +476,14 @@ if __name__ == "__main__":
             loc = GeoPtProperty()
             box = GeoBoxProperty()
 
-    with gripe.pgsql.Tx.begin():
+    with gripe.db.Tx.begin():
         jan = Test(loc_label = "Jan", loc = dunbar_pt, box = box)
         print "++", jan.loc_label, jan.loc, jan.box
         jan.put()
         print "+++", jan.id(), jan.keyname(), jan.label(), jan.loc, jan.box
         k = jan.key()
 
-    with gripe.pgsql.Tx.begin():
+    with gripe.db.Tx.begin():
         jan = Test.get(k)
         print "++++", jan.id(), jan.keyname(), jan.label(), jan.loc, jan.box
 

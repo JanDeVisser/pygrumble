@@ -1,11 +1,10 @@
-__author__="jan"
-__date__ ="$29-Jan-2013 11:00:39 AM$"
+__author__ = "jan"
+__date__ = "$29-Jan-2013 11:00:39 AM$"
 
 import psycopg2
-import gripe
 import gripe.db
 
-logger = gripe.get_logger(__name__)
+logger = gripe.get_logger("gripe.db")
 
 class Cursor(gripe.db.LoggedCursor, psycopg2.extensions.cursor):
     def _interpolate(self, sql, args):
@@ -13,10 +12,10 @@ class Cursor(gripe.db.LoggedCursor, psycopg2.extensions.cursor):
 
 class Connection(gripe.db.LoggedConnection, psycopg2.extensions.connection):
     def cursor(self):
-        return super(Connection, self).cursor(cursor_factory=Cursor)
+        return super(Connection, self).cursor(cursor_factory = Cursor)
 
 class DbAdapter(object):
-    
+
     @classmethod
     def setup(cls, pgsql_conf):
         cls.config = pgsql_conf
@@ -87,6 +86,6 @@ class DbAdapter(object):
             dsn += " host=%s" % self.config.host
         logger.debug("Connecting with role '%s' autocommit = %s",
             self.role, self.autocommit)
-        conn = psycopg2.connect(dsn, connection_factory=Connection)
+        conn = psycopg2.connect(dsn, connection_factory = Connection)
         conn.autocommit = self.autocommit
         return conn

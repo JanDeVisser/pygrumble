@@ -5,7 +5,7 @@ from PySide.QtCore import QAbstractTableModel
 from PySide.QtCore import QModelIndex
 from PySide.QtCore import Qt
 
-import gripe.pgsql
+import gripe.db
 import grumble
 
 class GrumbleTableModel(QAbstractTableModel):
@@ -33,7 +33,7 @@ class GrumbleTableModel(QAbstractTableModel):
     def _get_data(self, ix):
         if not self._data:
             self._data = []
-            with gripe.pgsql.Tx.begin():
+            with gripe.db.Tx.begin():
                 for o in self._query:
                     self._data.append(o)
         return self._data[ix]
@@ -77,7 +77,7 @@ class GrumbleListModel(QAbstractListModel):
     def _get_data(self, ix):
         if not self._data:
             self._data = []
-            with gripe.pgsql.Tx.begin():
+            with gripe.db.Tx.begin():
                 for o in self._query:
                     self._data.append(o)
         return self._data[ix]

@@ -126,7 +126,7 @@ class User(grumble.Model, gripe.auth.AbstractUser):
 
     def uid(self):
         return self.email
-    
+
     def displayname(self):
         return self.display_name
 
@@ -138,7 +138,9 @@ class User(grumble.Model, gripe.auth.AbstractUser):
 
     def authenticate(self, **kwargs):
         password = kwargs.get("password")
-        return self.exists() and self.is_active() and self.password == password
+        return self.exists() and \
+            self.is_active() and \
+            grumble.PasswordProperty.hash(password) == self.password
 
     def confirm(self, status = 'Active'):
         logger.debug("User(%s).confirm(%s)", self, status)

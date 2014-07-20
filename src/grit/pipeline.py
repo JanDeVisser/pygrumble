@@ -2,13 +2,11 @@
 # To change this template file, choose Tools | Templates
 # and open the template in the editor.
 
-__author__="jan"
-__date__ ="$19-Sep-2013 4:44:54 PM$"
+__author__ = "jan"
+__date__ = "$19-Sep-2013 4:44:54 PM$"
 
 import datetime
-
-import gripe
-import gripe.pgsql
+import gripe.db
 
 logger = gripe.get_logger(__name__)
 
@@ -20,7 +18,7 @@ class TxWrapper(object):
 
     @classmethod
     def begin(cls, reqctx):
-        return TxWrapper(gripe.pgsql.Tx.begin(), reqctx.request)
+        return TxWrapper(gripe.db.Tx.begin(), reqctx.request)
 
     def __enter__(self):
         return self._tx.__enter__()

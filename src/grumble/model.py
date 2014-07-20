@@ -8,7 +8,7 @@ __date__ = "$17-Sep-2013 11:41:49 AM$"
 import uuid
 
 import gripe.acl
-import gripe.pgsql
+import gripe.db
 import gripe.sessionbridge
 import grumble.errors
 import grumble.key
@@ -44,14 +44,14 @@ class Model():
                 setattr(ret, propname, propvalue)
         logger.debug("%s.__new__: %s", ret.kind(), ret._values)
         return ret
-    
+
     @classmethod
     def schema(cls):
         cls.seal()
         ret = { "kind": cls.kind(), "flat": cls._flat, "audit": cls._audit }
         ret["properties"] = [ prop.schema() for prop in cls._properties_by_seqnr if not(prop.private) ]
         return ret
-    
+
     @classmethod
     def seal(cls):
         if not cls._sealed:
@@ -210,7 +210,7 @@ class Model():
                 prop._after_store(self)
             if hasattr(self, "after_store") and callable(self.after_store):
                 self.after_store()
-            gripe.pgsql.Tx.put_in_cache(self)
+            gripe.db.Tx.put_in_cache(self)
             self._storing -= 1
         del self._storing
 
@@ -350,7 +350,7 @@ class Model():
 
     def _update(self, d):
         pass
-    
+
     @classmethod
     def _deserialize(cls, descriptor):
         logger.debug("""_deserialize: descriptor %s
@@ -542,7 +542,7 @@ class Model():
         k = grumble.key.Key(id)
         if cls != Model:
             cls.seal()
-            ret = gripe.pgsql.Tx.get_from_cache(k)
+            ret = gripe.db.Tx.get_from_cache(k)
             if not ret:
                 ret = super(Model, cls).__new__(cls)
                 assert (cls.kind().endswith(k.kind)) or not k.kind, "%s.get(%s.%s) -> wrong key kind" % (cls.kind(), k.kind, k.name)
@@ -564,7 +564,7 @@ class Model():
         cls.seal()
         assert cls != Model, "Cannot use get_by_key on unconstrained Models"
         k = grumble.key.Key(cls, key)
-        ret = gripe.pgsql.Tx.get_from_cache(k)
+        ret = gripe.db.Tx.get_from_cache(k)
         if not ret:
             ret = super(Model, cls).__new__(cls)
             assert (cls.kind().endswith(k.kind)) or not k.kind, "%s.get_by_key(%s:%s) -> wrong key kind" % (cls.kind(), k.kind, k.name)
@@ -639,7 +639,7 @@ class Model():
         for cdata in data:
             clazz = grumble.meta.Registry.get(cdata.model)
             if clazz:
-                with gripe.pgsql.Tx.begin():
+                with gripe.db.Tx.begin():
                     if clazz.all(keys_only = True).count() == 0:
                         logger.info("_import_template_data(%s): Loading template model data for model %s", cname, cdata.model)
                         for d in cdata["data"]:

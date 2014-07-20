@@ -8,7 +8,7 @@
     "grizzle": {
         "userparts": {
             "sweattrails.userprofile.UserProfile": { "default": true, "configurable": false },
-            "sweattrails.config.ActivityProfile": { "default": false, "configurable": false },
+            "sweattrails.config.ActivityProfile": { "default": true, "configurable": false },
             "sweattrails.userprofile.WeightMgmt": {
                 "default": true, "configurable": true, 
                 "label": "Weight Tracking",

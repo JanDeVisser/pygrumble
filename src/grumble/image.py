@@ -8,6 +8,7 @@ import hashlib
 import os
 import psycopg2
 import gripe
+import gripe.db
 import grumble.converter
 import grumble.property
 
@@ -71,7 +72,7 @@ if __name__ == "__main__":
         label = grumble.property.TextProperty(required = True)
         image = ImageProperty()
 
-    with gripe.pgsql.Tx.begin():
+    with gripe.db.Tx.begin():
         with open("C:/Users/Public/Pictures/Sample Pictures/Desert.jpg", "rb") as fh:
             img = fh.read()
             desert = Test(label = "Desert")
@@ -84,7 +85,7 @@ if __name__ == "__main__":
     except:
         pass
 
-    with gripe.pgsql.Tx.begin():
+    with gripe.db.Tx.begin():
         desert = Test.get(k)
         with open("C:/Users/Public/Pictures/Sample Pictures/Desert_1.jpg", "wb") as fh:
             fh.write(desert.image_blob)

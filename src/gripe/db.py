@@ -12,17 +12,17 @@ logger = gripe.get_logger(__name__)
 class LoggedCursor(object):
     def _interpolate(self, sql, args):
         return "%s <- %s" % (sql, args)
-    
+
     def set_columns(self, columns, key_index):
         self._columns = columns
         self._key_index = key_index
 
-    def execute(self, sql, args=None, **kwargs):
+    def execute(self, sql, args = None, **kwargs):
         if "columns" in kwargs:
             self._columns = kwargs["columns"]
         if "key_index" in kwargs:
             self._key_index = kwargs["key_index"]
-        #logger.debug("sql: %s args %s", sql, args)
+        # logger.debug("sql: %s args %s", sql, args)
         logger.debug(self._interpolate(sql, args))
         try:
             super(LoggedCursor, self).execute(sql, args)
@@ -50,7 +50,7 @@ class LoggedCursor(object):
     def singleton(self):
         return self.single_row()[0]
 
-    #_close = close
+    # _close = close
 
     def _close(self):
         pass
@@ -111,13 +111,16 @@ class Tx(object):
         cls._adapter_class = None
         for a in Tx._adapters:
             if a in config:
-                cls._adapter_class = gripe.resolve(cls._adapters[a])
+                logger.info("Initializing DB adapter class %s for database type %s", cls._adapters[a], a)
+                cls._adapter_name = cls._adapters[a]
+                cls._adapter_class = gripe.resolve(cls._adapter_name)
+                cls._database_type = a
                 c = config[a]
-        if cls._adapter_class:
+        if cls._adapter_class and hasattr(cls._adapter_class, "setup"):
             cls._adapter_class.setup(c)
-        
+
     @classmethod
-    def begin(cls, role="user", database=None, autocommit=False):
+    def begin(cls, role = "user", database = None, autocommit = False):
         return cls._tl.tx \
             if hasattr(cls._tl, "tx") \
             else Tx(role, database, autocommit)
@@ -125,10 +128,13 @@ class Tx(object):
     @classmethod
     def get(cls):
         return cls._tl.tx if hasattr(cls._tl, "tx") else None
-    
+
     def create_adapter(self, role, database, autocommit):
-        self.adapter = self._adapter_class()
-        self.adapter.initialize(role, database, autocommit)
+        adapter = self._adapter_class()
+        assert adapter, "Could not create adapter %s for DB type %s" % (self._adapter_name, self._database_type)
+        if hasattr(adapter, "initialize"):
+            adapter.initialize(role, database, autocommit)
+        return adapter
 
     def __enter__(self):
         self.count += 1

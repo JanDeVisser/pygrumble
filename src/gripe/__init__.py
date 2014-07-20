@@ -76,18 +76,18 @@ def write_file(fname, data, mode = "w+"):
 def exists(f):
     p = os.path.join(root_dir(), f)
     logger.debug("exists(%s)", p)
-    return os.access(p, os.F_OK)              
+    return os.access(p, os.F_OK)
 
 def unlink(f):
     p = os.path.join(root_dir(), f)
     try:
         logger.debug("rm %s", p)
-        if os.access(p, os.F_OK):              
+        if os.access(p, os.F_OK):
             if os.access(p, os.W_OK):
                 os.unlink(p)
                 if os.access(p, os.F_OK):
                     logger.info("rm %s: File seems to be still there after os.unlink()", p)
-                else:              
+                else:
                     logger.debug("rm %s: OK", p)
             else:
                 logger.info("rm %s: Can't unlink: No write permission", p)
@@ -106,12 +106,12 @@ def rename(oldname, newname):
     try:
         logger.debug("mv %s %s", o, n)
         if os.access(o, os.F_OK):
-            if os.access(o, os, W_OK):  
+            if os.access(o, os.W_OK):
                 if not os.access(n, os.F_OK):
                     os.rename(o, n)
                     if os.access(o, os.F_OK):
                         logger.info("mv %s %s: File seems to be still there after os.rename()", o, n)
-                    else:              
+                    else:
                         logger.debug("mv %s %s OK", o, n)
                 else:
                     logger.info("mv %s %s: Can't rename: Target exists", o, n)
@@ -270,34 +270,34 @@ class ConfigMeta(type):
         if not super(ConfigMeta, cls).__getattribute__("_loaded"):
             super(ConfigMeta, cls).__getattribute__("_load")()
         return super(ConfigMeta, cls).__getattribute__(name)
-    
+
     def __setattr__(cls, name, value):
         if not name.startswith("_"):
             cls._sections.add(name)
-        return super(ConfigMeta, cls).__setattr__(name, value)
-     
+        return super(ConfigMeta, cls).__setattr__(name, gripe.json_util.JSON.create(value))
+
     def __delattr__(cls, name):
         cls._sections.remove(name)
         return super(ConfigMeta, cls).__delattr__(name)
-     
+
     def __len__(cls):
         return len(cls._sections)
-     
+
     def __getitem__(cls, key):
         return getattr(cls, key)
-     
+
     def __setitem__(cls, key, value):
         return setattr(cls, key, value)
-         
+
     def __delitem__(cls, key):
         return delattr(cls, key)
-     
+
     def __iter__(cls):
         return iter(cls._sections)
-     
+
     def __contains__(cls, key):
         return key in cls._sections
-    
+
     def keys(cls):
         return cls._sections
 
@@ -325,16 +325,18 @@ class Config(object):
 
     @classmethod
     def set(cls, section, config):
+        logger.info("Writing config section %s", section)
         config = gripe.json_util.JSONObject(config) \
             if not isinstance(config, gripe.json_util.JSONObject) \
             else config
-        if (not exists(os.path.join("conf", "%s.json.backup" % section), os.F_OK) and
-                exists(os.path.join("conf", "%s.json" % section, os.F_OK))):
+        if (not exists(os.path.join("conf", "%s.json.backup" % section)) and
+                exists(os.path.join("conf", "%s.json" % section))):
             print "Renaming conf/%s.json to conf/%s.json.backup" % (section, section)
-            rename(os.path.join("conf", "%s.json" % section), 
+            rename(os.path.join("conf", "%s.json" % section),
                    os.path.join("conf", "%s.json.backup" % section))
         config.file_write(os.path.join("conf", "%s.json" % section), 4)
         setattr(cls, section, config)
+        return config
 
     @classmethod
     def _load(cls):
@@ -352,7 +354,7 @@ class Config(object):
                 # print >> sys.stderr, "Config.%s: %s" % (section, json.dumps(config))
                 setattr(cls, section, config)
         cls._loaded = True
-        
+
     @classmethod
     def backup(cls):
         logger.debug("Backing up config")
@@ -374,7 +376,7 @@ class Config(object):
         for f in os.listdir(os.path.join(root_dir(), "conf")):
             (section, ext) = os.path.splitext(f)
             if ext == ".backup":
-                os.rename(os.path.join(root_dir(), "conf", "%s.json.backup" % section), 
+                os.rename(os.path.join(root_dir(), "conf", "%s.json.backup" % section),
                           os.path.join(root_dir(), "conf", "%s.json" % section))
 
 class Enum(tuple):

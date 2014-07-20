@@ -11,6 +11,7 @@ import uuid
 import webapp2
 
 import gripe
+import gripe.db
 import gripe.sessionbridge
 import grumble
 
@@ -111,7 +112,7 @@ class SessionManager(object):
                 cutoff = datetime.datetime.now() - datetime.timedelta(100)
                 q = grumble.Query(UserData)
                 q.add_filter("last_access <= ", cutoff)
-                with gripe.pgsql.Tx.begin():
+                with gripe.db.Tx.begin():
                     result = q.delete()
                     logger.info("Weeded %s cookies", result)
                     self._lastharvest = datetime.datetime.now()
@@ -199,7 +200,7 @@ class RequestCtx(object):
         self.response = response
         for k in defaults:
             setattr(self, k, defaults[k])
-            
+
     def sessionid(self):
         return self.request.cookies.get("grit")
 
@@ -266,7 +267,7 @@ class Session(gripe.role.Guard):
 
     def __contains__(self, item):
         return item in self._data
-    
+
     def sessiondata(self):
         return self._data
 
@@ -333,7 +334,7 @@ class SessionBridge(object):
         sets the instance as the bridge between the grit session associated with
         the running thread and grumble.
     """
-    
+
     def userid(self):
         session = Session.get()
         return session.userid() if session is not None else None

@@ -2,8 +2,8 @@
 # To change this template file, choose Tools | Templates
 # and open the template in the editor.
 
-__author__="jan"
-__date__ ="$17-Sep-2013 12:23:49 PM$"
+__author__ = "jan"
+__date__ = "$17-Sep-2013 12:23:49 PM$"
 
 import datetime
 import json
@@ -14,7 +14,7 @@ logger = gripe.get_logger(__name__)
 
 class Converters(type):
     _converters = { }
-    
+
     def __new__(cls, name, bases, dct):
         ret = type.__new__(cls, name, bases, dct)
         if hasattr(ret, "datatypes"):
@@ -95,10 +95,10 @@ class DictConverter(PropertyConverter):
     def from_jsonvalue(self, value):
         assert (value is None) or isinstance(value, dict), "DictConverter.to_sqlvalue(): value must be a dict"
         return value or {}
-    
+
 class ListConverter(PropertyConverter):
     datatype = list
-        
+
     def convert(self, value):
         try:
             return list(value)
@@ -120,20 +120,25 @@ class ListConverter(PropertyConverter):
     def from_jsonvalue(self, value):
         assert (value is None) or isinstance(value, list), "ListConverter.to_sqlvalue(): value must be a list"
         return value or []
-    
+
 class DateTimeConverter(PropertyConverter):
     datatype = datetime.datetime
-        
+
+    def convert(self, value):
+        if isinstance(value, (int, float)):
+            value = datetime.datetime.utcfromtimestamp(value)
+        return super(TimeConverter, self).convert(value)
+
     def to_jsonvalue(self, value):
         assert (value is None) or isinstance(value, datetime.datetime), "DateTimeConverter.to_jsonvalue: value must be datetime"
         return gripe.json_util.datetime_to_dict(value)
 
     def from_jsonvalue(self, value):
         return gripe.json_util.dict_to_datetime(value) if isinstance(value, dict) else value
-    
+
 class DateConverter(PropertyConverter):
     datatype = datetime.date
-    
+
     def to_jsonvalue(self, value):
         assert (value is None) or isinstance(value, datetime.date), "DateConverter.to_jsonvalue: value must be date"
         return gripe.json_util.date_to_dict(value)
@@ -143,7 +148,7 @@ class DateConverter(PropertyConverter):
 
 class TimeConverter(PropertyConverter):
     datatype = datetime.time
-    
+
     def to_jsonvalue(self, value):
         assert (value is None) or isinstance(value, datetime.time), "TimeConverter.to_jsonvalue: value must be time"
         return gripe.json_util.time_to_dict(value)
@@ -151,4 +156,3 @@ class TimeConverter(PropertyConverter):
     def from_jsonvalue(self, value):
         return gripe.json_util.dict_to_time(value) if isinstance(value, dict) else value
 
-    

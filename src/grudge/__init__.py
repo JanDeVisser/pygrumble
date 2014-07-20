@@ -1,6 +1,6 @@
 import datetime
 import gripe
-import gripe.pgsql
+import gripe.db
 import gripe.smtp
 import grumble
 
@@ -31,7 +31,7 @@ class Worker(object):
                 kwargs = kwargs or {}
                 logger.debug("Worker %s: handling(%s, %s, %s)", self._ix,
                     a, args, kwargs)
-                with gripe.pgsql.Tx.begin():
+                with gripe.db.Tx.begin():
                     ret = a(*args, **kwargs)
                     if isinstance(ret, (basestring, Status)) and "process" in kwargs:
                         process = kwargs["process"]()
@@ -154,7 +154,7 @@ class Stop(ProcessAction):
 class Transition(ProcessAction):
     def __str__(self):
         return "(--> %s)" % self._target
-    
+
     def __call__(self, **kwargs):
         process = kwargs.get("process")
         logger.debug("Transition %s to %s", process, self._target)
@@ -265,7 +265,7 @@ class SendMail(Action):
 
     def __call__(self, **kwargs):
         process = kwargs.get("process")
-        text =  process().resolve_attribute(self._text[1:]) \
+        text = process().resolve_attribute(self._text[1:]) \
             if process and self._text.startswith("@") \
             else self._text
         msg = None
@@ -400,7 +400,7 @@ class Process(object):
 
         def instantiate(cls, parent = None):
             logger.debug("instantiate %s", cls.__name__)
-            with gripe.pgsql.Tx.begin():
+            with gripe.db.Tx.begin():
                 p = cls(parent = parent)
                 p.put()
                 for sub in cls.subprocesses():
@@ -411,7 +411,7 @@ class Process(object):
 
         def start(self):
             if self.starttime is None:
-                with gripe.pgsql.Tx.begin():
+                with gripe.db.Tx.begin():
                     self.semaphore = self.semaphore + 1
                     if self.semaphore < self._start_semaphore:
                         logger.debug("start semaphore value is %s threshold of %s not yet reached", self.semaphore, self._start_semaphore)
@@ -423,7 +423,7 @@ class Process(object):
                         self.put()
                         for a in self._on_started:
                             _queue.put_action(a, process = self)
-                with gripe.pgsql.Tx.begin():
+                with gripe.db.Tx.begin():
                     ep = grumble.Model.for_name(self._entrypoint) if self._entrypoint else None
                     logger.debug("Entrypoint of %s: %s", self.__class__.__name__, ep.__name__ if ep is not None else "None")
                     if ep:
@@ -438,7 +438,7 @@ class Process(object):
         def stop(self):
             if self.starttime is not None and self.finishtime is None:
                 logger.debug("stop instance of %s", self.__class__.__name__)
-                with gripe.pgsql.Tx.begin():
+                with gripe.db.Tx.begin():
                     if self.subprocesses():
                         for sub in grumble.Query(self.subprocesses(), ancestor = self):
                             sub.stop()
@@ -456,7 +456,7 @@ class Process(object):
             assert status in self._statuses, "Cannot add status %s to process %s" % (status, self.__class__.__name__)
             logger.debug("Checking status %s on process %s", status, self.__class__.__name__)
             added = None
-            with gripe.pgsql.Tx.begin():
+            with gripe.db.Tx.begin():
                 for s in AddedStatus.query(parent = self):
                     logger.debug(" -- Status %s found", s.status)
                     if s.status == status:
@@ -470,7 +470,7 @@ class Process(object):
             logger.debug("Adding status %s to process %s", status, self.__class__.__name__)
             statusdef = self._statuses[status]
             added = None
-            with gripe.pgsql.Tx.begin():
+            with gripe.db.Tx.begin():
                 for s in AddedStatus.query(parent = self):
                     if s.status == status:
                         added = s
@@ -487,7 +487,7 @@ class Process(object):
             logger.debug("Removing status %s from process %s", status, self.__class__.__name__)
             statusdef = self._statuses[status]
             remove = None
-            with gripe.pgsql.Tx.begin():
+            with gripe.db.Tx.begin():
                 for s in AddedStatus.query(parent = self):
                     if s.status == status:
                         remove = s

@@ -1,6 +1,6 @@
 import sys
 
-import gripe.pgsql
+import gripe.db
 import grumble
 
 class HttpAccess(grumble.Model):
@@ -18,7 +18,7 @@ class HttpAccessLogger(object):
     def log(self, reqctx):
         request = reqctx.request
         response = reqctx.response
-        with gripe.pgsql.Tx.begin():
+        with gripe.db.Tx.begin():
             access = HttpAccess()
             access.remote_addr = request.remote_addr
             access.user = reqctx.user.uid() if (hasattr(reqctx, "user") and reqctx.user) else None
