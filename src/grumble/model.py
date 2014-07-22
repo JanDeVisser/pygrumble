@@ -157,7 +157,7 @@ class Model():
             self._exists = False
 
     def _load(self):
-        # logger.debug("_load -> kind: %s, _id: %s, _key_name: %s", self.kind(), self._id, self._key_name)
+        logger.debug("_load -> kind: %s, key: %s", self.kind(), str(self.key()))
         if (not(hasattr(self, "_values")) or (self._values is None)) and (self._id or self._key_name):
             self._populate(grumble.query.ModelQuery.get(self.key()))
         else:
@@ -215,7 +215,7 @@ class Model():
         del self._storing
 
     def _on_delete(self):
-        return self.on_delete(self) if hasattr(self, "on_delete") and getattr(cls, "on_delete") else True
+        return self.on_delete(self) if hasattr(self, "on_delete") and callable(cls, "on_delete") else True
 
     def _validate(self):
         for prop in self._properties.values():
@@ -322,7 +322,7 @@ class Model():
         with gripe.LoopDetector.begin(self.id()) as detector:
             if detector.loop:
                 logger.info("to_dict: Loop detected. %s is already serialized", self)
-                return ret
+                return { "key": self.id() }
             p = self.parent()
             ret = { "key": self.id(), 'parent': p.id if p else None }
             detector.add(self.id())

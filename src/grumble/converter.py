@@ -39,7 +39,7 @@ class PropertyConverter(object):
 
     def convert(self, value):
         """
-            Convert value from to the canonical internal representation. Raise 
+            Convert value from to the canonical internal representation. Raise
             an exception if value cannot be converted.
         """
         try:
@@ -50,8 +50,8 @@ class PropertyConverter(object):
 
     def to_sqlvalue(self, value):
         """
-                Convert value, which is guaranteed to be produced by a call to 
-                convert(), to a value suitable for storing in persistant 
+                Convert value, which is guaranteed to be produced by a call to
+                convert(), to a value suitable for storing in persistant
                 storage.
         """
         return value
@@ -127,7 +127,7 @@ class DateTimeConverter(PropertyConverter):
     def convert(self, value):
         if isinstance(value, (int, float)):
             value = datetime.datetime.utcfromtimestamp(value)
-        return super(TimeConverter, self).convert(value)
+        return super(DateTimeConverter, self).convert(value)
 
     def to_jsonvalue(self, value):
         assert (value is None) or isinstance(value, datetime.datetime), "DateTimeConverter.to_jsonvalue: value must be datetime"
@@ -155,4 +155,14 @@ class TimeConverter(PropertyConverter):
 
     def from_jsonvalue(self, value):
         return gripe.json_util.dict_to_time(value) if isinstance(value, dict) else value
+
+class TimeDeltaConverter(PropertyConverter):
+    datatype = datetime.timedelta
+
+    def to_jsonvalue(self, value):
+        assert (value is None) or isinstance(value, datetime.timedelta), "TimeDeltaConverter.to_jsonvalue: value must be timedelta"
+        return value.total_seconds()
+
+    def from_jsonvalue(self, value):
+        return datetime.timedelta(seconds = value)
 

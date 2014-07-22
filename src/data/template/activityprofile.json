@@ -8,18 +8,18 @@
             "isdefault": true,
             "description": "Triathlon activity profile",
             "sessionType": [
-                { "name": "Run", "isA": null, "intervalpart": "sweattrails.session.RunPart", defaultfor = "running" },
+                { "name": "Run", "isA": null, "intervalpart": "sweattrails.session.RunPart", "defaultfor": "running" },
                 { "name": "Treadmill Run", "isA": { "name": "Run" } },
                 { "name": "Track Session", "isA": { "name": "Run" } },
                 { "name": "Trail Run", "isA": { "name": "Run" } },
                 { "name": "Walk", "isA": { "name": "Run" } },
                 { "name": "Hike", "isA": { "name": "Run" } },
-                { "name": "Bike Ride", "isA": null, "intervalpart": "sweattrails.session.BikePart", defaultfor = "cycling" },
+                { "name": "Bike Ride", "isA": null, "intervalpart": "sweattrails.session.BikePart", "defaultfor": "cycling" },
                 { "name": "Road Ride", "isA": { "name": "Bike Ride" } },
                 { "name": "Trainer Session", "isA": { "name": "Road Ride" } },
                 { "name": "Commute/Transportation", "isA": { "name": "Road Ride" } },
                 { "name": "Trail/Mountain Ride", "isA": { "name": "Bike Ride" } },
-                { "name": "Swim", "isA": null, "intervalpart": "sweattrails.session.SwimPart", defaultfor = "swimming" },
+                { "name": "Swim", "isA": null, "intervalpart": "sweattrails.session.SwimPart", "defaultfor": "swimming" },
                 { "name": "Pool Swim", "isA": { "name": "Swim" } },
                 { "name": "Pool Swim (20m)", "isA": { "name": "Pool Swim" } },
                 { "name": "Pool Swim (20y)", "isA": { "name": "Pool Swim" } },
@@ -30,7 +30,8 @@
                 { "name": "Open Water Swim", "isA": { "name": "Swim" } },
                 { "name": "Other", "isA": null },
                 { "name": "Weights", "isA": { "name": "Other" } },
-                { "name": "Core", "isA": { "name": "Other" } }
+                { "name": "Core", "isA": { "name": "Other" } },
+                { "name": "Transition", "isA": { "name": "Other" }, "defaultfor": "transition" }
             ],
             "gearType": [
                 { "name": "Bike", "isA": null, "usedFor": { "name": "Bike Ride" }, "partOf": null },

@@ -16,6 +16,10 @@ def local_date_to_utc(d):
     """Local date to UTC"""
     return datetime.datetime.utcfromtimestamp(time.mktime(d.timetuple()))
 
+def semicircle_to_degrees(semicircles):
+    """Convert a number in semicricles to degrees"""
+    return semicircles * (180.0 / 2.0 ** 31)
+
 
 class RecordWrapper(object):
     def __init__(self, rec):
@@ -58,9 +62,11 @@ class RecordWrapper(object):
 
 class FITLap(RecordWrapper):
     def convert_interval(self, interval):
-        interval.interval_id = local_date_to_utc(self.get_data("start_time")) + "Z"
+        self.start_time = self.get_data("start_time")
+        interval.interval_id = str(local_date_to_utc(self.start_time)) + "Z"
+        ts = self.start_time - self.session.start_time
+        interval.timestamp = ts
         interval.distance = self.get_data("total_distance")
-        interval.start_time = self.get_data("start_time")
         interval.elapsed_time = self.get_data("total_elapsed_time")
         interval.duration = self.get_data("total_timer_time")
         interval.calories_burnt = self.get_data("total_calories")
@@ -70,10 +76,12 @@ class FITLap(RecordWrapper):
 class FITRecord(RecordWrapper):
     def convert(self, session):
         wp = sweattrails.session.Waypoint(parent = session)
-        wp.timestamp = self.get_data("timestamp")
+        wp.timestamp = self.get_data("timestamp") - self.session.start_time
         lat = self.get_data("position_lat")
         lon = self.get_data("position_lon")
         if lat and lon:
+            lat = semicircle_to_degrees(lat)
+            lon = semicircle_to_degrees(lon)
             wp.location = grumble.geopt.GeoPt(lat, lon)
         wp.speed = self.get_data("speed")
         wp.altitude = self.get_data("altitude")
@@ -88,38 +96,44 @@ class FITRecord(RecordWrapper):
 
 class FITSession(FITLap):
     def initialize(self):
-        self.start = self.data["start_time"]
-        self.end = self.data["timestamp"]
+        self.start = self.get_data("start_time")
+        self.end = self.get_data("timestamp")
         self.laps = []
         self.records = []
+        self.session = self
 
     def contains(self, obj):
-        return self.start < obj.data["timestamp"] <= self.end
+        return self.start < obj._data["timestamp"] <= self.end
 
     def add_lap(self, lap):
         self.laps.append(lap)
+        lap.session = self
 
     def add_record(self, record):
         self.records.append(record)
+        record.session = self
 
     def convert(self, athlete):
-        assert athlete, "fitparse.upload(): athlete is None"
-        session = sweattrails.session.Session()
-        session.athlete = athlete
-        session.inprogress = False
-        profile = sweattrails.config.ActivityProfile.get_profile(athlete)
-        assert profile, "fitparse.upload(): User %s has no profile" % athlete.uid()
-        sessiontype = profile.get_default_SessionType(self.get_data("sport"))
-        assert sessiontype, "fitparse.upload(): User %s has no default session type for sport %s" % (athlete.uid(), self.get_data("sport"))
-        session.sessiontype = sessiontype
-        self.upload_interval(session)
-        for lap in self.laps:
-            interval = sweattrails.session.Interval(parent = session)
-            lap.convert_interval(interval)
-        for record in self.records:
-            record.convert(session)
-        session.analyze()
-        return session
+        with gripe.db.Tx.begin():
+            assert athlete, "fitparse.upload(): athlete is None"
+            session = sweattrails.session.Session()
+            session.athlete = athlete
+            self.start_time = self.get_data("start_time")
+            session.start_time = self.start_time
+            session.inprogress = False
+            profile = sweattrails.config.ActivityProfile.get_profile(athlete)
+            assert profile, "fitparse.upload(): User %s has no profile" % athlete.uid()
+            sessiontype = profile.get_default_SessionType(self.get_data("sport"))
+            assert sessiontype, "fitparse.upload(): User %s has no default session type for sport %s" % (athlete.uid(), self.get_data("sport"))
+            session.sessiontype = sessiontype
+            self.convert_interval(session)
+            for lap in self.laps:
+                interval = sweattrails.session.Interval(parent = session)
+                lap.convert_interval(interval)
+            for record in self.records:
+                record.convert(session)
+            session.analyze()
+            return session
 
 class ActivityWrapper(object):
     def __init__(self, activity):
@@ -173,11 +187,11 @@ def convert(user, filename):
 if __name__ == "__main__":
 
     def printhelp():
-        print "usage: python" + sys.argv[0] + "<uid> <password> <fit file>"
+        print "usage: python" + sys.argv[0] + " <uid> <password> <fit file>"
 
     def main():
 
-        if len(sys.argv) != 1:
+        if len(sys.argv) != 4:
             printhelp()
             return 0
 

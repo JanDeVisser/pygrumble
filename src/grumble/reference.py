@@ -23,14 +23,11 @@ class ReferenceConverter(grumble.converter.PropertyConverter):
         else:
             assert isinstance(value, grumble.model.Model)
             k = value.key()
-            return k.name if self.reference_class else str(k)
+            return str(k)
 
     def from_sqlvalue(self, sqlvalue):
         if sqlvalue:
-            return grumble.model.Model.get(
-                grumble.key.Key(self.reference_class, sqlvalue) 
-                    if self.reference_class 
-                    else grumble.key.Key(sqlvalue))
+            return grumble.model.Model.get(grumble.key.Key(sqlvalue))
         else:
             return None
 

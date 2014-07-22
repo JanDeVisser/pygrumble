@@ -48,6 +48,8 @@ class GroupManager():
 
 @grumble.abstract
 class UserPart(grumble.Model):
+    def get_user(self):
+        return self.parent()()
 
     @classmethod
     def get_userpart(cls, user):
@@ -62,9 +64,9 @@ class UserPartKennel(UserPart):
 """
     Banned - User is still there, content is still there, user cannot log in.
         Revertable.
-    Inactive - At user's request, User is "deleted", content deleted, user 
+    Inactive - At user's request, User is "deleted", content deleted, user
         cannot log in. Not revertable.
-    Deleted - Admin "deleted" user, content deleted, user cannot log in. 
+    Deleted - Admin "deleted" user, content deleted, user cannot log in.
         Not revertable.
 """
 UserStatus = gripe.Enum(['Unconfirmed', 'Active', 'Admin', 'Banned', 'Inactive', 'Deleted'])
@@ -223,7 +225,7 @@ class GroupsForUser(grumble.Model):
 class UserManager():
     def get(self, userid):
         ret = User.get_by_key(userid)
-        return ret and ret.exists() and ret
+        return ret if ret and ret.exists() else None
 
     def add(self, userid, **attrs):
         logger.debug("grizzle.UserManager.add(%s, %s)", userid, attrs)

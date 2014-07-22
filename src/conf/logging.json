@@ -8,6 +8,7 @@
     "gripe.smtp": { "flat": false, "destination": "stderr" },
     "grudge": { "destination": "stderr" },
     "grudge.control": { "flat": false, "destination": "stderr" },
+    "grumble": { "destination": "stderr" },
     "grit.usermgmt": { "flat": false, "destination": "stderr" },
     "sweattrails.config": { "destination": "stderr" },
     "grizzle": { "destination": "stderr" }

@@ -457,4 +457,6 @@ class TimeProperty(DateTimeProperty):
         dt = datetime.datetime.now()
         return datetime.time(dt.hour, dt.minute, dt.second, dt.microsecond)
 
-
+class TimeDeltaProperty(ModelProperty):
+    datatype = datetime.timedelta
+    sqltype = "INTERVAL"

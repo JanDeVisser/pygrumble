@@ -20,7 +20,7 @@ logger = gripe.get_logger(__name__)
 QueryType = gripe.Enum(['Columns', 'KeyName', 'Update', 'Insert', 'Delete', 'Count'])
 
 class Sort(object):
-    def __init__(self, colname, ascending):
+    def __init__(self, colname, ascending = True):
         self.colname = colname
         self.ascending = ascending
 
@@ -161,7 +161,7 @@ class ModelQuery(object):
     def clear_sort(self):
         self._sortorder = []
 
-    def add_sort(self, colname, ascending):
+    def add_sort(self, colname, ascending = True):
         self._reset_state()
         self._sortorder.append(Sort(colname, ascending))
         return self

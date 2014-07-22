@@ -24,10 +24,10 @@ class Key(object):
             if isinstance(value, basestring):
                 self._assign(value)
             elif isinstance(value, dict):
-                if "id" in dict:
-                    self.__init__(dict[id])
+                if "id" in value:
+                    self.__init__(value[id])
                 else:
-                    self.__init__(dict["kind"], dict["name"], dict.get("scope"))
+                    self.__init__(value["kind"], value["name"], value.get("scope"))
             elif hasattr(value, "key") and callable(value.key):
                 k = value.key()
                 self.kind = k.kind
@@ -46,8 +46,8 @@ class Key(object):
             if len(args) == 2:
                 self._assign("%s:%s" % (kind if isinstance(kind, basestring) else kind.kind(), urllib.quote_plus(str(args[1]))))
             elif len(args) == 3:
-                self._assign("%s:%s:%s" % (kind if isinstance(kind, basestring) else kind.kind(), 
-                    urllib.quote_plus(str(args[1])) if args[1] else "", 
+                self._assign("%s:%s:%s" % (kind if isinstance(kind, basestring) else kind.kind(),
+                    urllib.quote_plus(str(args[1])) if args[1] else "",
                     urllib.quote_plus(str(args[2]))))
         if not (hasattr(self, "id") and self.id):
             self.id = base64.urlsafe_b64encode(str(self))
@@ -74,23 +74,23 @@ class Key(object):
 
     def __call__(self):
         return self.get()
-    
+
     def key(self):
         return self
-    
+
     def deref(self):
         return self.get()
-    
+
     def basekind(self):
         (_, _, k) = self.kind.rpartition(".")
         return k
-    
+
     def modelclass(self):
         return grumble.meta.Registry.get(self.kind)
-    
+
     def scope(self):
         return Key(self._scope) if self._scope else None
-    
+
     def __eq__(self, other):
         if not(isinstance(other, Key)) and hasattr(other, "key") and callable(other.key):
             return self == other.key()

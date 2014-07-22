@@ -39,6 +39,7 @@ from grumble.property import BooleanProperty
 from grumble.property import DateTimeProperty
 from grumble.property import DateProperty
 from grumble.property import TimeProperty
+from grumble.property import TimeDeltaProperty
 
 from grumble.model import Model
 from grumble.model import Query

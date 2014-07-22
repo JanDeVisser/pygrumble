@@ -28,7 +28,8 @@
                 { "name": "Open Water Swim",        "trackDistance": true, "speedPace": "Swim Pace" },
                 { "name": "Other",                  "trackDistance": false, "speedPace": null },
                 { "name": "Weights",                "trackDistance": false, "speedPace": null },
-                { "name": "Core",                   "trackDistance": false, "speedPace": null }
+                { "name": "Core",                   "trackDistance": false, "speedPace": null },
+                { "name": "Transition",             "trackDistance": false, "speedPace": null }
             ]
         }
     ]

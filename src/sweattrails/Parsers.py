@@ -102,32 +102,32 @@ class Analysis:
         for i in range(l):
             for cp in self.critical_power:
                 cp.analyze(i)
-                wp = self.waypoints[i]
-                # fixme: sum_power += wp.power * (timediff with last wp)
-                sum_power += wp.power if wp.power else 0
-                self.max_power = max(self.max_power, wp.power)
-                sum_torque += wp.torque if wp.torque else 0.0
-                self.max_torque = max(self.max_torque, wp.torque)
-                sum_cadence += wp.cadence if wp.cadence else 0
-                self.max_cadence = max(self.max_cadence, wp.cadence)
-                sum_hr += wp.heartrate if wp.heartrate else 0
-                self.max_hr = max(self.max_hr, wp.heartrate)
-                self.max_speed = max(self.max_speed, wp.speed)
-                self.geo_analysis(wp)
-                if (self.container.type == 'bike') and (wp.seconds >= 30):
-                    while (wp.seconds - self.waypoints[start_30].seconds) > 30:
-                        start_30 += 1
-                        wp_start30 = self.waypoints[start_30]
-                        diff_30 = wp.seconds - wp_start30.seconds
-                        if diff_30 >= 29:
-                            sum_30 = 0
-                            prev_wp = None
-                            for wp30 in self.waypoints[start_30+1:i+1]:
-                                td = (wp30.seconds - prev_wp.seconds) if prev_wp else 1
-                                sum_30 += (wp30.power * td) if wp30.power else 0
-                                prev_wp = wp30
-                                sum_norm += (round(sum_30/diff_30))**4
-                                rolling30_count += 1
+            wp = self.waypoints[i]
+            # fixme: sum_power += wp.power * (timediff with last wp)
+            sum_power += wp.power if wp.power else 0
+            self.max_power = max(self.max_power, wp.power)
+            sum_torque += wp.torque if wp.torque else 0.0
+            self.max_torque = max(self.max_torque, wp.torque)
+            sum_cadence += wp.cadence if wp.cadence else 0
+            self.max_cadence = max(self.max_cadence, wp.cadence)
+            sum_hr += wp.heartrate if wp.heartrate else 0
+            self.max_hr = max(self.max_hr, wp.heartrate)
+            self.max_speed = max(self.max_speed, wp.speed)
+            self.geo_analysis(wp)
+            if (self.container.type == 'bike') and (wp.seconds >= 30):
+                while (wp.seconds - self.waypoints[start_30].seconds) > 30:
+                    start_30 += 1
+                    wp_start30 = self.waypoints[start_30]
+                    diff_30 = wp.seconds - wp_start30.seconds
+                    if diff_30 >= 29:
+                        sum_30 = 0
+                        prev_wp = None
+                        for wp30 in self.waypoints[start_30+1:i+1]:
+                            td = (wp30.seconds - prev_wp.seconds) if prev_wp else 1
+                            sum_30 += (wp30.power * td) if wp30.power else 0
+                            prev_wp = wp30
+                            sum_norm += (round(sum_30/diff_30))**4
+                            rolling30_count += 1
         timediff = self.waypoints[l-1].seconds - self.waypoints[0].seconds
         if self.container.type == 'bike':
             self.avg_power = int(round(sum_power / timediff))
@@ -319,7 +319,7 @@ class IntervalContainer():
 class FileParser():
     def __init__(self):
         self.current = None
-    
+
     def initialize(self, datafile):
         self.datafile = datafile
         self.athlete = datafile.athlete
@@ -346,185 +346,185 @@ class FileParser():
 
     def initialize_session(self):
         pass
-    
+
     def prepare(self):
         pass
 
     def process(self):
-    self.process_data()
-    while self.current is not None:
-        self.close_interval()
-    self.session.put()
-    return self.session.key()
+        self.process_data()
+        while self.current is not None:
+            self.close_interval()
+        self.session.put()
+        return self.session.key()
 
     def new_interval(self, sub = False, policy = None, offset = None, start_time = None, interval_id = None):
-    if self.current is None:
-        p = self.session
-        policy = Policy(Policy.UPDATE_ABSOLUTE, Policy.UPDATE_ABSOLUTE)
-        offset = 0
-        lap = 0
-        start_time = time.min
-        part_of = None
-    else:
-        if policy is None:
-        policy = self.current.policy
-        if offset is None:
-        offset = self.current.interval.distance
-        if start_time is None:
-        start_time = self.current.interval.duration
-        if sub:
-        p = self.current.interval
-        lap = 0
+        if self.current is None:
+            p = self.session
+            policy = Policy(Policy.UPDATE_ABSOLUTE, Policy.UPDATE_ABSOLUTE)
+            offset = 0
+            lap = 0
+            start_time = time.min
+            part_of = None
         else:
-        p = self.current.interval.parent()
-        lap = self.current.interval.interval_id + 1
-        self.close_interval()
-        part_of = p
-        p.num_intervals += 1
-    if interval_id is not None:
-        interval_id = lap
-    interval = Interval(parent=p)
-    interval.interval_id = interval_id
-    interval.part_of = part_of
-        interval.duration = Util.seconds_to_time(0)
-        interval.distance = 0
-    interval.put()
-    if p == self.session:
-        self.session.interval = interval
-        self.session.put()
-    # self.current points to parent, even if sub, because of close_interval
-        container = IntervalContainer(interval, self.current)
-        container.policy = policy
-        container.distance_offset = offset
-    container.start_time = Util.time_to_seconds(start_time)
-    
-    # self.current points to parent, even if sub, because of close_interval
-    if self.current is not None:
-        self.current.current = container
-    self.current = container
+            if policy is None:
+                policy = self.current.policy
+            if offset is None:
+                offset = self.current.interval.distance
+            if start_time is None:
+                start_time = self.current.interval.duration
+            if sub:
+                p = self.current.interval
+                lap = 0
+            else:
+                p = self.current.interval.parent()
+                lap = self.current.interval.interval_id + 1
+                self.close_interval()
+                part_of = p
+                p.num_intervals += 1
+        if interval_id is not None:
+            interval_id = lap
+        interval = Interval(parent=p)
+        interval.interval_id = interval_id
+        interval.part_of = part_of
+            interval.duration = Util.seconds_to_time(0)
+            interval.distance = 0
+        interval.put()
+        if p == self.session:
+            self.session.interval = interval
+            self.session.put()
+        # self.current points to parent, even if sub, because of close_interval
+            container = IntervalContainer(interval, self.current)
+            container.policy = policy
+            container.distance_offset = offset
+        container.start_time = Util.time_to_seconds(start_time)
+
+        # self.current points to parent, even if sub, because of close_interval
+        if self.current is not None:
+            self.current.current = container
+        self.current = container
 
     def close_interval(self):
-    self.current = self.current.close()
-    
+        self.current = self.current.close()
+
     def new_wp(self, ts = None):
-    self.current.timestamp(ts)
-    return self.current.new_wp()
+        self.current.timestamp(ts)
+        return self.current.new_wp()
 
     def distance(self, value):
-    self.current.distance(value)
+        self.current.distance(value)
 
     def speed(self, value):
-    self.current.speed(value)
+        self.current.speed(value)
 
     def work(self, value):
-    self.current.work(value)
+        self.current.work(value)
 
     def power(self, value):
-    self.current.power(value)
+        self.current.power(value)
 
     def torque(self, value):
-    self.current.torque(value)
+        self.current.torque(value)
 
     def heartrate(self, value):
-    self.current.heartrate(value)
+        self.current.heartrate(value)
 
     def cadence(self, value):
-    self.current.cadence(value)
-    
+        self.current.cadence(value)
+
     def altitude(self, value):
-    self.current.altitude(value)
+        self.current.altitude(value)
 
     def location(self, latval, lonval):
-    self.current.location(latval, lonval)
+        self.current.location(latval, lonval)
 
     def process_data(self):
-    logging.info(" --- FileParser process_data() ---")
-    return None
+        logging.info(" --- FileParser process_data() ---")
+        return None
 
     def lap(self):
-    return self.current.interval.interval_id
+        return self.current.interval.interval_id
 
     def set_sessiontype(self, sessiontype):
-    self.session.sessiontype = SessionType.get_sessiontype(self.athlete, sessiontype)
+        self.session.sessiontype = SessionType.get_sessiontype(self.athlete, sessiontype)
         self.current.type = self.session.sessiontype.get_basetype()
 
 class CSVParser(FileParser):
     def process_data(self):
-    self.seqnr = 0
-    self.duration = 0
-    self.mode = 0
+        self.seqnr = 0
+        self.duration = 0
+        self.mode = 0
 
         self.set_sessiontype("Road ride")
-    self.new_interval(True, Policy(Policy.UPDATE_WITH_OFFSET, Policy.UPDATE_ABSOLUTE), 0, time.min, 0)
-    state = 0
-    self.lines = self.data.splitlines()
+        self.new_interval(True, Policy(Policy.UPDATE_WITH_OFFSET, Policy.UPDATE_ABSOLUTE), 0, time.min, 0)
+        state = 0
+        self.lines = self.data.splitlines()
         self.data = None
-    for line in self.lines:
-        if line.strip() == '':
-        continue
-        if state == 0:
-        if line.startswith("Version,"):
-            logging.info("Detected extended CSV file")
-            state = 1
-        elif line.startswith("User Name,"):
-            state = 2
-        elif line.startswith("Minutes"):
-            state = 3
-            self.headers = line.split(",")
-            if len(self.headers) == 9:
-            self.mode = 1
-            elif len(self.headers) == 18:
-            self.mode = 2
-        elif state == 1:
-        # Version,Date/Time,Km,Minutes,RPE,Tags,"Weight, kg","Work, kJ",FTP,"Sample Rate, s",Device Type,Firmware Version,Last Updated,Category 1,Category 2
-        # 6,2011-11-08 11:13:06,13.947,31.23572,0,,72.575,373,230,1,PowerTap+ (ANT+),7.6,2011-11-08 11:56:25,0,0
-        logging.info("Parsing header line")
-        data = line.split(",")
-        self.session.session_start = datetime.strptime(data[1], "%Y-%m-%d %H:%M:%S")
-        self.work(int(data[7]))
-        self.session.device = data[10]
-        logging.info("Header line parsed")
-        state = 0
-        elif state == 2:
-        # User Name,Power Zone 1,Power Zone 2,Power Zone 3,Power Zone 4,Power Zone 5,Power Zone 6,HR Zone 1,HR Zone 2,HR Zone 3,HR Zone 4,HR Zone 5,Calc Power A,Calc Power B,Calc Power C
-        # < user name >,0,0,0,0,0,0,150,160,170,180,250,0,0,0
-        # Ignored for now
-        state = 0
-        elif state == 3:
-        self.importLine(line)
-    
+        for line in self.lines:
+            if line.strip() == '':
+            continue
+            if state == 0:
+            if line.startswith("Version,"):
+                logging.info("Detected extended CSV file")
+                state = 1
+            elif line.startswith("User Name,"):
+                state = 2
+            elif line.startswith("Minutes"):
+                state = 3
+                self.headers = line.split(",")
+                if len(self.headers) == 9:
+                self.mode = 1
+                elif len(self.headers) == 18:
+                self.mode = 2
+            elif state == 1:
+            # Version,Date/Time,Km,Minutes,RPE,Tags,"Weight, kg","Work, kJ",FTP,"Sample Rate, s",Device Type,Firmware Version,Last Updated,Category 1,Category 2
+            # 6,2011-11-08 11:13:06,13.947,31.23572,0,,72.575,373,230,1,PowerTap+ (ANT+),7.6,2011-11-08 11:56:25,0,0
+            logging.info("Parsing header line")
+            data = line.split(",")
+            self.session.session_start = datetime.strptime(data[1], "%Y-%m-%d %H:%M:%S")
+            self.work(int(data[7]))
+            self.session.device = data[10]
+            logging.info("Header line parsed")
+            state = 0
+            elif state == 2:
+            # User Name,Power Zone 1,Power Zone 2,Power Zone 3,Power Zone 4,Power Zone 5,Power Zone 6,HR Zone 1,HR Zone 2,HR Zone 3,HR Zone 4,HR Zone 5,Calc Power A,Calc Power B,Calc Power C
+            # < user name >,0,0,0,0,0,0,150,160,170,180,250,0,0,0
+            # Ignored for now
+            state = 0
+            elif state == 3:
+            self.importLine(line)
+
     def importLine(self, line):
-    # Mode = 0: Minutes, Torq (N-m),Km/h,Watts,Km,Cadence,Hrate,ID
-    # Mode = 1: Minutes, Torq (N-m),Km/h,Watts,Km,Cadence,Hrate,ID,Altitude
-    # Mode = 2: Minutes, Torq (N-m),Km/h,Watts,Km,Cadence,Hrate,ID,Altitude (m),
-    #        Temperature (C),"Grade, %",Latitude,Longitude,Power Calc'd,
-    #        Calc Power,Right Pedal,Pedal Power %,Cad. Smooth
+        # Mode = 0: Minutes, Torq (N-m),Km/h,Watts,Km,Cadence,Hrate,ID
+        # Mode = 1: Minutes, Torq (N-m),Km/h,Watts,Km,Cadence,Hrate,ID,Altitude
+        # Mode = 2: Minutes, Torq (N-m),Km/h,Watts,Km,Cadence,Hrate,ID,Altitude (m),
+        #        Temperature (C),"Grade, %",Latitude,Longitude,Power Calc'd,
+        #        Calc Power,Right Pedal,Pedal Power %,Cad. Smooth
         logging.info("Line ------> " + line)
-    data = line.split(",")
+        data = line.split(",")
 
-    # Disregard datapoints where we're standing still and not pedaling:
-    #if ((int(data[3]) == 0) and (float(data[2]) < 1) and (int(data[5]) == 0)):
-    #    return
+        # Disregard datapoints where we're standing still and not pedaling:
+        #if ((int(data[3]) == 0) and (float(data[2]) < 1) and (int(data[5]) == 0)):
+        #    return
 
-    lap = int(data[7])
-    if  lap > self.lap():
-        self.new_interval(False,
-        Policy(Policy.UPDATE_WITH_OFFSET, Policy.UPDATE_WITH_OFFSET),
-        - self.root.interval.distance, self.root.interval.duration, lap)
-    seconds = int(round(float(data[0]) * 60))
-    ts = Util.seconds_to_time(seconds)
-    self.new_wp(ts)
+        lap = int(data[7])
+        if  lap > self.lap():
+            self.new_interval(False,
+            Policy(Policy.UPDATE_WITH_OFFSET, Policy.UPDATE_WITH_OFFSET),
+            - self.root.interval.distance, self.root.interval.duration, lap)
+        seconds = int(round(float(data[0]) * 60))
+        ts = Util.seconds_to_time(seconds)
+        self.new_wp(ts)
 
-    self.speed(float(data[2]) / 3.600)
-    self.distance(int(round(float(data[4]) * 1000)))
-    self.power(data[3])
-    self.torque(data[1])
-    self.heartrate(data[6])
-    self.cadence(data[5])
-    if self.mode > 0:
-        self.altitude(data[8])
-    if self.mode == 2:
-        self.location(data[11], data[12])
+        self.speed(float(data[2]) / 3.600)
+        self.distance(int(round(float(data[4]) * 1000)))
+        self.power(data[3])
+        self.torque(data[1])
+        self.heartrate(data[6])
+        self.cadence(data[5])
+        if self.mode > 0:
+            self.altitude(data[8])
+        if self.mode == 2:
+            self.location(data[11], data[12])
 
 
 tcx_parser = XMLProcessor()
@@ -609,7 +609,7 @@ class TCXParser(FileParser):
     def process_data(self):
         tcx_parser.process(self.data, self)
         return self.sessionkey
-    
+
 def parse(key):
     datafile = SessionFile.get(key)
     if (datafile is None):

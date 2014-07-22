@@ -45,30 +45,32 @@ class ProfileReference(object):
 
 class SessionType(grumble.Model, ProfileReference):
     _resolved_parts = set()
-    name = grumble.StringProperty(is_key = True, scoped = True)
-    description = grumble.StringProperty()
-    intervalpart = grumble.StringProperty()
-    trackDistance = grumble.BooleanProperty()
-    speedPace = grumble.StringProperty(choices = set(['Speed', 'Pace', 'Swim Pace']))
+    name = grumble.property.StringProperty(is_key = True, scoped = True)
+    description = grumble.property.StringProperty()
+    intervalpart = grumble.property.StringProperty()
+    trackDistance = grumble.property.BooleanProperty()
+    speedPace = grumble.property.StringProperty(choices = set(['Speed', 'Pace', 'Swim Pace']))
     icon = grumble.image.ImageProperty()
 
     def get_interval_part_type(self, profile):
         node = profile.get_node(SessionType, self.name)
         part = node.get_root_property("intervalpart")
-        if part not in self._resolved_parts:
-            logger.debug("sweattrails.config.SessionType.get_interval_part_type(%s): Resolving part %s", self.name, part)
-            gripe.resolve(part)
-            self._resolved_parts.add(part)
-        return grumble.Model.for_name(part)
+        if part:
+            if part not in self._resolved_parts:
+                gripe.resolve(part)
+                self._resolved_parts.add(part)
+            return grumble.Model.for_name(part)
+        else:
+            return None
 
 class GearType(grumble.Model, ProfileReference):
-    name = grumble.StringProperty(is_key = True, scoped = True)
-    description = grumble.StringProperty()
+    name = grumble.property.StringProperty(is_key = True, scoped = True)
+    description = grumble.property.StringProperty()
     icon = grumble.image.ImageProperty()
 
 class CriticalPowerInterval(grumble.Model, ProfileReference):
-    name = grumble.StringProperty(is_key = True, scoped = True)
-    duration = grumble.IntegerProperty()  # seconds
+    name = grumble.property.StringProperty(is_key = True, scoped = True)
+    duration = grumble.property.TimeDeltaProperty()
 
 
 # ----------------------------------------------------------------------------
@@ -128,9 +130,9 @@ class NodeTypeDefinition(object):
     def link_properties(self):
         if not hasattr(self, "_link_props"):
             self._link_props = {}
-            for p in self.node_class().properties():
-                if isinstance(p, grumble.ReferenceProperty) and issubclass(p.reference_class, NodeBase):
-                    self._link_props[p.name] = NodeTypeRegistry.get_by_node_class(p.reference_class)
+            for (p, prop) in self.node_class().properties().items():
+                if isinstance(prop, grumble.ReferenceProperty) and issubclass(prop.reference_class, NodeBase):
+                    self._link_props[p] = NodeTypeRegistry.get_by_node_class(prop.reference_class)
         return self._link_props
 
     def get_reference_by_name(self, profile, key_name):
@@ -155,19 +157,29 @@ class NodeTypeDefinition(object):
     def update_node(self, node, descriptor):
         ref = getattr(node, self.name())
         assert ref, "%s.update_node: no reference" % self.name()
-        if ref.parent() == node.get_profile().parent():
+        profile = node.get_profile()
+        if ref.parent() == profile.parent():
             ref.update(descriptor)
         dirty = False
         d = dict(descriptor)
-        for (prop, t) in self.link_properties():
+        for (prop, t) in self.link_properties().items():
             if prop in d:
-                n = t.get_or_create_node(self, descriptor[prop])
-                setattr(node, prop, n)
+                descr = d[prop]
+                if descr is not None:
+                    n = t.get_or_create_node(profile, d[prop])
+                    setattr(node, prop, n)
+                    dirty = True
                 del d[prop]
-                dirty = True
         if dirty:
             node.put()
-        node.update(d)
+        l = []
+        for p in d:
+            if p not in node.properties():
+                l.append(p)
+        for p in l:
+            del d[p]
+        if d:
+            node.update(d)
         return node
 
     def get_or_create_node_for_reference(self, profile, ref, parent = None):
@@ -193,7 +205,6 @@ class NodeTypeDefinition(object):
         # is not owned by another profile, it's a global entity.
         ref_key = getattr(original, self.name_property())
         if original.parent():
-            logger.debug("original is global")
             return original
         # Check if the reference already exists:
         ref = self.get_reference_by_name(profile, ref_key)
@@ -205,14 +216,12 @@ class NodeTypeDefinition(object):
     def get_or_duplicate_node(self, original, profile):
         orig_ref = getattr(original, self.name())
         ref_key = getattr(orig_ref, self.name_property())
-        logger.debug("get_or_duplicate_node(%s, %s)", self.name(), ref_key)
         node = self.get_node_by_reference_name(
                 profile, ref_key)
         return node if node else self.duplicate_node(original, profile)
 
     def duplicate_node(self, original, profile):
         orig_ref = getattr(original, self.name())
-        ref_key = getattr(orig_ref, self.name_property())
         ref = self.get_or_duplicate_reference(orig_ref, profile)
         if isinstance(original.parent(), original.__class__):
             parent = self.get_or_duplicate_node(original.parent(), profile)
@@ -220,10 +229,16 @@ class NodeTypeDefinition(object):
             parent = profile
         node = self.get_or_create_node_for_reference(profile, ref, parent)
         dirty = False
-        for (prop, t) in self.link_properties():
-            n = t.get_or_duplicate_node(getattr(original, prop), profile)
-            node.setattr(node, prop, n)
-            dirty = True
+        for (prop, t) in self.link_properties().items():
+            link = getattr(original, prop)
+            if link:
+                n = t.get_or_duplicate_node(link, profile)
+                setattr(node, prop, n)
+                dirty = True
+        for (pname, prop) in node.properties().items():
+            if not isinstance(prop, grumble.reference.ReferenceProperty):
+                setattr(node, pname, getattr(original, pname))
+                dirty = True
         if dirty:
             node.put()
         return node
@@ -273,8 +288,16 @@ class TreeNodeBase(NodeBase):
 
     def get_root_property(self, prop):
         ref = self.get_reference()
-        val = getattr(ref, prop)
-        return val if val is not None or self.parent() is None else self.parent().get_root_property(prop)
+        if ref:
+            ref = ref()
+            val = getattr(ref, prop)
+            if val is not None:
+                return val
+        p = self.parent()
+        if p is None:
+            return None
+        p = p()
+        return p.get_root_property(prop) if hasattr(p, "get_root_property") else None
 
     def get_subtypes(self, all = False):
         q = self.children() if not all else self.descendents()
@@ -451,9 +474,17 @@ class ActivityProfile(grizzle.UserPart):
         node_type = NodeTypeRegistry.get_by_ref_class(ref_class)
         return node_type.get_node_by_reference_name(self, key_name)
 
-    def get_default_SessionType(self, sessiontype):
-        nodes = SessionTypeNode.query("defaultfor", sessiontype, ancestor = self)
-        return nodes[0].sessionType if len(nodes) else None
+    def get_default_SessionType(self, sport):
+        print "looking for default session type for", sport
+        q = SessionTypeNode.query(ancestor = self)
+        q.add_filter("defaultfor", " = ", sport)
+        node = q.get()
+        if node is None:
+            print "no node found for sport", sport
+        ret = node.sessionType if node else None
+        if ret:
+            print "default session type for", sport, 'is', type(ret), "*", ret.name, "*", str(ret.key())
+        return ret
 
     @classmethod
     def get_profile(cls, user):
