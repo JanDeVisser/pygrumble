@@ -26,6 +26,7 @@ class RecordWrapper(object):
         self._data = rec.as_dict(True)
         self._fitrec = rec
         self._grumble_obj = None
+        self.container = None
         self.initialize()
 
     def initialize(self):
@@ -45,6 +46,10 @@ class RecordWrapper(object):
     def get_data(self, key):
         assert "RecordWrapper.get_data(%s): no FIT record set in class %s" % (key, self.__class__)
         return self.fitrecord().get_data(key)
+
+    def log(self, msg):
+        if self.container is not None:
+            self.container.log(msg)
 
     @classmethod
     def create(cls, container, rec):
@@ -78,11 +83,10 @@ class FITRecord(RecordWrapper):
         wp = sweattrails.session.Waypoint(parent = session)
         wp.timestamp = self.get_data("timestamp") - self.session.start_time
         lat = self.get_data("position_lat")
-        lon = self.get_data("position_lon")
+        lon = self.get_data("position_long")
         if lat and lon:
-            lat = semicircle_to_degrees(lat)
-            lon = semicircle_to_degrees(lon)
-            wp.location = grumble.geopt.GeoPt(lat, lon)
+            wp.location = grumble.geopt.GeoPt(
+                semicircle_to_degrees(lat), semicircle_to_degrees(lon))
         wp.speed = self.get_data("speed")
         wp.altitude = self.get_data("altitude")
         wp.distance = self.get_data("distance")
@@ -126,21 +130,45 @@ class FITSession(FITLap):
             sessiontype = profile.get_default_SessionType(self.get_data("sport"))
             assert sessiontype, "fitparse.upload(): User %s has no default session type for sport %s" % (athlete.uid(), self.get_data("sport"))
             session.sessiontype = sessiontype
+            self.log("Converting session %s/%s" % (self.index, len(self.container.sessions)))
             self.convert_interval(session)
+            self.log("Session %s/%s: Converting %s intervals" % (self.index, len(self.container.sessions), len(self.laps)))
             for lap in self.laps:
                 interval = sweattrails.session.Interval(parent = session)
                 lap.convert_interval(interval)
+            self.log("Session %s/%s: Converting %s waypoints" % (self.index, len(self.container.sessions), len(self.records)))
             for record in self.records:
                 record.convert(session)
+            self.log("Analyzing session %s/%s" % (self.index, len(self.container.sessions)))
             session.analyze()
             return session
 
-class ActivityWrapper(object):
-    def __init__(self, activity):
-        self.activity = activity
+class FITParser(object):
+    def __init__(self, user, filename):
+        self.user = user
+        self.filename = filename
+        self.activity = None
         self.sessions = []
         self.laps = []
         self.records = []
+        self.logger = None
+        
+    def setLogger(self, logger):
+        self.logger = logger
+        
+    def parse(self):
+        self.log("Reading FIT file %s" % self.filename)
+        self.activity = Activity(self.filename)
+        self.log("Parsing FIT file %s" % self.filename)
+        self.activity.parse()
+        self.log("Processing FIT file %s" % self.filename)
+        self._process()
+        self.log("FIT file %s converted" % self.filename)
+        return None
+    
+    def log(self, msg):
+        if self.logger is not None:
+            self.logger.log(msg)
 
     def find_session_for_obj(self, obj):
         for s in self.sessions:
@@ -150,6 +178,7 @@ class ActivityWrapper(object):
 
     def add_session(self, session):
         self.sessions.append(session)
+        session.index = len(self.sessions)
 
     def add_lap(self, lap):
         self.laps.append(lap)
@@ -157,10 +186,12 @@ class ActivityWrapper(object):
     def add_record(self, record):
         self.records.append(record)
 
-    def process(self, user):
+    def _process(self):
         # Walk all records and wrap them in our types:
         for r in self.activity.records:
-            RecordWrapper.create(self, r)
+            rec = RecordWrapper.create(self, r)
+            if rec is not None:
+                rec.container = self
 
         # Collect all laps and records with the sessions they
         # belong with:
@@ -175,16 +206,12 @@ class ActivityWrapper(object):
 
         # Create ST sessions and convert everything:
         for s in self.sessions:
-            s.convert(user)
-
-def convert(user, filename):
-    activity = Activity(filename)
-    activity.parse()
-    wrapper = ActivityWrapper(activity)
-    wrapper.process(user)
-    return None
+            s.convert(self.user)
 
 if __name__ == "__main__":
+    class Logger(object):
+        def log(self, msg):
+            print >> sys.stderr, msg
 
     def printhelp():
         print "usage: python" + sys.argv[0] + " <uid> <password> <fit file>"
@@ -208,7 +235,9 @@ if __name__ == "__main__":
             return 0
 
         try:
-            convert(user, sys.argv[3])
+            parser = FITParser(user, sys.argv[3])
+            parser.setLogger(Logger())
+            parser.parse()
             return 0
         except FitParseError, exception:
             sys.stderr.write(str(exception) + "\n")

@@ -5,50 +5,109 @@ from PySide.QtCore import QAbstractTableModel
 from PySide.QtCore import QModelIndex
 from PySide.QtCore import Qt
 
+import gripe
 import gripe.db
 import grumble
 
+logger = gripe.get_logger(__name__)
+
+class GrumbleTableColumn(object):
+    def __init__(self, name, **kwargs):
+        self.name = name
+        for (n,v) in kwargs.items():
+            setattr(self, n, v)
+            
+    def get_header(self):
+        return self.header if hasattr(self, "header") else self.prop.verbose_name
+    
+    def get_format(self):
+        return self.format if hasattr(self, "format") else "s"
+    
+    def get_value(self, instance):
+        if callable(self):
+            val = self(instance)
+        else:
+            val = self.value(instance) \
+                if hasattr(self, "value") \
+                else getattr(instance, self.name)
+        fmt = "{:" + self.get_format() + "}" 
+        return fmt.format(val) if val is not None else ''
+
 class GrumbleTableModel(QAbstractTableModel):
-    def __init__(self, query, column_names):
+    def __init__(self, query, *args):
         QAbstractTableModel.__init__(self)
         self._query = query
         self._kind = query.get_kind()
-        self._columns = [getattr(self._kind, n) for n in column_names]
+        self._columns = self._get_column_defs(args)
         self._data = None
-
+        
+    def _get_column_defs(self, *args):
+        ret = []
+        for arg in args:
+            if isinstance(arg, (list, tuple)):
+                ret.extend(self._get_column_defs(*arg))
+            else:
+                if isinstance(arg, GrumbleTableColumn):
+                    col = arg
+                else:
+                    col = GrumbleTableColumn(str(arg))
+                col.prop = getattr(self._kind, col.name)
+                col.kind = self._kind
+                ret.append(col)
+        return ret
+                
+    def add_columns(self, *args):
+        self._columns.extend(self._get_column_defs(args))
+        
     def rowCount(self, parent = QModelIndex()):
-        if self._data:
-            return len(self._data)
-        else:
-            return self._query.count()
+        ret = len(self._data) if self._data is not None else self._query.count()
+        #logger.debug("GrumbleTableModel.rowCount() = %s (%squeried)", ret,
+        #             "not " if self._data is not None else "")
+        return ret
 
     def columnCount(self, parent = QModelIndex()):
+        #logger.debug("GrumbleTableModel.columnCount()")
         return len(self._columns)
 
     def headerData(self, col, orientation, role):
-        return self._columns[col].verbose_name \
+        #logger.debug("GrumbleTableModel.headerData(%s,%s,%s)", col, orientation, role)
+        return self._columns[col].get_header() \
             if orientation == Qt.Horizontal and role == Qt.DisplayRole \
             else None
 
     def _get_data(self, ix):
-        if not self._data:
-            self._data = []
+        if self._data is None:
+            #logger.debug("GrumbleTableModel._get_data(%s) -> query", ix)
             with gripe.db.Tx.begin():
-                for o in self._query:
-                    self._data.append(o)
+                self._data = [o for o in self._query]
         return self._data[ix]
 
     def data(self, index, role = Qt.DisplayRole):
         if role == Qt.DisplayRole:
+            instance = self._get_data(index.row())
+            col = self._columns[index.column()]
+            ret = col.get_value(instance)
+            #logger.debug("GrumbleTableModel.data(%s,%s) = %s", index.row(), index.column(), ret)
+            return ret
+        elif role == Qt.UserRole:
             r = self._get_data(index.row())
-            return self._columns[index.column()].__get__(r)
+            return r.key()
         else:
             return None
+        
+    def flush(self):
+        logger.debug("GrumbleTableModel.flush()")
+        self.beginResetModel()
+        self.layoutAboutToBeChanged.emit()
+        self._data = None
+        self.layoutChanged.emit()
+        self.endResetModel()
 
     def sort(self, colnum, order):
         """
             Sort table by given column number.
         """
+        logger.debug("GrumbleTableModel.sort(%s)", colnum)
         self.layoutAboutToBeChanged.emit()
         self._data = None
         self._query.clear_sort()
@@ -78,8 +137,7 @@ class GrumbleListModel(QAbstractListModel):
         if not self._data:
             self._data = []
             with gripe.db.Tx.begin():
-                for o in self._query:
-                    self._data.append(o)
+                self._data = [ o for o in self._query ]
         return self._data[ix]
 
     def data(self, index, role = Qt.DisplayRole):

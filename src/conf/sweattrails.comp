@@ -31,6 +31,10 @@
             "criticalPowerInterval": { 
                 "nodeClass": "sweattrails.config.CriticalPowerIntervalNode", 
                 "refClass": "sweattrails.config.CriticalPowerInterval"
+            },
+            "criticalPace": { 
+                "nodeClass": "sweattrails.config.CriticalPaceNode", 
+                "refClass": "sweattrails.config.CriticalPace"
             }
         }        
     }

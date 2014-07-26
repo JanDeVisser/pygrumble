@@ -81,6 +81,10 @@ class MaxPowerHistory(grumble.Model):
     max_power = grumble.property.IntegerProperty(default = 0)  # Max power in Watts
 
 
+class RunProfile(grizzle.UserPart):
+    pass
+
+
 class WeightMgmt(grizzle.UserPart):
     def get_weight(self, on_date = None):
         weight = 0

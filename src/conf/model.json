@@ -2,7 +2,7 @@
     "_description": "Describes the models used by the app.",
     "author": "jan",
     "version": "1.0",
-    "reconcile": "all",
+    "reconcile": "add",
     "_reconcile_choices": "drop|add|all|none",
     "model": {
         "Test": { "reconcile": "drop" }

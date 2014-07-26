@@ -73,6 +73,11 @@ class CriticalPowerInterval(grumble.Model, ProfileReference):
     duration = grumble.property.TimeDeltaProperty()
 
 
+class CriticalPace(grumble.Model, ProfileReference):
+    name = grumble.property.StringProperty(is_key = True, scoped = True)
+    distance = grumble.property.IntegerProperty() # In m
+
+
 # ----------------------------------------------------------------------------
 #  NODE MACHINERY
 # ----------------------------------------------------------------------------
@@ -142,6 +147,10 @@ class NodeTypeDefinition(object):
             ref = self.ref_class().get_by_key_and_parent(key_name, None)
         assert ref, "Cannot find reference to %s:%s" % (self.ref_class(), key_name)
         return ref
+    
+    def get_all_linked_references(self, profile):
+        q = self.node_class().query(ancestor = profile)
+        return [ getattr(node, self.name()) for node in q ]
 
     def get_or_create_node(self, profile, descriptor, parent = None):
         ref = self.ref_class().get(descriptor[self.name()]) \
@@ -339,6 +348,9 @@ class GearTypeNode(TreeNodeBase):
 class CriticalPowerIntervalNode(NodeBase):
     criticalPowerInterval = grumble.ReferenceProperty(CriticalPowerInterval, serialize = False)
 
+class CriticalPaceNode(NodeBase):
+    criticalPace = grumble.ReferenceProperty(CriticalPace, serialize = False)
+
 
 for (part, partdef) in gripe.Config.app.sweattrails.activityprofileparts.items():
     definition = NodeTypeDefinition(part, gripe.resolve(partdef.refClass), gripe.resolve(partdef.nodeClass))
@@ -470,20 +482,19 @@ class ActivityProfile(grizzle.UserPart):
         node_type = NodeTypeRegistry.get_by_ref_class(ref_class)
         return node_type.get_reference_by_name(self, key_name)
 
+    def get_all_linked_references(self, ref_class):
+        node_type = NodeTypeRegistry.get_by_ref_class(ref_class)
+        return node_type.get_all_linked_references(self)
+
     def get_node(self, ref_class, key_name):
         node_type = NodeTypeRegistry.get_by_ref_class(ref_class)
         return node_type.get_node_by_reference_name(self, key_name)
 
     def get_default_SessionType(self, sport):
-        print "looking for default session type for", sport
         q = SessionTypeNode.query(ancestor = self)
         q.add_filter("defaultfor", " = ", sport)
         node = q.get()
-        if node is None:
-            print "no node found for sport", sport
         ret = node.sessionType if node else None
-        if ret:
-            print "default session type for", sport, 'is', type(ret), "*", ret.name, "*", str(ret.key())
         return ret
 
     @classmethod

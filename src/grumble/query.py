@@ -310,7 +310,6 @@ class ModelQueryRenderer(object):
 
     def execute(self, type, new_values = None):
         assert self._query, "Must set a Query prior to executing a ModelQueryRenderer"
-        logger.debug("Rendering query")
         with gripe.db.Tx.begin() as tx:
             key_ix = -1
             cols = ()
@@ -388,6 +387,7 @@ class ModelQueryRenderer(object):
                     glue = ' AND '
             if type == QueryType.Columns and self.sortorder():
                 sql += ' ORDER BY ' + ', '.join([('"' + c.colname + '" ' + c.order()) for c in self.sortorder()])
+            logger.debug("Rendered query: %s [%s]", sql, vals)
             cur = tx.get_cursor()
             cur.execute(sql, vals, columns = cols, key_index = key_ix)
             return cur

@@ -85,13 +85,34 @@ class Registry(dict):
         modelclass._kind = fullname
 
     @classmethod
+    def fullname(cls, module, name):
+        if not module:
+            fullname = name
+        else:
+            hierarchy = module.split(".")
+            while hierarchy and hierarchy[0] in [ 'model', '__main__' ]:
+                hierarchy.pop(0)
+            hierarchy.append(name)
+            fullname = ".".join(hierarchy)
+        fullname = fullname.lower()
+        return fullname
+
+    @classmethod
+    def fullname_for_class(cls, modelclass):
+        return Registry.fullname(modelclass.__module__, modelclass.__name__)
+
+    @classmethod
     def get(cls, name):
         reg = cls._get_registry()
         # if empty - whatever we want it ain't there:
         assert reg, "Looking for kind %s but registry empty" % name
         if isinstance(name, ModelMetaClass):
+            n = Registry.fullname_for_class(name)
+            assert n in reg, "Requested grumble.meta.Registry entry for model class %s, but it is not in the registry" % n 
             return name
         elif isinstance(name.__class__, ModelMetaClass):
+            n = Registry.fullname_for_class(name)
+            assert n in reg, "Requested grumble.meta.Registry entry for model instance of class %s, but its class is not in the registry" % n 
             return name.__class__
         else:
             name = name.replace('/', '.').lower()
@@ -101,8 +122,8 @@ class Registry(dict):
                 (main, dot, name) = name.partition(".")
             ret = reg[name] if name in reg else None   # dict.get is shadowed.
             if not ret and "." not in name:
+                e = ".%s" % name
                 for n in reg:
-                    e = ".%s" % name
                     if n.endswith(e):
                         c = reg[n]
                         assert not ret, "Registry.get(%s): Already found match %s but there's a second one %s" % \

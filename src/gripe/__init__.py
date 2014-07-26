@@ -409,16 +409,17 @@ _log_sub_fmt = '%(name)-15s:%(asctime)s:%(levelname)-7s:%(message)s'
 
 class LogConfig(object):
     def __init__(self, conf = None, defaults = None):
-        conf = conf or object()
+        conf = conf or {}
+        assert defaults is None or isinstance(defaults, LogConfig)
         self.log_level = defaults.log_level if defaults else logging.INFO
-        self.log_level = getattr(logging, conf.level.upper()) if hasattr(conf, "level") and conf.level else self.log_level
+        self.log_level = getattr(logging, conf["level"].upper()) if "level" in conf and conf.level else self.log_level
         self.destination = defaults.destination if defaults else "stderr"
-        self.destination = conf.destination.lower() if hasattr(conf, "destination") and conf.destination else self.destination
+        self.destination = conf["destination"].lower() if "destination" in conf and conf.destination else self.destination
         assert self.destination in ("stderr", "file"), "Invalid logging destination %s" % self.destination
         self.flat = defaults.flat if defaults else False
-        self.flat = conf.flat if hasattr(conf, "flat") else self.flat
+        self.flat = conf["flat"] if "flat" in conf else self.flat
         self.append = defaults.append if defaults else False
-        self.append = conf.append if hasattr(conf, "append") else self.append
+        self.append = conf["append"] if "append" in conf else self.append
 
 def get_logger(name):
     global _log_defaults
@@ -445,8 +446,8 @@ def get_logger(name):
             (fname, _, _) = name.partition(".")
         else:
             fname = name
-        # fh = logging.FileHandler("%s/logs/%s.log" % (root_dir(), name), mode)
-        fh = logging.FileHandler("%s/logs/%s.log" % (root_dir(), fname))
+        fh = logging.FileHandler("%s/logs/%s.log" % (root_dir(), name), mode)
+        # fh = logging.FileHandler("%s/logs/%s.log" % (root_dir(), fname))
         fh.setFormatter(formatter)
         logger.addHandler(fh)
     else:

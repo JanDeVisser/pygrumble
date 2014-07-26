@@ -14,7 +14,7 @@
 		"host": "localhost",
         "database": "jan",
         "schema": "grumble",
-        "wipe_schema": true,
+        "_wipe_schema": true,
         "wipe_database": false
     }
 }

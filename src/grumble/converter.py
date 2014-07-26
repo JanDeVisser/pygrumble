@@ -159,6 +159,11 @@ class TimeConverter(PropertyConverter):
 class TimeDeltaConverter(PropertyConverter):
     datatype = datetime.timedelta
 
+    def convert(self, value):
+        if isinstance(value, (int, float)):
+            value = datetime.timedelta(seconds = value)
+        return super(TimeDeltaConverter, self).convert(value)
+
     def to_jsonvalue(self, value):
         assert (value is None) or isinstance(value, datetime.timedelta), "TimeDeltaConverter.to_jsonvalue: value must be timedelta"
         return value.total_seconds()

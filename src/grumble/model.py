@@ -54,7 +54,9 @@ class Model():
 
     @classmethod
     def seal(cls):
-        if not cls._sealed:
+        if not cls._sealed and not hasattr(cls, "_sealing"):
+            logger.info("Sealing class %s", cls.kind())
+            setattr(cls, "_sealing", True)
             if cls.customizer:
                 c = gripe.resolve(cls.customizer)
                 if c:
@@ -67,9 +69,11 @@ class Model():
                 cls._key_scoped = False
             cls._properties_by_seqnr = [ p for p in cls._allproperties.values() ]
             cls._properties_by_seqnr.sort(lambda p1, p2: p1.seq_nr - p2.seq_nr)
-            cls._sealed = True
             if not cls._abstract:
                 cls.modelmanager.reconcile()
+            logger.info("Class %s SEALED", cls.kind())
+            cls._sealed = True
+            delattr(cls, "_sealing")
 
     def __repr__(self):
         return str(self.key())

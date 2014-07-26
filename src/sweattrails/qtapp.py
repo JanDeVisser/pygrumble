@@ -5,6 +5,8 @@
 import sys
 
 from PySide.QtCore import QCoreApplication
+from PySide.QtCore import QThread
+from PySide.QtCore import Qt
 
 from PySide.QtGui import QAction
 from PySide.QtGui import QApplication
@@ -13,7 +15,10 @@ from PySide.QtGui import QComboBox
 from PySide.QtGui import QDialog
 from PySide.QtGui import QDialogButtonBox
 from PySide.QtGui import QFileDialog
+from PySide.QtGui import QFont
+from PySide.QtGui import QFormLayout
 from PySide.QtGui import QGridLayout
+from PySide.QtGui import QHBoxLayout
 from PySide.QtGui import QInputDialog
 from PySide.QtGui import QLabel
 from PySide.QtGui import QLineEdit
@@ -22,13 +27,17 @@ from PySide.QtGui import QMessageBox
 from PySide.QtGui import QPixmap
 from PySide.QtGui import QSplashScreen
 from PySide.QtGui import QTableView
+from PySide.QtGui import QTabWidget
+from PySide.QtGui import QVBoxLayout
+from PySide.QtGui import QWidget
 
 import gripe
 import gripe.db
 import grumble
-import grumble.qt
 import grumble.geopt
+import grumble.qt
 import grizzle
+import sweattrails.fitparser
 import sweattrails.config
 # import sweattrails.session
 # import gripe.sessionbridge
@@ -38,24 +47,90 @@ class SplashScreen(QSplashScreen):
     def __init__(self):
         QSplashScreen.__init__(self, QPixmap("image/splash.png"))
 
+class DescriptionColumn(grumble.qt.GrumbleTableColumn):
+    def __init__(self):
+        super(DescriptionColumn, self).__init__("description")
+        
+    def __call__(self, session):
+        if not session.description:
+            sessiontype = session.sessiontype
+            ret = sessiontype.name
+        else:
+            ret = session.description
+        return ret
+
+class SessionList(QTableView):
+    def __init__(self, parent = None, user = None):
+        super(SessionList, self).__init__(parent)
+
+        # set the table model
+        if not user:
+            user = QCoreApplication.instance().user
+        self.q = sweattrails.session.Session.query()
+        self.q.add_filter("athlete", "=", user)
+        self.q.add_sort("start_time")
+        tm = grumble.qt.GrumbleTableModel(self.q,
+                grumble.qt.GrumbleTableColumn("start_time", format = "%A %B %d", header = "Date"),
+                grumble.qt.GrumbleTableColumn("start_time", format = "%H:%M", header = "Time"),
+                DescriptionColumn())
+        self.setModel(tm)
+        self.setSelectionBehavior(self.SelectRows)
+
+        # set the minimum size
+        self.setMinimumSize(400, 600)
+
+        # hide grid
+        self.setShowGrid(False)
+
+        # set the font
+        # font = QFont("Consolas", 15)
+        # self.setFont(font)
+
+        # hide vertical header
+        vh = self.verticalHeader()
+        vh.setVisible(False)
+
+        # set horizontal header properties
+        hh = self.horizontalHeader()
+        hh.setStretchLastSection(True)
+
+        # set column width to fit contents
+        self.resizeColumnsToContents()
+
+        # set row height
+        # nrows = len(self.tabledata)
+        # for row in xrange(nrows):
+        #    self.setRowHeight(row, 18)
+
+        # enable sorting
+        self.setSortingEnabled(True)
+        
+    def refresh(self):
+        user = QCoreApplication.instance().user
+        self.model().beginResetModel()
+        self.q.clear_filters()
+        self.q.add_filter("athlete", "=", user)
+        self.model().flush()
+        self.model().endResetModel()
+        self.resizeColumnsToContents()
+
+
 class SelectUser(QDialog):
     def __init__(self, window = None):
         QDialog.__init__(self, window)
-        layout = QGridLayout(self)
-        layout.addWidget(QLabel("&User ID:"), 0, 0)
+        layout = QFormLayout(self)
         self.combo = QComboBox()
         view = grumble.qt.GrumbleListModel(grumble.Query(grizzle.User, False), "display_name")
         self.combo.setModel(view)
-        layout.addWidget(self.combo, 0, 1)
-        layout.addWidget(QLabel("&Password:"), 1, 0)
+        layout.addRow("&User ID:", self.combo)
         self.pwd = QLineEdit()
-        layout.addWidget(self.pwd, 1, 1)
+        layout.addRow("&Password:", self.pwd)
         self.savecreds = QCheckBox("&Save Credentials (unsafe)")
-        layout.addWidget(self.savecreds, 2, 0, 1, 2)
+        layout.addRow(self.savecreds)
         self.buttonbox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.buttonbox.accepted.connect(self.authenticate)
         self.buttonbox.rejected.connect(self.reject)
-        layout.addWidget(self.buttonbox, 3, 0, 1, 2)
+        layout.addRow(self.buttonbox)
         self.setLayout(layout)
 
     def select(self):
@@ -72,12 +147,115 @@ class SelectUser(QDialog):
             QMessageBox.critical(self, "Wrong Password",
                 "The chosen user and the password entered do not match.")
 
+class ImportThread(QThread):
+    def __init__(self, mainWindow, fileName):
+        super(ImportThread, self).__init__()
+        self.fileName = fileName
+        self.mainWindow = mainWindow
+    
+    def run(self):
+        self.finished.connect(self.mainWindow.refresh)
+        if self.fileName:
+            if self.fileName.endswith(".fit"):
+                self.parseFITFile()
+            elif self.fileName.endswith(".tcx"):
+                self.parseTCXFile()
+            else:
+                self.parseCSVFile()
+
+    def parseFITFile(self):
+        parser = sweattrails.fitparser.FITParser(QCoreApplication.instance().user, self.fileName)
+        parser.setLogger(self.mainWindow)
+        parser.parse()
+
+    def parseTCXFile(self):
+        pass
+
+    def parseCSVFile(self):
+        pass
+
+class UserTab(QWidget):
+    def __init__(self, parent = None):
+        super(SessionTab, self).__init__(parent)
+        self.sessions = SessionList(self)
+        self.sessions.doubleClicked.connect(self.sessionSelected)
+        layout = QHBoxLayout(self)
+        layout.addWidget(self.sessions)
+        self.details = SessionDetails(self)
+        layout.addWidget(self.details)
+        self.setLayout(layout)
+
+
+class SessionPage(QWidget):
+    def __init__(self, session, parent = None):
+        super(SessionPage, self).__init__(parent)
+        self.session = session
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+        hbox = QHBoxLayout()
+        form1 = QFormLayout()
+        layout.addLayout(hbox)
+        hbox.addLayout(form1)
+        self.start_time = QLineEdit()
+        self.start_time.setText(str(self.session.start_time))
+        self.start_time.setReadOnly(True)
+        form1.addRow("Date/Time", self.start_time)
+        self.description = QLineEdit()
+        self.description.setText(self.session.description)
+        self.description.setReadOnly(True)
+        form1.addRow("Description", self.description)
+        
+    
+class SessionDetails(QWidget):
+    def __init__(self, parent = None):
+        super(SessionDetails, self).__init__(parent)
+        self.session = None
+        self.tabs = QTabWidget()
+        layout = QVBoxLayout()
+        layout.addWidget(self.tabs)
+        self.setLayout(layout)
+        self.setMinimumSize(600, 600)
+    
+    def setSession(self, session):
+        self.session = session
+        self.tabs.clear()
+        self.tabs.addTab(SessionPage(session), str(session.start_time))
+        
+
+class SessionTab(QWidget):
+    def __init__(self, parent = None):
+        super(SessionTab, self).__init__(parent)
+        self.sessions = SessionList(self)
+        self.sessions.doubleClicked.connect(self.sessionSelected)
+        layout = QHBoxLayout(self)
+        layout.addWidget(self.sessions)
+        self.details = SessionDetails(self)
+        layout.addWidget(self.details)
+        self.setLayout(layout)
+
+    def sessionSelected(self, index):
+        k = self.sessions.model().data(index, Qt.UserRole)
+        self.details.setSession(k())
+
+    def refresh(self):
+        self.sessions.refresh()
+
 class STMainWindow(QMainWindow):
     def __init__(self):
-        QMainWindow.__init__(self)
+        super(STMainWindow, self).__init__()
         self.createActions()
         self.createMenus()
-        # self.setCentralWidget(self.createTable())
+        layout = QVBoxLayout()
+        self.sessiontab = SessionTab()
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self.sessiontab, "Sessions")
+        layout.addWidget(self.tabs)
+        self.statusbar = QLabel()
+        layout.addWidget(self.statusbar)
+        w = QWidget(self)
+        w.setLayout(layout)
+        self.setCentralWidget(w)
+        self.threads = []
 
     def createActions(self):
         self.switchUserAct = QAction("&Switch User", self, shortcut = "Ctrl+U", statusTip = "Switch User", triggered = self.switch_user)
@@ -119,30 +297,27 @@ class STMainWindow(QMainWindow):
     def select_user(self):
         dialog = SelectUser(self)
         dialog.select()
-        return QCoreApplication.instance().is_authenticated()
+        ret = QCoreApplication.instance().is_authenticated()
+        if ret:
+            self.refresh()
+        return ret
 
     def import_file(self):
         (fileName, _) = QFileDialog.getOpenFileName(self,
                                                "Open Activity File",
                                                "",
                                                "Activity Files (*.tcx *.fit *.csv)")
-        print fileName, filter
         if fileName:
-            if fileName.endswith(".fit"):
-                self.parseFITFile(fileName)
-            elif fileName.endswith(".tcx"):
-                self.parseTCXFile(fileName)
-            else:
-                self.parseCSVFile(fileName)
-
-    def parseFITFile(self, fileName):
-        pass
-
-    def parseTCXFile(self, fileName):
-        pass
-
-    def parseCSVFile(self, fileName):
-        pass
+            t = ImportThread(self, fileName)
+            self.threads.append(t)
+            t.start()
+            
+    def refresh(self):
+        self.sessiontab.refresh()
+        self.statusbar.setText("")
+        
+    def log(self, msg):
+        self.statusbar.setText(msg)
 
     def about(self):
         QMessageBox.about(self, "About SweatTrails",
@@ -203,6 +378,7 @@ class SweatTrails(QApplication):
 
 app = SweatTrails(sys.argv)
 splash = SplashScreen()
+app.processEvents()
 splash.show()
 app.processEvents()
 app.init_config()

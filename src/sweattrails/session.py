@@ -137,7 +137,7 @@ class IntervalPart(grumble.Model):
         return self.get_session().start_time
 
     def get_interval(self):
-        return self.parent()
+        return self.parent()()
 
     def get_session(self):
         return self.root()
@@ -145,11 +145,15 @@ class IntervalPart(grumble.Model):
     def get_athlete(self):
         return self.get_session().athlete
 
+    def get_activityprofile(self):
+        return self.get_interval().get_activityprofile()
+
     def reducers(self):
         return []
 
     def analyze(self):
         pass
+
 
 class CriticalPower(grumble.Model, Reducer):
     cpdef = grumble.ReferenceProperty(sweattrails.config.CriticalPowerInterval)
@@ -174,11 +178,13 @@ class CriticalPower(grumble.Model, Reducer):
                 td = (p[0] - prev[0]).seconds if prev else 1
                 prev = p
                 s += p[1]*td
-            diff = (prev.timestamp - starttime).seconds
-            avg = int(round(s/diff))
-            if self.max_avg is None or avg > self.max_avg:
-                self.max_avg = avg
-                self.starttime = starttime
+            if prev:
+                diff = (prev[0] - starttime).seconds
+                if diff:
+                    avg = int(round(s/diff))
+                    if self.max_avg is None or avg > self.max_avg:
+                        self.max_avg = avg
+                    self.starttime = starttime
         return self
 
     def reduction(self):
@@ -189,20 +195,20 @@ class CriticalPower(grumble.Model, Reducer):
 
     def after_store(self):
         best = None
-        for bcp in BestCriticalPower.query(ancestor = self.interval.get_athlete()):
-            if bcp.cpdef.duration == self.cpdef.duration:
-                best = bcp
-        if not best:
+        q = BestCriticalPower.query(parent = self.cpdef).add_sort("snapshotdate")
+        q.add_filter("snapshotdate <= ", self.parent()().get_session().start_time)
+        best = q.get()
+        if not best or self.power > best.power:
             best = BestCriticalPower(parent = self.cpdef)
-            best.cpdef = self.cpdef
-            best.best = None
-        if best.best is None or self.power > best.best.power:
             best.best = self
-        best.put()
+            best.power = self.power
+            best.put()
+
 
 class BestCriticalPower(grumble.Model):
-    cpdef = grumble.ReferenceProperty(sweattrails.config.CriticalPowerInterval)
+    snapshotdate = grumble.DateTimeProperty(auto_now_add = True)
     best = grumble.ReferenceProperty(CriticalPower)
+    power = grumble.IntegerProperty(default = 0)
 
 
 class WattsPerKgProperty(grumble.FloatProperty):
@@ -270,8 +276,8 @@ class BikePart(IntervalPart):
 
     def reducers(self):
         ret = []
-        for cpdef in sweattrails.config.CriticalPowerInterval.query(ancestor = self.get_athlete()):
-            if cpdef.duration <= self.parent().duration:
+        for cpdef in self.get_activityprofile().get_all_linked_references(sweattrails.config.CriticalPowerInterval):
+            if cpdef.duration <= self.get_interval().duration:
                 cp = CriticalPower(parent = self)
                 cp.cpdef = cpdef
                 cp.put()
@@ -322,12 +328,69 @@ class BikePart(IntervalPart):
                 self.tss = (self.timediff * self.intensity_factor**2)/36 if ftp > 0 else 0
 
 
+class RunPace(grumble.Model, Reducer):
+    cpdef = grumble.ReferenceProperty(sweattrails.config.CriticalPace)
+    timestamp = grumble.TimeDeltaProperty()
+    speed = grumble.IntegerProperty()
+
+    def init_reducer(self):
+        self.rollingwindow = []
+        self.starttime = None
+        self.max_speed = None
+
+    def reduce(self, wp):
+        if wp.distance is None:
+            return self
+        self.rollingwindow.append((wp.distance, wp.timestamp))
+        while self.rollingwindow and (wp.distance - self.rollingwindow[0][0]) > self.cpdef.distance:
+            del self.rollingwindow[0]
+        dist = wp.distance - self.rollingwindow[0][0]
+        td = wp.timestamp - self.rollingwindow[0][1]
+        if td:
+            speed = int(round(dist/td.seconds))
+            if self.max_speed is None or speed > self.max_speed:
+                self.max_speed = speed
+                self.starttime = self.rollingwindow[0][1]
+        return self
+
+    def reduction(self):
+        if self.starttime is not None:
+            self.speed = self.max_speed
+            self.timestamp = self.starttime
+            self.put()
+
+    def after_store(self):
+        best = None
+        q = BestRunPace.query(parent = self.cpdef).add_sort("snapshotdate")
+        q.add_filter("snapshotdate <= ", self.parent()().get_session().start_time)
+        best = q.get()
+        if not best or self.speed > best.speed:
+            best = BestRunPace(parent = self.cpdef)
+            best.best = self
+            best.speed = self.speed
+            best.put()
+
+
+class BestRunPace(grumble.Model):
+    snapshotdate = grumble.DateTimeProperty(auto_now_add = True)
+    best = grumble.ReferenceProperty(RunPace)
+    speed = grumble.FloatProperty(default = 0) # m/s
+
+
 class RunPart(IntervalPart):
     average_cadence = grumble.IntegerProperty(default = 0)  # rpm
     max_cadence = grumble.IntegerProperty(default = 0)  # rpm
 
     def reducers(self):
-        return (MaximizeAndAverageOverTime("timestamp", "cadence", self, "max_cadence", "average_cadence"),)
+        ret = []
+        for cpdef in self.get_activityprofile().get_all_linked_references(sweattrails.config.CriticalPace):
+            if cpdef.distance <= self.get_interval().distance:
+                p = RunPace(parent = self)
+                p.cpdef = cpdef
+                p.put()
+                ret.append(p)
+        ret.append(MaximizeAndAverageOverTime("timestamp", "cadence", self, "max_cadence", "average_cadence"))
+        return ret
 
 class SwimPart(IntervalPart):
     pass
@@ -389,7 +452,7 @@ class Interval(grumble.Model, Reducer):
     distance = grumble.property.IntegerProperty(default = 0)  # Distance in meters
     average_hr = grumble.property.IntegerProperty(default = 0)  # bpm
     max_hr = grumble.property.IntegerProperty(default = 0)  # bpm
-    max_speed = grumble.property.IntegerProperty(default = 0)  # bpm
+    max_speed = grumble.property.FloatProperty(default = 0)  # m/s
     work = grumble.property.IntegerProperty(default = 0)  # kJ
     calories_burnt = grumble.property.IntegerProperty(default = 0)  # kJ
 
@@ -501,11 +564,6 @@ class Session(Interval):
     posted = grumble.DateTimeProperty(auto_now_add = True)
     inprogress = grumble.BooleanProperty(default = True)
     device = grumble.StringProperty(default = "")
-
-    def analyze(self):
-        super(Session, self).analyze()
-        for i in Interval.query(parent = self):
-            i.analyze()
 
     def upload_slice(self, request):
         lines = request.get("slice").splitlines()
