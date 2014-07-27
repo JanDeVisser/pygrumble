@@ -18,6 +18,7 @@ from PySide.QtGui import QFileDialog
 from PySide.QtGui import QFont
 from PySide.QtGui import QFormLayout
 from PySide.QtGui import QGridLayout
+from PySide.QtGui import QGroupBox
 from PySide.QtGui import QHBoxLayout
 from PySide.QtGui import QInputDialog
 from PySide.QtGui import QLabel
@@ -25,6 +26,7 @@ from PySide.QtGui import QLineEdit
 from PySide.QtGui import QMainWindow
 from PySide.QtGui import QMessageBox
 from PySide.QtGui import QPixmap
+from PySide.QtGui import QPushButton
 from PySide.QtGui import QSplashScreen
 from PySide.QtGui import QTableView
 from PySide.QtGui import QTabWidget
@@ -47,73 +49,50 @@ class SplashScreen(QSplashScreen):
     def __init__(self):
         QSplashScreen.__init__(self, QPixmap("image/splash.png"))
 
-class DescriptionColumn(grumble.qt.GrumbleTableColumn):
-    def __init__(self):
-        super(DescriptionColumn, self).__init__("description")
-        
-    def __call__(self, session):
-        if not session.description:
-            sessiontype = session.sessiontype
-            ret = sessiontype.name
-        else:
-            ret = session.description
-        return ret
 
-class SessionList(QTableView):
-    def __init__(self, parent = None, user = None):
-        super(SessionList, self).__init__(parent)
-
-        # set the table model
-        if not user:
-            user = QCoreApplication.instance().user
-        self.q = sweattrails.session.Session.query()
-        self.q.add_filter("athlete", "=", user)
-        self.q.add_sort("start_time")
-        tm = grumble.qt.GrumbleTableModel(self.q,
-                grumble.qt.GrumbleTableColumn("start_time", format = "%A %B %d", header = "Date"),
-                grumble.qt.GrumbleTableColumn("start_time", format = "%H:%M", header = "Time"),
-                DescriptionColumn())
-        self.setModel(tm)
+class GrumbleTableView(QTableView):
+    def __init__(self, query = None, columns = None, parent = None):
+        super(GrumbleTableView, self).__init__(parent)
+        self._query = None
+        self._columns = None
+        if query is not None or columns is not None:
+            self.setQueryAndColumns(query, *columns)
         self.setSelectionBehavior(self.SelectRows)
-
-        # set the minimum size
-        self.setMinimumSize(400, 600)
-
-        # hide grid
         self.setShowGrid(False)
-
-        # set the font
-        # font = QFont("Consolas", 15)
-        # self.setFont(font)
-
-        # hide vertical header
         vh = self.verticalHeader()
         vh.setVisible(False)
-
-        # set horizontal header properties
         hh = self.horizontalHeader()
         hh.setStretchLastSection(True)
-
-        # set column width to fit contents
         self.resizeColumnsToContents()
-
-        # set row height
-        # nrows = len(self.tabledata)
-        # for row in xrange(nrows):
-        #    self.setRowHeight(row, 18)
-
-        # enable sorting
         self.setSortingEnabled(True)
-        
+
     def refresh(self):
-        user = QCoreApplication.instance().user
         self.model().beginResetModel()
-        self.q.clear_filters()
-        self.q.add_filter("athlete", "=", user)
+        self.resetQuery()
         self.model().flush()
         self.model().endResetModel()
         self.resizeColumnsToContents()
 
+    def setQueryAndColumns(self, query, *columns):
+        self._query = query
+        self._columns = columns
+        if self._query is not None:
+            tm = grumble.qt.GrumbleTableModel(self._query, self._columns)
+            self.setModel(tm)
+
+    def query(self):
+        return self._query
+
+    def columns(self):
+        return self._columns
+
+    def resetQuery(self):
+        pass
+
+    def getSelectedObject(self):
+        ix = self.selectedIndexes()[0]
+        ret = self.model().data(ix, Qt.UserRole)
+        return None if ret is None else ret()
 
 class SelectUser(QDialog):
     def __init__(self, window = None):
@@ -174,17 +153,82 @@ class ImportThread(QThread):
     def parseCSVFile(self):
         pass
 
+
+class UserList(GrumbleTableView):
+    def __init__(self, parent = None):
+        super(UserList, self).__init__(parent = parent)
+        query = grizzle.User.query()
+        query.add_sort("email")
+        self.setQueryAndColumns(query, "email", "display_name", "status")
+        self.setMinimumSize(400, 600)
+        
+
+class UserDetails(QWidget):
+    def __init__(self, user, parent = None):
+        super(UserDetails, self).__init__(parent)
+        layout = QVBoxLayout(self)
+        self.setLayout(layout)
+        hbox = QHBoxLayout(self)
+        form1 = QFormLayout(self)
+        layout.addLayout(hbox)
+        hbox.addLayout(form1)
+        self.email = QLineEdit(self)
+        self.email.setReadOnly(True)
+        form1.addRow("User email", self.email)
+        self.display_name = QLineEdit(self)
+        self.display_name.setReadOnly(True)
+        form1.addRow("Display Name", self.display_name)
+        self.status = QComboBox(self)
+        for s in grizzle.UserStatus:
+            self.status.addItem(s)
+        form1.addRow("Status", self.status)
+        rolebox = QGroupBox("Roles", self)
+        rb_layout = QVBoxLayout(self)
+        self.roles = {}
+        for (role, definition) in gripe.Config.app.roles.items():
+            cb = QCheckBox(definition.label, self)
+            cb.setCheckable(False)
+            self.roles[role] = (definition, cb)
+            rb_layout.addWidget(cb)
+        rolebox.setLayout(rb_layout)
+        form1.addRow(rolebox)
+        self.setUser(user)
+        
+        
+    def setUser(self, user):
+        self.user = user
+        self.email.setText(user.email)
+        self.display_name.setText(user.display_name)
+        self.status.setEditText(user.status)
+        for (role, (definition, cb)) in self.roles.items():
+            cb.setChecked(role in user.has_roles)
+
+    
 class UserTab(QWidget):
     def __init__(self, parent = None):
-        super(SessionTab, self).__init__(parent)
-        self.sessions = SessionList(self)
-        self.sessions.doubleClicked.connect(self.sessionSelected)
+        super(UserTab, self).__init__(parent)
+        self.users = UserList(self)
+        self.users.doubleClicked.connect(self.userSelected)
         layout = QHBoxLayout(self)
-        layout.addWidget(self.sessions)
-        self.details = SessionDetails(self)
+        vbox = QVBoxLayout(self)
+        layout.addLayout(vbox)
+        vbox.addWidget(self.users)
+        self.addButton = QPushButton("New...", self)
+        self.addButton.clicked.connect(self.newUser)
+        vbox.addWidget(self.addButton)
+        user = self.users.query().get()
+        self.details = UserDetails(user, self)
         layout.addWidget(self.details)
         self.setLayout(layout)
 
+    def userSelected(self, index):
+        self.users.setUser(self.users.getSelectedObject())
+
+    def refresh(self):
+        self.users.refresh()
+        
+    def newUser(self):
+        pass
 
 class SessionPage(QWidget):
     def __init__(self, session, parent = None):
@@ -222,10 +266,44 @@ class SessionDetails(QWidget):
         self.tabs.addTab(SessionPage(session), str(session.start_time))
         
 
+class DescriptionColumn(grumble.qt.GrumbleTableColumn):
+    def __init__(self):
+        super(DescriptionColumn, self).__init__("description")
+        
+    def __call__(self, session):
+        if not session.description:
+            sessiontype = session.sessiontype
+            ret = sessiontype.name
+        else:
+            ret = session.description
+        return ret
+
+
+class SessionList(GrumbleTableView):
+    def __init__(self, user = None, parent = None):
+        super(SessionList, self).__init__(parent = parent)
+
+        if not user:
+            user = QCoreApplication.instance().user
+        query = sweattrails.session.Session.query()
+        query.add_filter("athlete", "=", user)
+        query.add_sort("start_time")
+        self.setQueryAndColumns(query,
+                grumble.qt.GrumbleTableColumn("start_time", format = "%A %B %d", header = "Date"),
+                grumble.qt.GrumbleTableColumn("start_time", format = "%H:%M", header = "Time"),
+                DescriptionColumn())
+        self.setMinimumSize(400, 600)
+        
+    def resetQuery(self):
+        user = QCoreApplication.instance().user
+        self.query().clear_filters()
+        self.query().add_filter("athlete", "=", user)
+
+
 class SessionTab(QWidget):
     def __init__(self, parent = None):
         super(SessionTab, self).__init__(parent)
-        self.sessions = SessionList(self)
+        self.sessions = SessionList(parent = self)
         self.sessions.doubleClicked.connect(self.sessionSelected)
         layout = QHBoxLayout(self)
         layout.addWidget(self.sessions)
@@ -234,8 +312,7 @@ class SessionTab(QWidget):
         self.setLayout(layout)
 
     def sessionSelected(self, index):
-        k = self.sessions.model().data(index, Qt.UserRole)
-        self.details.setSession(k())
+        self.details.setSession(self.sessions.getSelectedObject())
 
     def refresh(self):
         self.sessions.refresh()
@@ -247,8 +324,11 @@ class STMainWindow(QMainWindow):
         self.createMenus()
         layout = QVBoxLayout()
         self.sessiontab = SessionTab()
+        self.usertab = UserTab()
         self.tabs = QTabWidget()
         self.tabs.addTab(self.sessiontab, "Sessions")
+        if QCoreApplication.instance().user.is_admin():
+            self.tabs.addTab(self.usertab, "Users")
         layout.addWidget(self.tabs)
         self.statusbar = QLabel()
         layout.addWidget(self.statusbar)
@@ -384,7 +464,9 @@ app.processEvents()
 app.init_config()
 app.processEvents()
 
-w = STMainWindow()
+with gripe.db.Tx.begin():
+    w = STMainWindow()
+    
 w.show()
 splash.finish(w)
 
