@@ -107,7 +107,7 @@ class ModelProperty(object):
             ret.converter = kwargs.get("converter", \
                 ret.converter \
                     if hasattr(ret, "converter") \
-                    else grumble.converter.Converters.get(cls.datatype)
+                    else grumble.converter.Converters.get(cls.datatype, ret)
             )
             if "getvalue" in kwargs:
                 ret.getvalue = kwargs.get("getvalue")

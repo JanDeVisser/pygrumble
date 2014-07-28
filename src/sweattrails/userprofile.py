@@ -10,6 +10,7 @@ import grumble
 import grumble.property
 import grumble.geopt
 
+
 class UserProfile(grizzle.UserPart):
     country = grumble.StringProperty(default = "CA")
     dob = grumble.DateProperty()

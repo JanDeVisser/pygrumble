@@ -25,15 +25,16 @@ class Converters(type):
         return ret
 
     @classmethod
-    def get(cls, datatype):
-        return cls._converters[datatype]() \
+    def get(cls, datatype, property):
+        return cls._converters[datatype](datatype, property) \
             if datatype in cls._converters \
-            else PropertyConverter(datatype)
+            else PropertyConverter(datatype, property)
 
 class PropertyConverter(object):
     __metaclass__ = Converters
 
-    def __init__(self, datatype = None):
+    def __init__(self, datatype = None, property = None):
+        self.property = property
         if datatype:
             self.datatype = datatype
 
@@ -120,6 +121,25 @@ class ListConverter(PropertyConverter):
     def from_jsonvalue(self, value):
         assert (value is None) or isinstance(value, list), "ListConverter.to_sqlvalue(): value must be a list"
         return value or []
+
+class BooleanConverter(PropertyConverter):
+    datatype = bool
+
+    def convert(self, value):
+        if isinstance(value, basestring) and self.property.choices and len(self.property.choices) == 2:
+            value = self.property.choices.index(value) == 1
+        return super(BooleanConverter, self).convert(value)
+
+    def to_jsonvalue(self, value):
+        assert (value is None) or isinstance(value, bool), "BooleanConverter.to_jsonvalue: value must be bool"
+        return self.property.choices[1 if value else 0] \
+            if self.property.choices and len(self.property.choices) == 2 \
+            else value
+
+    def from_jsonvalue(self, value):
+        if isinstance(value, basestring) and self.property.choices and len(self.property.choices) == 2:
+            value = self.property.choices.index(value) == 1
+        return super(BooleanConverter, self).from_jsonvalue(value)
 
 class DateTimeConverter(PropertyConverter):
     datatype = datetime.datetime

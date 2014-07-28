@@ -15,9 +15,6 @@ import grumble.property
 class BinaryConverter(grumble.converter.PropertyConverter):
     datatype = psycopg2.Binary
 
-    def __init__(self):
-        self.datatype = psycopg2.Binary
-
     def convert(self, value):
         # psycopg2.Binary is a function, not a class. Therefore our isinstance
         # test in the base convert method doesn't work.

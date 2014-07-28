@@ -10,9 +10,8 @@ import grumble.converter
 import grumble.model
 
 class ReferenceConverter(grumble.converter.PropertyConverter):
-    def __init__(self, reference_class, serialize):
-        self.reference_class = reference_class
-        self.serialize = serialize
+    def __init__(self, property):
+        super(ReferenceConverter, self).__init__(None, property)
 
     def convert(self, value):
         return grumble.model.Model.get(value)
@@ -82,14 +81,14 @@ class ReferenceProperty(grumble.property.ModelProperty):
                 if args \
                 else kwargs.get("reference_class")
             if self.reference_class and isinstance(self.reference_class, basestring):
-                self.reference_class = Model.for_name(self.reference_class)
+                self.reference_class = grumble.Model.for_name(self.reference_class)
             assert not self.reference_class or isinstance(self.reference_class, grumble.meta.ModelMetaClass)
             self.collection_name = kwargs.get("collection_name")
             self.collection_verbose_name = kwargs.get("collection_verbose_name")
             self.serialize = kwargs.get("serialize", True)
             self.collection_serialize = kwargs.get("collection_serialize", False)
             self.collection_private = kwargs.get("collection_private", True)
-        self.converter = ReferenceConverter(self.reference_class, self.serialize)
+        self.converter = ReferenceConverter(self)
 
     def set_kind(self, kind):
         super(ReferenceProperty, self).set_kind(kind)
@@ -109,7 +108,7 @@ class ReferenceProperty(grumble.property.ModelProperty):
             values[self.name] = ref.to_dict() if self.serialize else ref.id()
         return values
 
-    def from_json_value(self, instance, values):
+    def from_json_value(self, instance, value):
         clazz = self.reference_class
         if isinstance(value, basestring):
             value = clazz.get(value) if clazz else grumble.model.Model.get(value)
@@ -123,5 +122,5 @@ class SelfReferenceProperty(ReferenceProperty):
     def set_kind(self, kind):
         self.reference_class = grumble.model.Model.for_name(kind)
         super(SelfReferenceProperty, self).set_kind(kind)
-        self.converter = ReferenceConverter(self.reference_class, self.serialize)
+        self.converter = ReferenceConverter(self)
 
