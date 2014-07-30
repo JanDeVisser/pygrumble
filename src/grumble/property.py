@@ -21,6 +21,9 @@ class Validator(object):
     def property(self, prop = None):
         if prop:
             self.prop = prop
+            if hasattr(self, "updateProperty") and \
+                    callable(self.updateProperty):
+                self.updateProperty(prop)
         return prop
 
 
@@ -51,6 +54,9 @@ class RegExpValidator(Validator):
         if pat is not None:
             self._pattern = pat
         return self._pattern
+
+    def updateProperty(self, property):
+        property.config["regexp"] = self._pattern
 
     def __call__(self, instance, value):
         if value and not re.match(self.pattern(), value):
@@ -87,9 +93,11 @@ class ModelProperty(object):
             ret.assigned = prop.assigned
 
             ret.seq_nr = prop.seq_nr
+            ret.config = dict(prop.config)
             ret.inherited_from = prop
         else:
             ret = super(ModelProperty, cls).__new__(cls)
+            ret.config = {}
             ret.seq_nr = ModelProperty.property_counter
             ModelProperty.property_counter += 1
             ret.name = args[0] if args else None
@@ -145,6 +153,7 @@ class ModelProperty(object):
                     else None
             )
             ret.inherited_from = None
+            ret.config.update(kwargs)
         return ret
 
     def set_name(self, name):

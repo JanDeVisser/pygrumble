@@ -147,7 +147,7 @@ class NodeTypeDefinition(object):
             ref = self.ref_class().get_by_key_and_parent(key_name, None)
         assert ref, "Cannot find reference to %s:%s" % (self.ref_class(), key_name)
         return ref
-    
+
     def get_all_linked_references(self, profile):
         q = self.node_class().query(ancestor = profile)
         return [ getattr(node, self.name()) for node in q ]

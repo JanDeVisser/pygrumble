@@ -653,7 +653,10 @@ class Model():
     @classmethod
     def load_template_data(cls):
         cname = cls.__name__.lower()
-        fname = "data/template/" + cname + ".json"
+        dirname = cls._template_dir \
+            if hasattr(cls, "_template_dir") \
+            else "data/template"
+        fname = "%s/%s.json" % (dirname, cname)
         data = gripe.json_util.JSON.file_read(fname)
         if data and "data" in data:
             d = data["data"]

@@ -26,21 +26,23 @@ from PySide.QtGui import QWidget
 
 
 import grizzle
-import grumble.qt
 import sweattrails.fitparser
 import sweattrails.qt.profiletab
 import sweattrails.qt.sessiontab
-import sweattrails.qt.usertab
+# import sweattrails.qt.usertab
 
 class SelectUser(QDialog):
     def __init__(self, window = None):
         super(SelectUser, self).__init__(window)
         layout = QFormLayout(self)
-        self.combo = QComboBox()
-        view = grumble.qt.GrumbleListModel(grumble.Query(grizzle.User, False), "display_name")
-        self.combo.setModel(view)
-        layout.addRow("&User ID:", self.combo)
+        self.email = QLineEdit(self)
+        fm = self.email.fontMetrics()
+        self.email.setMaximumWidth(30 * fm.maxWidth() + 11)
+        layout.addRow("&User ID:", self.email)
         self.pwd = QLineEdit()
+        self.pwd.setEchoMode(QLineEdit.Password)
+        fm = self.pwd.fontMetrics()
+        self.pwd.setMaximumWidth(30 * fm.width('*') + 11)
         layout.addRow("&Password:", self.pwd)
         self.savecreds = QCheckBox("&Save Credentials (unsafe)")
         layout.addRow(self.savecreds)
@@ -70,7 +72,7 @@ class ImportThread(QThread):
         super(ImportThread, self).__init__()
         self.fileName = fileName
         self.mainWindow = mainWindow
-    
+
     def run(self):
         self.finished.connect(self.mainWindow.refresh)
         if self.fileName:
@@ -100,13 +102,13 @@ class STMainWindow(QMainWindow):
         self.createActions()
         self.createMenus()
         layout = QVBoxLayout()
-        self.sessiontab = sweattrails.qt.sessiontab.SessionTab()
-        self.profiletab = sweattrails.qt.profiletab.ProfileTab()
+        self.sessiontab = sweattrails.qt.sessiontab.SessionTab(self)
+        self.profiletab = sweattrails.qt.profiletab.ProfileTab(self)
         self.tabs = QTabWidget()
         self.tabs.currentChanged[int].connect(self.tabChanged)
         self.tabs.addTab(self.sessiontab, "Sessions")
         self.tabs.addTab(self.profiletab, "Profile")
-        #if QCoreApplication.instance().user.is_admin():
+        # if QCoreApplication.instance().user.is_admin():
         #    self.usertab = sweattrails.qt.usertab.UserTab()
         #    self.tabs.addTab(self.usertab, "Users")
         layout.addWidget(self.tabs)
@@ -172,16 +174,16 @@ class STMainWindow(QMainWindow):
                 t = ImportThread(self, f)
                 self.threads.append(t)
                 t.start()
-            
+
     def refresh(self):
         self.sessiontab.refresh()
         self.statusbar.setText("")
-        
+
     def tabChanged(self, tabix):
         w = self.tabs.currentWidget()
         if hasattr(w, "setValues"):
             w.setValues()
-        
+
     def log(self, msg):
         self.statusbar.setText(msg)
 
