@@ -14,7 +14,6 @@ if __name__ == '__main__':
     from PySide.QtGui import QLabel
     from PySide.QtGui import QMainWindow
     from PySide.QtGui import QPushButton
-    from PySide.QtGui import QTableView
     from PySide.QtGui import QVBoxLayout
     from PySide.QtGui import QWidget
 
@@ -42,7 +41,7 @@ if __name__ == '__main__':
             fileMenu.addAction(
                 QAction("E&xit", self,
                         shortcut = "Ctrl+Q",
-                        statusTip = "Exit SweatTrails",
+                        statusTip = "Exit",
                         triggered = self.close))
             window = QWidget()
             layout = QVBoxLayout(self)

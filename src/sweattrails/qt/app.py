@@ -24,6 +24,19 @@ class SplashScreen(QSplashScreen):
 class SweatTrails(QApplication):
     def __init__(self, argv):
         super(SweatTrails, self).__init__(argv)
+        self.splash = SplashScreen()
+        
+    def start(self):
+        self.processEvents()
+        self.splash.show()
+        self.processEvents()
+        self.init_config()
+        self.processEvents()
+        with gripe.db.Tx.begin():
+            self.mainwindow = sweattrails.qt.mainwindow.STMainWindow()
+        self.mainwindow.show()
+        self.splash.finish(self.mainwindow)
+        self.splash = None
 
     def init_config(self):
         save = False
@@ -76,17 +89,6 @@ class SweatTrails(QApplication):
         return self.user is not None
 
 app = SweatTrails(sys.argv)
-splash = SplashScreen()
-app.processEvents()
-splash.show()
-app.processEvents()
-app.init_config()
-app.processEvents()
-
-with gripe.db.Tx.begin():
-    w = sweattrails.qt.mainwindow.STMainWindow()
-    
-w.show()
-splash.finish(w)
+app.start()
 
 app.exec_()

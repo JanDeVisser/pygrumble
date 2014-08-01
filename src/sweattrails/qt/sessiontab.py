@@ -12,7 +12,8 @@ from PySide.QtGui import QTabWidget
 from PySide.QtGui import QVBoxLayout
 from PySide.QtGui import QWidget
 
-import grumble.qt
+import grumble.qt.model
+import grumble.qt.view
 import sweattrails.session
 
 class SessionPage(QWidget):
@@ -33,8 +34,8 @@ class SessionPage(QWidget):
         self.description.setText(self.session.description)
         self.description.setReadOnly(True)
         form1.addRow("Description", self.description)
-        
-    
+
+
 class SessionDetails(QWidget):
     def __init__(self, parent = None):
         super(SessionDetails, self).__init__(parent)
@@ -44,17 +45,17 @@ class SessionDetails(QWidget):
         layout.addWidget(self.tabs)
         self.setLayout(layout)
         self.setMinimumSize(600, 600)
-    
+
     def setSession(self, session):
         self.session = session
         self.tabs.clear()
         self.tabs.addTab(SessionPage(session), str(session.start_time))
-        
 
-class DescriptionColumn(grumble.qt.GrumbleTableColumn):
+
+class DescriptionColumn(grumble.qt.model.TableColumn):
     def __init__(self):
         super(DescriptionColumn, self).__init__("description")
-        
+
     def __call__(self, session):
         if not session.description:
             sessiontype = session.sessiontype
@@ -64,7 +65,7 @@ class DescriptionColumn(grumble.qt.GrumbleTableColumn):
         return ret
 
 
-class SessionList(grumble.qt.GrumbleTableView):
+class SessionList(grumble.qt.view.TableView):
     def __init__(self, user = None, parent = None):
         super(SessionList, self).__init__(parent = parent)
 
@@ -74,11 +75,11 @@ class SessionList(grumble.qt.GrumbleTableView):
         query.add_filter("athlete", "=", user)
         query.add_sort("start_time")
         self.setQueryAndColumns(query,
-                grumble.qt.GrumbleTableColumn("start_time", format = "%A %B %d", header = "Date"),
-                grumble.qt.GrumbleTableColumn("start_time", format = "%H:%M", header = "Time"),
+                grumble.qt.model.TableColumn("start_time", format = "%A %B %d", header = "Date"),
+                grumble.qt.model.TableColumn("start_time", format = "%H:%M", header = "Time"),
                 DescriptionColumn())
         self.setMinimumSize(400, 600)
-        
+
     def resetQuery(self):
         user = QCoreApplication.instance().user
         self.query().clear_filters()

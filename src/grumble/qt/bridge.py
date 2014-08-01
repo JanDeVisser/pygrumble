@@ -4,7 +4,10 @@ Created on Jul 29, 2014
 @author: jan
 '''
 
+import datetime
+
 from PySide.QtCore import Qt
+from PySide.QtCore import QMargins
 from PySide.QtCore import QRegExp
 
 from PySide.QtGui import QButtonGroup
@@ -79,33 +82,47 @@ class WidgetBridge(object):
         self.config.update(kwargs)
         self.choices = self.config.get("choices")
         self.hasOwnLabel = False
+        self.assigned = None
         self.widget = self.create()
+        if not hasattr(self, "container") or not self.container:
+            self.container = self.widget
 
     def getWidgetType(self):
         return self._qttype if hasattr(self, "_qttype") else None
 
     def create(self):
         self.widget = self._createWidget()
+        if hasattr(self, "customize") and callable(self.customize):
+            self.customize(self.widget)
         logger.debug("WidgetBridge: Created Qt Widget of type %s", type(self.widget))
+        if "suffix" in self.config:
+            self.container = QWidget(self.parent)
+            hbox = QHBoxLayout(self.container)
+            hbox.addWidget(self.widget)
+            hbox.addWidget(QLabel(str(self.config["suffix"]), self.parent))
+            hbox.addStretch(1)
+            hbox.setContentsMargins(QMargins(0, 0, 0, 0))
         return self.widget
 
     def _createWidget(self):
-        ret = self.getWidgetType()(parent = self.parent)
-        if hasattr(self, "customize") and callable(self.customize):
-            self.customize(ret)
-        return ret
+        return self.getWidgetType()(parent = self.parent)
 
     def setValue(self, value):
+        self.assigned = value
         self.widget.setText(str(value))
 
     def getValue(self):
-        return self.widget.text()
+        return self._pytype(self.widget.text())
+    
+    def isModified(self):
+        return self.assigned != self.getValue()
 
 
 class Label(WidgetBridge):
     _qttype = QLabel
 
     def setValue(self, value):
+        self.assigned = value
         fmt = self.config.get("format")
         if fmt:
             fmt = "{:" + fmt + "}"
@@ -114,6 +131,9 @@ class Label(WidgetBridge):
 
     def getValue(self):
         pass
+    
+    def isModified(self):
+        return False
 
 
 class LineEdit(WidgetBridge):
@@ -123,6 +143,7 @@ class LineEdit(WidgetBridge):
         grumble.property.LinkProperty
     ]
     _qttype = QLineEdit
+    _pytype = str
 
     def customize(self, widget):
         regexp = self.config.get("regexp")
@@ -155,6 +176,7 @@ class PasswordEdit(LineEdit):
 
 class IntEdit(LineEdit):
     _grumbletypes = [grumble.property.IntegerProperty]
+    _pytype = int
 
     def customize(self, widget):
         super(IntEdit, self).customize(widget)
@@ -179,6 +201,7 @@ class IntEdit(LineEdit):
 
 class FloatEdit(LineEdit):
     _grumbletypes = [grumble.property.FloatProperty]
+    _pytype = float
 
     def customize(self, widget):
         super(FloatEdit, self).customize(widget)
@@ -211,47 +234,75 @@ class FloatEdit(LineEdit):
 class DateEdit(WidgetBridge):
     _grumbletypes = [grumble.property.DateProperty]
     _qttype = QDateEdit
+    _pytype = datetime.date
+
+    def customize(self, widget):
+        widget.setDisplayFormat("MMMM d, yyyy")
+        widget.setCalendarPopup(True)
+        fm = widget.fontMetrics()
+        widget.setMaximumWidth(fm.width("September 29, 2000") + 31) # FIXME
+        self.assigned = None
 
     def setValue(self, value):
+        self.assigned = value
         self.widget.setDate(value)
 
     def getValue(self):
-        return self.widget.date()
-
+        return self.widget.date().toPython()
+    
 
 class DateTimeEdit(WidgetBridge):
     _grumbletypes = [grumble.property.DateTimeProperty]
     _qttype = QDateTimeEdit
+    _pytype = datetime.datetime
+
+    def customize(self, widget):
+        widget.setDisplayFormat("MMMM d, yyyy h:mm:ss ap")
+        widget.setCalendarPopup(True)
+        fm = widget.fontMetrics()
+        widget.setMaximumWidth(fm.width("September 29, 2000 12:00:00 pm") + 31) # FIXME
+        self.assigned = None
 
     def setValue(self, value):
         self.widget.setDateTime(value)
 
     def getValue(self):
-        return self.widget.dateTime()
+        return self.widget.dateTime().toPython()
+
+    def isModified(self):
+        return self.assigned != self.getValue()
 
 
 class TimeEdit(WidgetBridge):
     _grumbletypes = [grumble.property.TimeProperty]
     _qttype = QTimeEdit
+    _pytype = datetime.time
+
+    def customize(self, widget):
+        widget.setDisplayFormat("h:mm:ss ap")
+        fm = widget.fontMetrics()
+        widget.setMaximumWidth(fm.width("12:00:00 pm") + 31) # FIXME
+        self.assigned = None
 
     def setValue(self, value):
+        self.assigned = value
         self.widget.setTime(value)
 
     def getValue(self):
-        return self.widget.time()
+        return self.widget.time().toPython()
 
 
 class CheckBox(WidgetBridge):
     _grumbletypes = [grumble.property.BooleanProperty]
     _qttype = QCheckBox
+    _pytype = bool
 
-    def _createWidget(self):
-        ret = super(CheckBox, self)._createWidget()
-        ret.setText(self.label)
+    def customize(self, widget):
+        widget.setText(self.label)
         self.hasOwnLabel = True
-        return ret
 
     def setValue(self, value):
+        self.assigned = value
         self.widget.setChecked(value)
 
     def getValue(self):
@@ -264,16 +315,16 @@ class ComboBox(WidgetBridge):
     def __init__(self, parent, kind, propname, **kwargs):
         super(ComboBox, self).__init__(parent, kind, propname, **kwargs)
 
-    def _createWidget(self):
+    def customize(self, widget):
         assert self.choices, "ComboBox: Cannot build widget bridge without choices"
-        ret = super(ComboBox, self)._createWidget()
         self.required = "required" in self.config
         if not self.required:
-            ret.addItem("")
-        ret.addItems(self.choices)
+            widget.addItem("")
+        widget.addItems(self.choices)
         return ret
 
     def setValue(self, value):
+        self.assigned = value
         if not self.required:
             ix = 0 if not value else self.choices.index(value) + 1
         else:
@@ -290,12 +341,14 @@ class ComboBox(WidgetBridge):
 
 
 class RadioButtons(WidgetBridge):
-    def _createWidget(self):
+    _qttype = QGroupBox
+
+    def customize(self, widget):
         assert self.choices, "RadioButtons: Cannot build widget bridge without choices"
+        # We give the GroupBox a container so we can add stretch at the end.
+        self.container = QWidget(self.parent)
+        hbox = QHBoxLayout(self.container)
         self.buttongroup = QButtonGroup(self.parent)
-        ret = QWidget(self.parent)
-        hbox = QHBoxLayout()
-        gb = QGroupBox(self.parent)
         if "direction" in self.config and \
                 self.config["direction"].lower() == "vertical":
             box = QVBoxLayout()
@@ -307,16 +360,13 @@ class RadioButtons(WidgetBridge):
             rb = QRadioButton(c, self.parent)
             box.addWidget(rb)
             self.buttongroup.addButton(rb)
-        gb.setLayout(box)
-        hbox.addWidget(gb)
+        widget.setLayout(box)
+        hbox.addWidget(widget)
         hbox.addStretch(1)
-        margins = hbox.contentsMargins()
-        margins.setLeft(0)
-        hbox.setContentsMargins(margins)
-        ret.setLayout(hbox)
-        return ret
+        hbox.setContentsMargins(QMargins(0, 0, 0, 0))
 
     def setValue(self, value):
+        self.assigned = value
         for b in self.buttongroup.buttons():
             b.setChecked(b.text() == value)
 
@@ -335,26 +385,30 @@ class PropertyFormLayout(QFormLayout):
         pname = pnames[-1]
         bridge = WidgetBridgeFactory.get(parent, kind, pname, **kwargs)
         self._properties[propname] = bridge
+        w = bridge.container if hasattr(bridge, "container") else bridge.widget
         if bridge.hasOwnLabel:
-            self.addRow(bridge.widget)
+            self.addRow(w)
         else:
-            self.addRow(bridge.label + ":", bridge.widget)
+            self.addRow(bridge.label + ":", w)
 
     def setValues(self, instance):
         with gripe.db.Tx.begin():
             for (p, bridge) in self._properties.items():
                 bridge.setValue(reduce(lambda v, n : getattr(v, n),
-                                       p.split("."),
-                                       instance))
+                                p.split("."), instance))
 
     def getValues(self, instance):
         with gripe.db.Tx.begin():
-            for (p, bridge) in self._properties.items():
+            instances = set()
+            for (p, bridge) in filter(lambda (p,b): b.isModified(), self._properties.items()):
                 v = bridge.getValue()
                 path = p.split(".")
                 i = reduce(lambda i, n : getattr(i, n),
                            path[:-1],
                            instance)
+                print "setattr", i, "->", path[-1], "=", v
                 setattr(i, path[-1], v)
-
-
+                instances.add(i)
+                bridge.setValue(getattr(i, path[-1]))
+            for i in instances:
+                i.put()

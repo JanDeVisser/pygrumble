@@ -11,7 +11,6 @@ from PySide.QtCore import QThread
 from PySide.QtGui import QAction
 from PySide.QtGui import QApplication
 from PySide.QtGui import QCheckBox
-from PySide.QtGui import QComboBox
 from PySide.QtGui import QDialog
 from PySide.QtGui import QDialogButtonBox
 from PySide.QtGui import QFileDialog
@@ -65,7 +64,7 @@ class SelectUser(QDialog):
             self.accept()
         else:
             QMessageBox.critical(self, "Wrong Password",
-                "The chosen user and the password entered do not match.")
+                "The user ID and password entered do not match.")
 
 class ImportThread(QThread):
     def __init__(self, mainWindow, fileName):
@@ -189,6 +188,6 @@ class STMainWindow(QMainWindow):
 
     def about(self):
         QMessageBox.about(self, "About SweatTrails",
-                          "SweatTrails is a next-generation training log application")
+                          "SweatTrails is a training log application")
 
 
