@@ -25,7 +25,7 @@ class SweatTrails(QApplication):
     def __init__(self, argv):
         super(SweatTrails, self).__init__(argv)
         self.splash = SplashScreen()
-        
+
     def start(self):
         self.processEvents()
         self.splash.show()
@@ -87,6 +87,9 @@ class SweatTrails(QApplication):
 
     def is_authenticated(self):
         return self.user is not None
+
+    def log(self, msg):
+        self.mainwindow.log(msg)
 
 app = SweatTrails(sys.argv)
 app.start()

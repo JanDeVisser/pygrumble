@@ -177,11 +177,11 @@ class CriticalPower(grumble.Model, Reducer):
             for p in self.rollingwindow:
                 td = (p[0] - prev[0]).seconds if prev else 1
                 prev = p
-                s += p[1]*td
+                s += p[1] * td
             if prev:
                 diff = (prev[0] - starttime).seconds
                 if diff:
-                    avg = int(round(s/diff))
+                    avg = int(round(s / diff))
                     if self.max_avg is None or avg > self.max_avg:
                         self.max_avg = avg
                     self.starttime = starttime
@@ -227,7 +227,7 @@ class WattsPerKgProperty(grumble.FloatProperty):
             if weight > 0:
                 power = getattr(instance, self.power_prop)
                 if power is not None and power > 0:
-                    ret =  power / weight
+                    ret = power / weight
         return ret
 
     def setvalue(self, instance, value):
@@ -282,7 +282,7 @@ class BikePart(IntervalPart):
                 cp.cpdef = cpdef
                 cp.put()
                 ret.append(cp)
-        ret.extend(( MaximizeAndAverageOverTime("timestamp", "cadence", self, "max_cadence", "average_cadence"),
+        ret.extend((MaximizeAndAverageOverTime("timestamp", "cadence", self, "max_cadence", "average_cadence"),
                  MaximizeAndAverageOverTime("timestamp", "torque", self, "max_torque", "average_torque"),
                  MaximizeAndAverageOverTime("timestamp", "power", self, "max_power", "average_power"),
                  self
@@ -313,19 +313,19 @@ class BikePart(IntervalPart):
             for p in self.rollingwindow:
                 td = (p[0] - prev[0]).seconds if prev else 1
                 prev = p
-                s += p[1]*td
-                self.sum_norm += (round(s/diff))**4
+                s += p[1] * td
+                self.sum_norm += (round(s / diff)) ** 4
                 self.count += 1
         return self
 
     def reduction(self):
         if self.count > 0 and self.sum_norm > 0:
-            self.normalized_power = int(round((self.sum_norm/self.count)**(0.25)))
+            self.normalized_power = int(round((self.sum_norm / self.count) ** (0.25)))
             self.vi = round(self.normalized_power / self.average_power, 2)
             ftp = self.get_ftp()
             if ftp:
                 self.intensity_factor = round(self.normalized_power / ftp, 2) if ftp > 0 else 0
-                self.tss = (self.timediff * self.intensity_factor**2)/36 if ftp > 0 else 0
+                self.tss = (self.timediff * self.intensity_factor ** 2) / 36 if ftp > 0 else 0
 
 
 class RunPace(grumble.Model, Reducer):
@@ -347,7 +347,7 @@ class RunPace(grumble.Model, Reducer):
         dist = wp.distance - self.rollingwindow[0][0]
         td = wp.timestamp - self.rollingwindow[0][1]
         if td:
-            speed = int(round(dist/td.seconds))
+            speed = int(round(dist / td.seconds))
             if self.max_speed is None or speed > self.max_speed:
                 self.max_speed = speed
                 self.starttime = self.rollingwindow[0][1]
@@ -374,7 +374,7 @@ class RunPace(grumble.Model, Reducer):
 class BestRunPace(grumble.Model):
     snapshotdate = grumble.DateTimeProperty(auto_now_add = True)
     best = grumble.ReferenceProperty(RunPace)
-    speed = grumble.FloatProperty(default = 0) # m/s
+    speed = grumble.FloatProperty(default = 0)  # m/s
 
 
 class RunPart(IntervalPart):
@@ -443,16 +443,26 @@ class GeoData(grumble.Model):
     bounding_box = grumble.geopt.GeoBoxProperty()
 
 
+@grumble.property.transient
+class AvgSpeedProperty(grumble.property.FloatProperty):
+    def getvalue(self, instance):
+        return instance.distance / instance.duration.seconds
+
+    def setvalue(self, instance, value):
+        pass
+
+
 class Interval(grumble.Model, Reducer):
     interval_id = grumble.property.StringProperty(is_key = True)
     intervalpart = grumble.reference.ReferenceProperty(IntervalPart)
-    timestamp = grumble.property.TimeDeltaProperty()
-    elapsed_time = grumble.property.TimeDeltaProperty()  # Duration including pauses
-    duration = grumble.property.TimeDeltaProperty()  # Time excluding pauses
+    timestamp = grumble.property.TimeDeltaProperty(verbose_name = "Start at")
+    elapsed_time = grumble.property.TimeDeltaProperty(verbose_name = "Elapsed time")  # Duration including pauses
+    duration = grumble.property.TimeDeltaProperty(verbose_name = "Duration")  # Time excluding pauses
     distance = grumble.property.IntegerProperty(default = 0)  # Distance in meters
-    average_hr = grumble.property.IntegerProperty(default = 0)  # bpm
-    max_hr = grumble.property.IntegerProperty(default = 0)  # bpm
-    max_speed = grumble.property.FloatProperty(default = 0)  # m/s
+    average_hr = grumble.property.IntegerProperty(default = 0, verbose_name = "Avg. Heartrate")  # bpm
+    max_hr = grumble.property.IntegerProperty(default = 0, verbose_name = "Max. Heartrate")  # bpm
+    average_speed = AvgSpeedProperty(verbose_name = "Avg. Speed/Pace")
+    max_speed = grumble.property.FloatProperty(default = 0, verbose_name = "Max. Speed/Pace")  # m/s
     work = grumble.property.IntegerProperty(default = 0)  # kJ
     calories_burnt = grumble.property.IntegerProperty(default = 0)  # kJ
 
@@ -512,7 +522,7 @@ class Interval(grumble.Model, Reducer):
 
     def reduction(self):
         if self.cur_altitude is not None or self.bounding_box is not None:
-            geodata = GeoData(parent=self)
+            geodata = GeoData(parent = self)
             if self.cur_altitude is not None:
                 geodata.max_elev = self.max_elev
                 geodata.min_elev = self.min_elev
@@ -559,9 +569,9 @@ class Session(Interval):
     athlete = grumble.ReferenceProperty(grizzle.User)
     description = grumble.StringProperty()
     sessiontype = SessionTypeReference()
-    start_time = grumble.DateTimeProperty()
+    start_time = grumble.DateTimeProperty(verbose_name = "Date/Time")
     notes = grumble.StringProperty(multiline = True)
-    posted = grumble.DateTimeProperty(auto_now_add = True)
+    posted = grumble.DateTimeProperty(auto_now_add = True, verbose_name = "Posted on")
     inprogress = grumble.BooleanProperty(default = True)
     device = grumble.StringProperty(default = "")
 

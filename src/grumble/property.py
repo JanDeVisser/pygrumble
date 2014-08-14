@@ -281,6 +281,12 @@ class ModelProperty(object):
             except:
                 return value
 
+
+def transient(property):
+    property.transient = True
+    return property
+
+
 class CompoundProperty(object):
     _default_validators = []
 

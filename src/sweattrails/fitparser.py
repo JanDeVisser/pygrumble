@@ -4,6 +4,7 @@ import datetime
 import sys
 import time
 
+import gripe.conversions
 import gripe.db
 import grizzle
 import grumble.geopt
@@ -11,15 +12,6 @@ import sweattrails.config
 import sweattrails.session
 
 from fitparse import Activity, FitParseError
-
-def local_date_to_utc(d):
-    """Local date to UTC"""
-    return datetime.datetime.utcfromtimestamp(time.mktime(d.timetuple()))
-
-def semicircle_to_degrees(semicircles):
-    """Convert a number in semicricles to degrees"""
-    return semicircles * (180.0 / 2.0 ** 31)
-
 
 class RecordWrapper(object):
     def __init__(self, rec):
@@ -68,7 +60,7 @@ class RecordWrapper(object):
 class FITLap(RecordWrapper):
     def convert_interval(self, interval):
         self.start_time = self.get_data("start_time")
-        interval.interval_id = str(local_date_to_utc(self.start_time)) + "Z"
+        interval.interval_id = str(gripe.conversions.local_date_to_utc(self.start_time)) + "Z"
         ts = self.start_time - self.session.start_time
         interval.timestamp = ts
         interval.distance = self.get_data("total_distance")
@@ -86,7 +78,8 @@ class FITRecord(RecordWrapper):
         lon = self.get_data("position_long")
         if lat and lon:
             wp.location = grumble.geopt.GeoPt(
-                semicircle_to_degrees(lat), semicircle_to_degrees(lon))
+                gripe.conversions.semicircle_to_degrees(lat),
+                gripe.conversions.semicircle_to_degrees(lon))
         wp.speed = self.get_data("speed")
         wp.altitude = self.get_data("altitude")
         wp.distance = self.get_data("distance")
@@ -152,10 +145,10 @@ class FITParser(object):
         self.laps = []
         self.records = []
         self.logger = None
-        
+
     def setLogger(self, logger):
         self.logger = logger
-        
+
     def parse(self):
         self.log("Reading FIT file %s" % self.filename)
         self.activity = Activity(self.filename)
@@ -165,7 +158,7 @@ class FITParser(object):
         self._process()
         self.log("FIT file %s converted" % self.filename)
         return None
-    
+
     def log(self, msg):
         if self.logger is not None:
             self.logger.log(msg)

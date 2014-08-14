@@ -45,7 +45,7 @@ class ProfileReference(object):
 
 class SessionType(grumble.Model, ProfileReference):
     _resolved_parts = set()
-    name = grumble.property.StringProperty(is_key = True, scoped = True)
+    name = grumble.property.StringProperty(verbose_name = "Activity", is_key = True, scoped = True)
     description = grumble.property.StringProperty()
     intervalpart = grumble.property.StringProperty()
     trackDistance = grumble.property.BooleanProperty()
@@ -75,7 +75,7 @@ class CriticalPowerInterval(grumble.Model, ProfileReference):
 
 class CriticalPace(grumble.Model, ProfileReference):
     name = grumble.property.StringProperty(is_key = True, scoped = True)
-    distance = grumble.property.IntegerProperty() # In m
+    distance = grumble.property.IntegerProperty()  # In m
 
 
 # ----------------------------------------------------------------------------
@@ -112,6 +112,7 @@ class NodeTypeRegistry():
     @classmethod
     def types(cls):
         return cls._by_ref_name.values()
+
 
 class NodeTypeDefinition(object):
     def __init__(self, ref_name, ref_class, node_class):

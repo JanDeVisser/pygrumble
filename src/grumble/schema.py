@@ -39,7 +39,7 @@ class ModelManager(object):
         self.key_col = None
         self.flat = False
         self.audit = True
-        
+
     def __str__(self):
         return "ModelManager <%s>" % self.name
 
@@ -148,8 +148,9 @@ class ModelManager(object):
                                     self.tablename, colname, data_type.lower(), \
                                     column.data_type.lower())
                     cur.execute('ALTER TABLE %s DROP COLUMN "%s"' % (self.tablename, colname))
-                    column.exists = False
+                    column._exists = False
                 else:
+                    c._exists = True
                     alter = ""
                     vars = []
                     if column.required != (is_nullable == 'NO'):
@@ -166,7 +167,6 @@ class ModelManager(object):
             else:
                 # Column not found. Drop it:
                 cur.execute('ALTER TABLE %s DROP COLUMN "%s"' % (self.tablename, colname))
-                self.columns.remove(column)
         for c in filter(lambda c: not c._exists, self.columns):
             vars = []
             sql = 'ALTER TABLE %s ADD COLUMN "%s" %s' % (self.tablename, c.name, c.data_type)
