@@ -214,6 +214,7 @@ class Model():
                 prop._after_store(self)
             if hasattr(self, "after_store") and callable(self.after_store):
                 self.after_store()
+            self._exists = True
             gripe.db.Tx.put_in_cache(self)
             self._storing -= 1
         del self._storing
@@ -751,12 +752,18 @@ class Query(grumble.query.ModelQuery):
                    grumble.key.Key(self._cur_kind, ret[self._results.key_index()]),
                    None if self.keys_only else zip(self._results.columns(), ret)
                )
-
+        
+    def __len__(self):
+        return self.count()
+    
     def count(self):
         ret = 0
         for k in self.kind:
             ret += self._count(k)
         return ret
+    
+    def has(self):
+        return self.count() > 0
 
     def delete(self):
         res = 0
@@ -780,16 +787,15 @@ class Query(grumble.query.ModelQuery):
         except StopIteration:
             return None
 
-    def fetch(self):
+    def fetchall(self):
         results = [ r for r in self ]
-        ret = results[0] \
-            if len(results) == 1 \
-            else (results \
-                    if len(results) \
-                    else None)
-        logger.debug("Query(%s, %s, %s).fetch(): %s", self.kind, self.filters, self._ancestor if hasattr(self, "_ancestor") else None, ret)
-        return ret
-
-    def fetch_all(self):
-        return [ r for r in self ]
+        #=======================================================================
+        # ret = results[0] \
+        #     if len(results) == 1 \
+        #     else (results \
+        #             if len(results) \
+        #             else None)
+        #=======================================================================
+        logger.debug("Query(%s, %s, %s).fetchall(): len = %s", self.kind, self.filters, self._ancestor if hasattr(self, "_ancestor") else None, len(results))
+        return results
 

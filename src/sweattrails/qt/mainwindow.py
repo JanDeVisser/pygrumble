@@ -6,7 +6,6 @@ Created on Jul 27, 2014
 
 
 from PySide.QtCore import QCoreApplication
-from PySide.QtCore import QThread
 
 from PySide.QtGui import QAction
 from PySide.QtGui import QApplication
@@ -15,19 +14,22 @@ from PySide.QtGui import QDialog
 from PySide.QtGui import QDialogButtonBox
 from PySide.QtGui import QFileDialog
 from PySide.QtGui import QFormLayout
+from PySide.QtGui import QIcon
 from PySide.QtGui import QLabel
 from PySide.QtGui import QLineEdit
 from PySide.QtGui import QMainWindow
 from PySide.QtGui import QMessageBox
+from PySide.QtGui import QPixmap
+from PySide.QtGui import QProgressBar
 from PySide.QtGui import QTabWidget
 from PySide.QtGui import QVBoxLayout
 from PySide.QtGui import QWidget
 
 
-import grizzle
-import sweattrails.fitparser
+# import grizzle
 import sweattrails.qt.profiletab
 import sweattrails.qt.sessiontab
+import sweattrails.qt.imports
 # import sweattrails.qt.usertab
 
 class SelectUser(QDialog):
@@ -66,35 +68,6 @@ class SelectUser(QDialog):
             QMessageBox.critical(self, "Wrong Password",
                 "The user ID and password entered do not match.")
 
-class ImportThread(QThread):
-    def __init__(self, mainWindow, fileName):
-        super(ImportThread, self).__init__()
-        self.fileName = fileName
-        self.mainWindow = mainWindow
-
-    def run(self):
-        self.finished.connect(self.mainWindow.refresh)
-        if self.fileName:
-            if self.fileName.endswith(".fit"):
-                self.parseFITFile()
-            elif self.fileName.endswith(".tcx"):
-                self.parseTCXFile()
-            else:
-                self.parseCSVFile()
-
-    def parseFITFile(self):
-        parser = sweattrails.fitparser.FITParser(
-            QCoreApplication.instance().user, self.fileName)
-        parser.setLogger(self.mainWindow)
-        parser.parse()
-
-    def parseTCXFile(self):
-        pass
-
-    def parseCSVFile(self):
-        pass
-
-
 class STMainWindow(QMainWindow):
     def __init__(self):
         super(STMainWindow, self).__init__()
@@ -111,17 +84,30 @@ class STMainWindow(QMainWindow):
         #    self.usertab = sweattrails.qt.usertab.UserTab()
         #    self.tabs.addTab(self.usertab, "Users")
         layout.addWidget(self.tabs)
-        self.statusbar = QLabel(self)
-        layout.addWidget(self.statusbar)
         w = QWidget(self)
         w.setLayout(layout)
         self.setCentralWidget(w)
-        self.threads = []
-
+        self.statusmessage = QLabel()
+        self.statusmessage.setMinimumWidth(200)
+        self.statusBar().addPermanentWidget(self.statusmessage)
+        self.progressbar = QProgressBar()
+        self.progressbar.setMinimumWidth(100)
+        self.progressbar.setMinimum(0)
+        self.progressbar.setMaximum(100)
+        self.statusBar().addPermanentWidget(self.progressbar)
+        self.setWindowTitle("SweatTrails")
+        self.setWindowIconText("SweatTrails")
+        icon = QPixmap("image/sweatdrops.png")
+        self.setWindowIcon(QIcon(icon))
+        
+        
     def createActions(self):
         self.switchUserAct = QAction("&Switch User", self, shortcut = "Ctrl+U", statusTip = "Switch User", triggered = self.switch_user)
         self.createUserAct = QAction("&Create User", self, shortcut = "Ctrl+N", statusTip = "Create User", triggered = self.create_user)
-        self.importFileAct = QAction("&Import", self, shortcut = "Ctrl+I", statusTip = "Import Session", triggered = self.import_file)
+        self.importFileAct = QAction("&Import", self, shortcut = "Ctrl+I", statusTip = "Import Session", triggered = self.file_import)
+        self.downloadAct = QAction("&Download", self, shortcut = "Ctrl+D", 
+                                   statusTip = "Download activities from device", 
+                                   triggered = QCoreApplication.instance().download)
         self.exitAct = QAction("E&xit", self, shortcut = "Ctrl+Q", statusTip = "Exit SweatTrails", triggered = self.close)
 
         self.aboutAct = QAction("&About", self, triggered = self.about)
@@ -134,6 +120,7 @@ class STMainWindow(QMainWindow):
         self.fileMenu.addAction(self.createUserAct)
         self.fileMenu.addSeparator()
         self.fileMenu.addAction(self.importFileAct)
+        self.fileMenu.addAction(self.downloadAct)
         self.fileMenu.addSeparator()
         self.fileMenu.addAction(self.exitAct)
 
@@ -146,7 +133,12 @@ class STMainWindow(QMainWindow):
 
     def show(self):
         super(QMainWindow, self).show()
-        if not self.select_user():
+        if self.select_user():
+            t = sweattrails.qt.imports.ImportThread.get_thread()
+            t.importing.connect(self.file_import_started)
+            t.imported.connect(self.file_imported)
+            t.importerror.connect(self.file_import_error)
+        else:
             self.close()
 
     def switch_user(self):
@@ -163,28 +155,54 @@ class STMainWindow(QMainWindow):
             self.refresh()
         return ret
 
-    def import_file(self):
+    #
+    # FILE IMPORT
+    #
+
+    def file_import(self):
         (fileNames, _) = QFileDialog.getOpenFileNames(self,
                                "Open Activity File",
                                "",
                                "Activity Files (*.tcx *.fit *.csv)")
         if fileNames:
-            for f in fileNames:
-                t = ImportThread(self, f)
-                self.threads.append(t)
-                t.start()
+            QCoreApplication.instance().import_files(*fileNames)
+            
+    def file_import_started(self, filename):
+        self.switchUserAct.setEnabled(False)
+                
+    def file_imported(self, filename):
+        self.switchUserAct.setEnabled(True)
+        self.refresh()
+
+    def file_import_error(self, filename, msg):
+        self.switchUserAct.setEnabled(True)
+        self.refresh()
+
+    #
+    # END FILE IMPORT
+    #
 
     def refresh(self):
         self.sessiontab.refresh()
-        self.statusbar.setText("")
+        self.log("")
 
     def tabChanged(self, tabix):
         w = self.tabs.currentWidget()
         if hasattr(w, "setValues"):
             w.setValues()
 
-    def log(self, msg):
-        self.statusbar.setText(msg)
+    def log(self, msg, *args):
+        self.statusmessage.setText(msg.format(*args))
+
+    def reset_progress(self, msg, *args):
+        self.progressbar.setValue(0)
+        self.log(msg, *args)
+
+    def progress(self, percentage):
+        self.progressbar.setValue(percentage)
+        
+    def progress_done(self):
+        self.progressbar.setValue(0) 
 
     def about(self):
         QMessageBox.about(self, "About SweatTrails",

@@ -33,6 +33,7 @@ class TableColumn(object):
         fmt = "{:" + self.get_format() + "}" 
         return fmt.format(val) if val is not None else ''
 
+
 class TableModel(QAbstractTableModel):
     def __init__(self, query, *args):
         super(TableModel, self).__init__()

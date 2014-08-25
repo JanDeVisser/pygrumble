@@ -10,6 +10,8 @@ import gripe
 logger = gripe.get_logger(__name__)
 
 class LoggedCursor(object):
+    placeholder = '?'
+    
     def _interpolate(self, sql, args):
         return "%s <- %s" % (sql, args)
 
@@ -17,7 +19,7 @@ class LoggedCursor(object):
         self._columns = columns
         self._key_index = key_index
 
-    def execute(self, sql, args = None, **kwargs):
+    def execute(self, sql, args = [], **kwargs):
         if "columns" in kwargs:
             self._columns = kwargs["columns"]
         if "key_index" in kwargs:
@@ -25,6 +27,11 @@ class LoggedCursor(object):
         # logger.debug("sql: %s args %s", sql, args)
         logger.debug(self._interpolate(sql, args))
         try:
+            sql = sql.replace("%s", self.placeholder).replace("?", self.placeholder)
+            if hasattr(self, "modify") and callable(self.modify):
+                sql = self.modify(sql)
+            if not isinstance(args, (list, tuple)):
+                args = [args]
             super(LoggedCursor, self).execute(sql, args)
             logger.debug("Rowcount: %d", self.rowcount)
         except Exception, exc:
@@ -89,6 +96,18 @@ class Tx(object):
     _init = False
     _tl = threading.local()
     _adapters = { "sqlite3": "gripe.sqlite.DbAdapter", "postgresql": "gripe.pgsql.DbAdapter" }
+    config = gripe.Config.database
+    
+    if "adapters" in config:
+        for a in config.adapters:
+            _adapters[a] = config.adapters[a]
+    _adapter_class = None
+    for a in _adapters:
+        if a in config:
+            logger.info("Initializing DB adapter class %s for database type %s", _adapters[a], a)
+            _adapter_name = _adapters[a]
+            _adapter_class = None
+            database_type = a
 
     def __init__(self, role, database, autocommit):
         if not Tx._init:
@@ -104,18 +123,9 @@ class Tx(object):
 
     @classmethod
     def _init_schema(cls):
-        config = gripe.Config.database
-        if "adapters" in config:
-            for a in config.adapters:
-                cls._adapters[a] = config.adapters[a]
-        cls._adapter_class = None
-        for a in Tx._adapters:
-            if a in config:
-                logger.info("Initializing DB adapter class %s for database type %s", cls._adapters[a], a)
-                cls._adapter_name = cls._adapters[a]
-                cls._adapter_class = gripe.resolve(cls._adapter_name)
-                cls._database_type = a
-                c = config[a]
+        c = cls.config[cls.database_type]
+        if not cls._adapter_class:
+            cls._adapter_class = gripe.resolve(cls._adapter_name)
         if cls._adapter_class and hasattr(cls._adapter_class, "setup"):
             cls._adapter_class.setup(c)
 

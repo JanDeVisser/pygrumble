@@ -4,3 +4,4 @@
 .*\.backup
 src/logs/.*
 nbproject/private/.*
+users/.*

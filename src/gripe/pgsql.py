@@ -7,6 +7,8 @@ import gripe.db
 logger = gripe.get_logger("gripe.db")
 
 class Cursor(gripe.db.LoggedCursor, psycopg2.extensions.cursor):
+    placeholder = '%s'
+    
     def _interpolate(self, sql, args):
         return self.mogrify(sql, args)
 

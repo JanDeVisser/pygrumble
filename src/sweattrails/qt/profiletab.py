@@ -5,11 +5,6 @@ Created on Jul 27, 2014
 '''
 
 from PySide.QtCore import QCoreApplication
-
-from PySide.QtGui import QGroupBox
-from PySide.QtGui import QHBoxLayout
-from PySide.QtGui import QPushButton
-from PySide.QtGui import QVBoxLayout
 from PySide.QtGui import QWidget
 
 import gripe
@@ -18,24 +13,24 @@ import grumble.qt.bridge
 import sweattrails.qt.stackedpage
 import sweattrails.userprofile
 
-logger = gripe.get_logger("qt")
+logger = gripe.get_logger(__name__)
 
 class SettingsPage(grumble.qt.bridge.FormWidget):
     def __init__(self, parent = None):
         super(SettingsPage, self).__init__(parent)
         self.setMinimumSize(800, 600)
-        self.addProperty(grizzle.User, "email")
-        self.addProperty(grizzle.User, "display_name")
+        self.addProperty(grizzle.User, "email", 0, 0)
+        self.addProperty(grizzle.User, "display_name", 1, 0)
         self.addProperty(sweattrails.userprofile.UserProfile,
-                         "_userprofile.dob")
+                         "_userprofile.dob", 2, 0)
         self.addProperty(sweattrails.userprofile.UserProfile,
-                         "_userprofile.gender",
+                         "_userprofile.gender", 3, 0,
                          style = "radio")
         self.addProperty(sweattrails.userprofile.UserProfile,
-                         "_userprofile.height",
+                         "_userprofile.height", 4, 0,
                          min = 100, max = 240, suffix = "cm")
         self.addProperty(sweattrails.userprofile.UserProfile,
-                         "_userprofile.units",
+                         "_userprofile.units", 5, 0,
                          style = "radio")
         self.logmessage.connect(QCoreApplication.instance().log)
 

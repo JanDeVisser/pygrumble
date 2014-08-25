@@ -12,9 +12,10 @@ from math import atan2
 from math import radians
 
 import re
+import sqlite3
 import psycopg2.extensions
+
 import gripe.db
-import gripe.pgsql
 import grumble.property
 
 class GeoPt(object):
@@ -378,41 +379,63 @@ class GeoBoxProperty(grumble.property.ModelProperty):
     datatype = GeoBox
     sqltype = "box"
 
-#
-# psycopg2 machinery to cast pgsql datatypes to ours and vice versa.
-#
 
-def adapt_point(geopt):
-    return psycopg2.extensions.AsIs("'%r'" % geopt)
+if gripe.db.Tx.database_type == "postgresql":
+    #
+    # psycopg2 machinery to cast pgsql datatypes to ours and vice versa.
+    #
 
-def adapt_box(geobox):
-    return psycopg2.extensions.AsIs("'%r'" % geobox)
-
-psycopg2.extensions.register_adapter(GeoPt, adapt_point)
-psycopg2.extensions.register_adapter(GeoBox, adapt_box)
-
-def cast_point(value, cur):
-    try:
+    def adapt_point(geopt):
+        return psycopg2.extensions.AsIs("'%r'" % geopt)
+    
+    def adapt_box(geobox):
+        return psycopg2.extensions.AsIs("'%r'" % geobox)
+    
+    psycopg2.extensions.register_adapter(GeoPt, adapt_point)
+    psycopg2.extensions.register_adapter(GeoBox, adapt_box)
+    
+    def cast_point(value, cur):
+        try:
+            return GeoPt(value) if value is not None else None
+        except:
+            raise psycopg2.InterfaceError("bad point representation: %r" % value)
+    
+    def cast_box(value, cur):
+        try:
+            return GeoBox(value) if value is not None else None
+        except:
+            raise psycopg2.InterfaceError("bad box representation: %r" % value)
+    
+    with gripe.db.Tx.begin() as tx:
+        cur = tx.get_cursor()
+        cur.execute("SELECT NULL::point, NULL::box")
+        point_oid = cur.description[0][1]
+        box_oid = cur.description[1][1]
+    
+    POINT = psycopg2.extensions.new_type((point_oid,), "POINT", cast_point)
+    BOX = psycopg2.extensions.new_type((box_oid,), "BOX", cast_box)
+    psycopg2.extensions.register_type(POINT)
+    psycopg2.extensions.register_type(BOX)
+    
+    
+elif gripe.db.Tx.database_type == "sqlite3":
+    def adapt_point(geopt):
+        return repr(geopt)
+    
+    def adapt_box(geobox):
+        return repr(geobox)
+    
+    def convert_point(value):
         return GeoPt(value) if value is not None else None
-    except:
-        raise psycopg2.InterfaceError("bad point representation: %r" % value)
-
-def cast_box(value, cur):
-    try:
+    
+    def convert_box(value):
         return GeoBox(value) if value is not None else None
-    except:
-        raise psycopg2.InterfaceError("bad box representation: %r" % value)
+    
+    sqlite3.register_adapter(GeoPt, adapt_point)
+    sqlite3.register_converter("point", convert_point)
+    sqlite3.register_adapter(GeoBox, adapt_box)
+    sqlite3.register_converter("box", convert_box)
 
-with gripe.db.Tx.begin() as tx:
-    cur = tx.get_cursor()
-    cur.execute("SELECT NULL::point, NULL::box")
-    point_oid = cur.description[0][1]
-    box_oid = cur.description[1][1]
-
-POINT = psycopg2.extensions.new_type((point_oid,), "POINT", cast_point)
-BOX = psycopg2.extensions.new_type((box_oid,), "BOX", cast_box)
-psycopg2.extensions.register_type(POINT)
-psycopg2.extensions.register_type(BOX)
 
 if __name__ == "__main__":
     dunbar = (43.452601, -80.521909)

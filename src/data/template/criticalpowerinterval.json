@@ -6,7 +6,6 @@
         {
             "model": "criticalpowerinterval",
             "data": [
-                { "name": "1 second", "duration": 1 },
                 { "name": "5 seconds", "duration": 5 },
                 { "name": "10 seconds", "duration": 10 },
                 { "name": "30 seconds", "duration": 30 },

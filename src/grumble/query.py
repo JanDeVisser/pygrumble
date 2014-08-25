@@ -309,7 +309,7 @@ class ModelQueryRenderer(object):
                 del new_values[c]
 
     def execute(self, type, new_values = None):
-        assert self._query, "Must set a Query prior to executing a ModelQueryRenderer"
+        assert self._query is not None, "Must set a Query prior to executing a ModelQueryRenderer"
         with gripe.db.Tx.begin() as tx:
             key_ix = -1
             cols = ()

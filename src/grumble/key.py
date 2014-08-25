@@ -74,6 +74,9 @@ class Key(object):
 
     def __call__(self):
         return self.get()
+    
+    def __getattr__(self, name):
+        return getattr(self.get(), name)
 
     def key(self):
         return self

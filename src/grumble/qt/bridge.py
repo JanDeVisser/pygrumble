@@ -5,6 +5,7 @@ Created on Jul 29, 2014
 '''
 
 import datetime
+import math
 
 from PySide.QtCore import Qt
 from PySide.QtCore import QMargins
@@ -17,15 +18,17 @@ from PySide.QtGui import QComboBox
 from PySide.QtGui import QDateEdit
 from PySide.QtGui import QDateTimeEdit
 from PySide.QtGui import QDoubleValidator
-from PySide.QtGui import QFormLayout
+from PySide.QtGui import QGridLayout
 from PySide.QtGui import QGroupBox
 from PySide.QtGui import QHBoxLayout
 from PySide.QtGui import QIntValidator
 from PySide.QtGui import QLabel
 from PySide.QtGui import QLineEdit
+from PySide.QtGui import QPixmap
 from PySide.QtGui import QPushButton
 from PySide.QtGui import QRadioButton
 from PySide.QtGui import QRegExpValidator
+from PySide.QtGui import QTabWidget
 from PySide.QtGui import QTimeEdit
 from PySide.QtGui import QVBoxLayout
 from PySide.QtGui import QWidget
@@ -34,15 +37,29 @@ import gripe
 import gripe.db
 import grumble.property
 
-logger = gripe.get_logger("qt")
+logger = gripe.get_logger(__name__)
 
 class DisplayConverter(object):
     _delegate = None
     _suffix = None
 
-    def __init__(self, delegate = None, **kwargs):
+    def __init__(self, delegate = None, **config):
         self._delegate = delegate
-        self._suffix = kwargs.get("suffix")
+        self._suffix = config.get("suffix")
+        self._label = config.get("label",
+                        config.get("verbose_name"))
+        
+    def setProperty(self, property):
+        self._property = property
+        if not self._label:
+            self._label = property.verbose_name
+        if self._delegate:
+            self._delegate.setProperty(property)
+
+    def label(self, instance):
+        return self._delegate.label(instance) \
+            if self._delegate \
+            else self._label
 
     def suffix(self, instance):
         return self._delegate.suffix(instance) \
@@ -79,7 +96,8 @@ class WidgetBridgeFactory(type):
         # multiple-choiciness yourself.
         bridge = kwargs.get("bridge", property.config.get("bridge"))
         if bridge:
-            bridge = gripe.resolve(bridge)
+            if not isinstance(bridge, WidgetBridgeFactory):
+                bridge = gripe.resolve(bridge)
             return bridge(parent, kind, propname, **kwargs)
 
         if "readonly" in kwargs or \
@@ -105,16 +123,23 @@ class WidgetBridge(object):
         self.name = path
         propname = path.split(".")[-1]
         self.property = getattr(kind, propname)
-        self.label = kwargs.get("label", self.property.verbose_name)
         self.config = dict(self.property.config)
         self.config.update(kwargs)
-        self.converter = self.config.get("displayconverter",
-                                DisplayConverter(suffix = self.config.get("suffix")))
+        self.converter = self.config.get("displayconverter")
+        if not self.converter:
+            self.converter = DisplayConverter(
+                                 suffix = self.config.get("suffix"),
+                                 label = self.config.get("verbose_name", propname)
+                             )
+        if hasattr(self, "getDisplayConverter"):
+            self.converter = self.getDisplayConverter(self.converter)
+        self.converter.setProperty(self.property)
         self.choices = self.config.get("choices")
-        self.hasOwnLabel = False
+        self.hasLabel = self.config.get("has_label", True)
         self.assigned = None
         self.container = None
         self.suffix = None
+        self.label = None
         self.widget = self.create()
         if not self.container:
             self.container = self.widget
@@ -126,7 +151,6 @@ class WidgetBridge(object):
         self.widget = self._createWidget()
         if hasattr(self, "customize") and callable(self.customize):
             self.customize(self.widget)
-        logger.debug("WidgetBridge: Created Qt Widget of type %s", type(self.widget))
         if self.converter.suffix(None):
             self.container = QWidget(self.parent)
             self.suffix = QLabel("", self.parent)
@@ -135,12 +159,17 @@ class WidgetBridge(object):
             hbox.addWidget(self.suffix)
             hbox.addStretch(1)
             hbox.setContentsMargins(QMargins(0, 0, 0, 0))
+        if self.converter.label(None) and self.hasLabel:
+            self.label = QLabel(self.parent)
+            self.label.setBuddy(self.widget)
         return self.widget
 
     def _createWidget(self):
         return self.getWidgetType()(parent = self.parent)
 
     def setValue(self, instance):
+        if self.label:
+            self.label.setText(str(self.converter.label(instance)) + ":")
         if self.suffix:
             self.suffix.setText(str(self.converter.suffix(instance)))
         value = getattr(instance, self.property.name)
@@ -179,7 +208,43 @@ class Label(WidgetBridge):
     def isModified(self):
         return False
 
+    
+class Image(Label):
+    def customize(self, widget):
+        self.height = int(self.config.get("height", 0))
+        self.width = int(self.config.get("width", 0))
+        if self.height and not self.width:
+            self.width = self.height
+        if self.width and not self.height:
+            self.height = self.width
+        
+    
+    def apply(self, value):
+        if isinstance(value, basestring):
+            value = QPixmap(value)
+        assert isinstance(value, QPixmap), "Image bridge must be assigned a pixmap"
+        if self.width and self.height:
+            value = value.scaled(self.width, self.height)
+        self.widget.setPixmap(value)
 
+
+class TimeDeltaLabel(Label, DisplayConverter):
+    _grumbletypes = [ grumble.property.TimeDeltaProperty ]
+    
+    def getDisplayConverter(self):
+        return self
+
+    def to_display(self, value, instance):
+        h = int(math.floor(value.seconds / 3600))
+        r = value.seconds - (h * 3600)
+        m = int(math.floor(r / 60))
+        s = r % 60
+        if h > 0:
+            return "%dh %02d'%02d\"" % (h, m, s)
+        else:
+            return "%d'%02d\"" % (m, s)
+
+    
 class LineEdit(WidgetBridge):
     _grumbletypes = [
         grumble.property.TextProperty,
@@ -338,7 +403,7 @@ class CheckBox(WidgetBridge):
 
     def customize(self, widget):
         widget.setText(self.label)
-        self.hasOwnLabel = True
+        self.hasLabel = False
 
     def apply(self, value):
         self.widget.setChecked(value)
@@ -359,7 +424,6 @@ class ComboBox(WidgetBridge):
         if not self.required:
             widget.addItem("")
         widget.addItems(self.choices)
-        return ret
 
     def apply(self, value):
         self.assigned = value
@@ -392,8 +456,6 @@ class RadioButtons(WidgetBridge):
             box = QVBoxLayout()
         else:
             box = QHBoxLayout()
-        if not self.property.required:
-            logger.debug("RadioButtons bridge on not required property doesn't make much sense")
         for c in self.choices:
             rb = QRadioButton(c, self.parent)
             box.addWidget(rb)
@@ -412,47 +474,55 @@ class RadioButtons(WidgetBridge):
         return b.text()
 
 
-class PropertyFormLayout(QFormLayout):
+class PropertyFormLayout(QGridLayout):
     def __init__(self, parent = None):
         super(PropertyFormLayout, self).__init__(parent)
         self._properties = {}
         self.sublayouts = []
 
-    def addProperty(self, parent, kind, path, **kwargs):
+    def addProperty(self, parent, kind, path, row, col, *args, **kwargs):
         pnames = path.split(".")
         pname = pnames[-1]
         bridge = WidgetBridgeFactory.get(parent, kind, pname, **kwargs)
         self._properties[path] = bridge
-        w = bridge.container
-        if bridge.hasOwnLabel:
-            self.addRow(w)
-        else:
-            self.addRow(bridge.label + ":", w)
+        rowspan = int(kwargs.get("rowspan", 1))
+        if bridge.label:
+            labelspan = int(kwargs.get("labelspan", 1))
+            self.addWidget(bridge.label, row, col, 
+                           rowspan, labelspan)
+            col += labelspan
+        colspan = int(kwargs.get("colspan", 1))
+        #logger.debug("Adding bridge widget: %s(%s/%s), %d, %d", bridge.name, bridge.__class__.__name__, 
+        #             bridge.widget.__class__.__name__, row, col)
+        self.addWidget(bridge.container, row, col, rowspan, colspan)
 
-    def addSubLayout(self, left, right):
-        assert isinstance(right, PropertyFormLayout)
-        self.sublayouts.append(right)
-        if isinstance(left, basestring):
-            self.addRow(left, right)
-        else:
-            assert isinstance(left, PropertyFormLayout)
-            self.sublayouts.append(left)
-            hbox = QHBoxLayout()
-            hbox.setContentsMargins(0, 0, 0, 0)
-            hbox.addLayout(left)
-            hbox.addLayout(right)
-            self.addRow(hbox)
-
+    def addSubLayout(self, layout):
+        self.addSubLayouts(layout)
+        
+    def addSubLayouts(self, *layouts):
+        for layout in layouts:
+            self.sublayouts.append(layout)
+        
+    def addLayout(self, layout, *args):
+        if isinstance(layout, PropertyFormLayout):
+            self.sublayouts.append(layout)
+        super(PropertyFormLayout, self).addLayout(layout, *args)
+        
+    def _setValues(self, instance):
+        for (p, bridge) in self._properties.items():
+            path = p.split(".")
+            i = reduce(lambda i, n : getattr(i, n),
+                       path[:-1],
+                       instance)
+            #logger.debug("Set bridge widget value: %s(%s/%s), %s", bridge.name, bridge.__class__.__name__, 
+            #         bridge.widget.__class__.__name__, i)
+            bridge.setValue(i)
+        for s in self.sublayouts:
+            s._setValues(instance)
+        
     def apply(self, instance):
         with gripe.db.Tx.begin():
-            for (p, bridge) in self._properties.items():
-                path = p.split(".")
-                i = reduce(lambda i, n : getattr(i, n),
-                           path[:-1],
-                           instance)
-                bridge.setValue(i)
-            for s in self.sublayouts:
-                s.setValues(instance)
+            self._setValues(instance)
 
     def _getValues(self, instance):
         instances = set()
@@ -462,7 +532,6 @@ class PropertyFormLayout(QFormLayout):
             i = reduce(lambda i, n : getattr(i, n),
                        path[:-1],
                        instance)
-            print "setattr", i, "->", path[-1], "=", v
             setattr(i, path[-1], v)
             instances.add(i)
             bridge.setValue(i)
@@ -477,32 +546,59 @@ class PropertyFormLayout(QFormLayout):
                 i.put()
 
 
-class FormWidget(QWidget):
+class FormPage(QWidget):
+    def __init__(self, parent):
+        super(FormPage, self).__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        formframe = QGroupBox(self)
+        self.vbox = QVBoxLayout(formframe)
+        self.form = PropertyFormLayout()
+        self.vbox.addLayout(self.form)
+        self.vbox.addStretch(1)
+        layout.addWidget(formframe)
+
+    def addProperty(self, kind, path, row, col, *args, **kwargs):
+        self.form.addProperty(self, kind, path, row, col, *args, **kwargs)
+
+    def addLayout(self, sublayout, *args):
+        self.form.addLayout(sublayout, *args)
+
+
+class FormWidget(FormPage):
     logmessage = Signal(str)
 
     def __init__(self, parent = None):
         super(FormWidget, self).__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        formframe = QGroupBox()
-        vbox = QVBoxLayout(formframe)
-        self.form = PropertyFormLayout()
-        vbox.addLayout(self.form)
-        vbox.addStretch(1)
-        layout.addWidget(formframe)
         buttons = QGroupBox()
-        hbox = QHBoxLayout(buttons)
-        hbox.addStretch(1)
+        self.buttonbox = QHBoxLayout(buttons)
+        self.buttonbox.addStretch(1)
         self.resetbutton = QPushButton("Reset", self)
         self.resetbutton.clicked.connect(self.setInstance)
-        hbox.addWidget(self.resetbutton)
+        self.buttonbox.addWidget(self.resetbutton)
         self.savebutton = QPushButton("Save", self)
         self.savebutton.clicked.connect(self.save)
-        hbox.addWidget(self.savebutton)
-        layout.addWidget(buttons)
+        self.buttonbox.addWidget(self.savebutton)
+        self.layout().addWidget(buttons)
+        self.tabs = None
 
-    def addProperty(self, kind, path, **kwargs):
-        self.form.addProperty(self, kind, path, **kwargs)
+    def addWidgetToButtonBox(self, widget, *args):
+        self.buttonbox.insertWidget(0, widget, *args)
+        
+    def addTab(self, widget, title):
+        if self.tabs is None:
+            self.tabs = QTabWidget(self)
+            self.tabs.currentChanged[int].connect(self.tabChanged)
+            self.vbox.insertWidget(self.vbox.count() - 1, self.tabs, 1)
+        if isinstance(widget, FormPage):
+            self.form.addSubLayout(widget.form)
+        self.tabs.addTab(widget, title)
+        return widget
+    
+    def tabChanged(self, ix):
+        w = self.tabs.currentWidget()
+        if hasattr(w, "selected"):
+            w.selected()
 
     def save(self):
         try:

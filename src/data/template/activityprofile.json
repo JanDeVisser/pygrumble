@@ -46,7 +46,6 @@
                 { "name": "Wetsuit", "isA": null, "usedFor": { "name": "Open Water Swim" }, "partOf": null }
             ],
             "criticalPowerInterval": [
-                { "name": "1 second" },
                 { "name": "5 seconds" },
                 { "name": "10 seconds" },
                 { "name": "30 seconds" },

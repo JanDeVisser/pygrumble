@@ -9,6 +9,7 @@ import os
 import os.path
 import sys
 import threading
+import traceback
 
 import gripe.json_util
 
@@ -50,11 +51,17 @@ def root_dir():
         modfile = sys.modules["gripe"].__file__
         _root_dir = os.path.dirname(modfile)
         _root_dir = os.path.dirname(_root_dir) if _root_dir != modfile else '..'
-        logging.info("root dir: %s", _root_dir)
     return _root_dir
-#       logging.info("os.getcwd(): %s", os.getcwd())
-#   return os.getcwd()
 
+_users_init = set([])
+def user_dir(uid):
+    if not _users_init:
+        mkdir("users")
+    userdir = os.path.join("users", uid)
+    if uid not in _users_init:
+        mkdir(userdir)
+        _users_init.add(uid)
+    return userdir
 
 def read_file(fname):
     try:
@@ -75,56 +82,32 @@ def write_file(fname, data, mode = "w+"):
 
 def exists(f):
     p = os.path.join(root_dir(), f)
-    logger.debug("exists(%s)", p)
     return os.access(p, os.F_OK)
 
 def unlink(f):
     p = os.path.join(root_dir(), f)
     try:
-        logger.debug("rm %s", p)
         if os.access(p, os.F_OK):
             if os.access(p, os.W_OK):
                 os.unlink(p)
-                if os.access(p, os.F_OK):
-                    logger.info("rm %s: File seems to be still there after os.unlink()", p)
-                else:
-                    logger.debug("rm %s: OK", p)
-            else:
-                logger.info("rm %s: Can't unlink: No write permission", p)
-        else:
-            logger.debug("rm %s: Can't unlink: File does not exist", p)
     except OSError as e:
-        print "OSError(%s)" % errno.errorcode[e.errno]
         if e.errno != errno.ENOENT:
             raise
-        else:
-            logger.info("rm %s: Can't unlink: File does not exist, but os.access said it did", p)
 
 def rename(oldname, newname):
     o = os.path.join(root_dir(), oldname)
     n = os.path.join(root_dir(), newname)
     try:
-        logger.debug("mv %s %s", o, n)
         if os.access(o, os.F_OK):
             if os.access(o, os.W_OK):
                 if not os.access(n, os.F_OK):
                     os.rename(o, n)
-                    if os.access(o, os.F_OK):
-                        logger.info("mv %s %s: File seems to be still there after os.rename()", o, n)
-                    else:
-                        logger.debug("mv %s %s OK", o, n)
-                else:
-                    logger.info("mv %s %s: Can't rename: Target exists", o, n)
-            else:
-                logger.info("mv %s %s: Can't rename: No write permission", o, n)
-        else:
-            logger.debug("mv %s %s: Can't rename: File does not exist", o, n)
     except OSError as e:
-        print "OSError(%s)" % errno.errorcode[e.errno]
         if e.errno != errno.ENOENT:
             raise
-        else:
-            logger.info("mv %s %s: Can't unlink: File does not exist, but os.access said it did", o, n)
+
+def listdir(dirname):
+    return os.listdir(os.path.join(root_dir(), dirname))
 
 def mkdir(dirname):
     try:
@@ -138,14 +121,9 @@ def resolve(funcname, default = None):
     if funcname:
         if callable(funcname):
             return funcname
-        try:
-            (module, dot, fnc) = funcname.rpartition(".")
-            logger.debug("resolve(%s): Importing module %s and getting function %s", funcname, module, fnc)
-            mod = importlib.import_module(module)
-            return getattr(mod, fnc) if hasattr(mod, fnc) and callable(getattr(mod, fnc)) else default
-        except Exception, exc:
-            logger.error("Exception in gripe.resolve(%s): %s %s", funcname, exc.__class__.__name__, exc)
-            raise
+        (module, dot, fnc) = funcname.rpartition(".")
+        mod = importlib.import_module(module)
+        return getattr(mod, fnc) if hasattr(mod, fnc) and callable(getattr(mod, fnc)) else default
     else:
         return resolve(default, None) if isinstance(default, basestring) else default
 
@@ -305,6 +283,18 @@ class Config(object):
     __metaclass__ = ConfigMeta
     _loaded = False
     _sections = set([])
+    
+    # We set a bunch of dummies here to keep IDEs happy:
+    logging = {}
+    app = {}
+    database = {}
+    gripe = {}
+    grit = {}
+    grumble = {}
+    model = {}
+    qtapp = {}
+    smtp = {}
+    sweattrails = {}
 
     @classmethod
     def get_key(cls, key):
@@ -320,18 +310,15 @@ class Config(object):
     @classmethod
     def resolve(cls, path, default = None):
         value = cls.get_key(path)
-        logger.debug("Config.resolve(get_key(%s) --> %s)", path, value)
         return resolve(value, default)
 
     @classmethod
     def set(cls, section, config):
-        logger.info("Writing config section %s", section)
         config = gripe.json_util.JSONObject(config) \
             if not isinstance(config, gripe.json_util.JSONObject) \
             else config
         if (not exists(os.path.join("conf", "%s.json.backup" % section)) and
                 exists(os.path.join("conf", "%s.json" % section))):
-            print "Renaming conf/%s.json to conf/%s.json.backup" % (section, section)
             rename(os.path.join("conf", "%s.json" % section),
                    os.path.join("conf", "%s.json.backup" % section))
         config.file_write(os.path.join("conf", "%s.json" % section), 4)
@@ -343,7 +330,8 @@ class Config(object):
         for f in os.listdir(os.path.join(root_dir(), "conf")):
             (section, ext) = os.path.splitext(f)
             if ext == ".json":
-                print >> sys.stderr, "Reading conf file %s.json" % section
+                #print >> sys.stderr, "Reading conf file %s.json" % section
+                #print "Reading conf file %s.json" % section
                 config = gripe.json_util.JSON.file_read(os.path.join("conf", "%s.json" % section))
                 if config and ("components" in config) and isinstance(config.components, list):
                     for component in config.components:
@@ -353,26 +341,27 @@ class Config(object):
                     del config["components"]
                 # print >> sys.stderr, "Config.%s: %s" % (section, json.dumps(config))
                 setattr(cls, section, config)
+        # print >> sys.stderr, "Read all conf files"
         cls._loaded = True
+        # logging is special. We always want it.
+        if not hasattr(cls, "logging"):
+            print "Adding dummy logging conf"
+            setattr(cls, "logging", gripe.json_util.JSONObject())
 
     @classmethod
     def backup(cls):
-        logger.debug("Backing up config")
         for s in cls._sections:
             config = getattr(cls, s)
             unlink(os.path.join("conf", "%s.json.backup" % s))
             if config is not None:
-                logger.debug("Backing up section %s", s)
                 config.file_write(os.path.join("conf", "%s.json.backup" % s), 4)
 
     @classmethod
     def restore(cls):
-        logger.debug("Restoring config - Removing existing .json files")
         for f in os.listdir(os.path.join(root_dir(), "conf")):
             (section, ext) = os.path.splitext(f)
             if ext == ".json":
                 unlink(os.path.join("conf", f))
-        logger.debug("Restoring config - Renaming .json.backup files")
         for f in os.listdir(os.path.join(root_dir(), "conf")):
             (section, ext) = os.path.splitext(f)
             if ext == ".backup":
@@ -401,65 +390,147 @@ class Enum(tuple):
 
 # Configure logging
 
-_loggers = {}
-_log_defaults = None
-_log_date_fmt = '%y%m%d %H:%M:%S'
-_log_root_fmt = '%(name)-15s:%(asctime)s:%(levelname)-7s:%(message)s'
-_log_sub_fmt = '%(name)-15s:%(asctime)s:%(levelname)-7s:%(message)s'
-
+class LoggerProxy(object):
+    def __init__(self, logger):
+        self._logger = logger;
+        
+    def __getattr__(self, name):
+        return getattr(self._logger, name)
+    
 class LogConfig(object):
-    def __init__(self, conf = None, defaults = None):
-        conf = conf or {}
-        assert defaults is None or isinstance(defaults, LogConfig)
-        self.log_level = defaults.log_level if defaults else logging.INFO
-        self.log_level = getattr(logging, conf["level"].upper()) if "level" in conf and conf.level else self.log_level
-        self.destination = defaults.destination if defaults else "stderr"
-        self.destination = conf["destination"].lower() if "destination" in conf and conf.destination else self.destination
-        assert self.destination in ("stderr", "file"), "Invalid logging destination %s" % self.destination
-        self.flat = defaults.flat if defaults else False
-        self.flat = conf["flat"] if "flat" in conf else self.flat
-        self.append = defaults.append if defaults else False
-        self.append = conf["append"] if "append" in conf else self.append
-
-def get_logger(name):
-    global _log_defaults
-    global _loggers
-
-    if name in _loggers:
-        return _loggers[name]
-
-    logger = logging.getLogger(name)
-    assert logger, "logging.getLogger(%s) returned None" % name
-    logger.propagate = False
-    formatter = logging.Formatter(_log_sub_fmt, _log_date_fmt)
-    conf = LogConfig(Config.logging[name] if hasattr(Config, "logging") and name in Config.logging else None, _log_defaults)
-    logger.setLevel(conf.log_level)
-    if "file" in conf.destination:
-        try:
-            os.mkdir("%s/logs" % root_dir())
-        except:
-            # Ignored. Probably already exists
-            pass
-        append = conf.append if conf.append is not None else False
-        mode = "a" if append else "w"
-        if conf.flat:
-            (fname, _, _) = name.partition(".")
+    _configs = {}
+    _defaults = None
+    _default_config = {
+        "level": logging.INFO, 
+        "destination": "stderr",
+        "filename": None,
+        "append": False,
+        "format": "%(name)-15s:%(asctime)s:%(levelname)-7s:%(message)s",
+        "dateformat": "%y%m%d %H:%M:%S"
+    }
+    
+    def __init__(self, name = None, config = None):
+        if config:
+            self._build(name, config)
         else:
-            fname = name
-        fh = logging.FileHandler("%s/logs/%s.log" % (root_dir(), name), mode)
-        # fh = logging.FileHandler("%s/logs/%s.log" % (root_dir(), fname))
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
-    else:
-        ch = logging.StreamHandler(sys.stderr)
-        ch.setFormatter(formatter)
-        logger.addHandler(ch)
-    _loggers[name] = logger
-    return logger
+            if LogConfig._defaults is None:
+                LogConfig._defaults = LogConfig("builtin.defaults", 
+                                                LogConfig._default_config)
+            self.name = name if name else ""
+            self.config = self._get_config()
+            self.parent = self._get_parent()
+            self._logger = None
+            self._handler = None
+            
+            self.log_level = getattr(logging, self.config["level"].upper()) \
+                if "level" in self.config \
+                else self.parent.log_level 
+                
+            self.destination = self.config.get(
+                                   "destination", 
+                                   self.parent.destination).lower()
+            assert self.destination in ("stderr", "file"), \
+                    "Invalid logging destination %s" % self.destination
+            self.filename = self.config.get("filename")
+            self.append = self.config.get("append", self.parent.append)
+            self.flat = self.config.get("flat", not bool(self.name))
+            self.format = self.config.get("format", self.parent.format)
+            self.dateformat = self.config.get("dateformat", self.parent.dateformat)
+        
+    def _build(self, name, config):
+        self.name = name
+        self.config = config
+        self.parent = None
+        self._logger = None
+        self._handler = None
+        
+        self.log_level   = config.get("level")
+        self.destination = config.get("destination")
+        self.filename    = config.get("filename")
+        self.append      = config.get("append")
+        self.format      = self.config.get("format")
+        self.dateformat  = self.config.get("dateformat")
+        self.flat        = True
+        
+    def _get_config(self):
+        ret = Config["logging"].get(self.name) \
+            if self.name \
+            else Config["logging"].get("__root__")
+        return ret or {}
+        
+    def _get_parent(self):
+        if not self.name:
+            return LogConfig._defaults
+        else:
+            (parent, _, _) = self.name.rpartition(".")
+            return LogConfig.get(parent)
+    
+    def _get_filename(self):
+        if self.filename or not self.parent:
+            return self.filename
+        else:
+            return self.parent._get_filename()
+            
+    def get_filename(self):
+        ret = self._get_filename()
+        if ret is None:
+            ret = (self.name if self.name else "__grumble__") + ".log"
+        return ret
+    
+    def _create_file_handler(self):
+        mkdir("logs")
+        mode = "a" if self.append else "w"
+        return logging.FileHandler(os.path.join(root_dir(), "logs", self.get_filename()), mode)
+    
+    def _create_stderr_handler(self):
+        return logging.StreamHandler(sys.stderr)
+            
+    def _get_handler(self):
+        if not self._handler:
+            formatter = logging.Formatter(self.format, self.dateformat)
+            handler_factory = self._get_handler_factory(self)
+            self._handler = handler_factory()
+            self._handler.setFormatter(formatter)
+        return self._handler
+    
+    def get_logger(self):
+        if not self._logger:
+            self._logger = logging.getLogger(self.name)
+            self._logger.propagate = not self.flat
+            self._logger.setLevel(self.log_level)
+            if self.flat:
+                self._logger.addHandler(self._get_handler())
+        return self._logger
 
-_log_defaults = LogConfig(Config.logging if hasattr(Config, "logging") else None)
-logging.basicConfig(stream = sys.stderr, level = _log_defaults.log_level, datefmt = _log_date_fmt, format = _log_root_fmt)
-logger = get_logger(__name__)
+    @classmethod
+    def _get_handler_factory(cls, config):
+        return getattr(config, "_create_%s_handler" % config.destination)
+        
+    @classmethod        
+    def get(cls, name):
+        name = name or ""
+        ret = LogConfig._configs.get(name)
+        if not ret:
+            ret = LogConfig(name)
+            LogConfig._configs[name] = ret
+        return ret
+    
+def get_logger(name):
+    return LogConfig.get(name).get_logger()
+
+# Tie our logging config into the platform's by pre-initializing all loggers 
+# we know of. This way we can use propagate = True to combine logging across
+# a package.
+# 
+# FIXME: I should really do this properly and have the platform logging use
+# gripe.Config.
+for name in filter(lambda n: n in ("__root__", "__main__") or not n.startswith("_"), Config["logging"].keys()):
+    get_logger(name if name != "__root__" else "")
+    
+logging.basicConfig(stream = sys.stderr, 
+                    level = LogConfig._default_config["level"], 
+                    datefmt = LogConfig._default_config["dateformat"], 
+                    format = LogConfig._default_config["format"])
 
 if __name__ == "__main__":
     Config.backup()

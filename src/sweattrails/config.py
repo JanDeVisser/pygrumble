@@ -50,7 +50,7 @@ class SessionType(grumble.Model, ProfileReference):
     intervalpart = grumble.property.StringProperty()
     trackDistance = grumble.property.BooleanProperty()
     speedPace = grumble.property.StringProperty(choices = set(['Speed', 'Pace', 'Swim Pace']))
-    icon = grumble.image.ImageProperty()
+    icon = grumble.property.StringProperty()
 
     def get_interval_part_type(self, profile):
         node = profile.get_node(SessionType, self.name)
@@ -295,7 +295,7 @@ class TreeNodeBase(NodeBase):
     @classmethod
     def is_tree(cls):
         return True
-
+    
     def get_root_property(self, prop):
         ref = self.get_reference()
         if ref:
@@ -311,7 +311,7 @@ class TreeNodeBase(NodeBase):
 
     def get_subtypes(self, all = False):
         q = self.children() if not all else self.descendents()
-        return q.fetch_all()
+        return q.fetchall()
 
     def get_all_subtypes(self):
         return self.get_subtypes(True)
@@ -319,7 +319,7 @@ class TreeNodeBase(NodeBase):
     def has_subtype(self, type, deep = True):
         q = self.children() if not deep else self.descendents()
         q.add_filter(self.name(), '=', type)
-        return q.fetch() is not None
+        return q.has()
 
     def on_delete(self):
         # FIXME: Go over link_properties and set reverse links to None

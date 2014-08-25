@@ -4,6 +4,10 @@ Created on Aug 12, 2014
 @author: jan
 '''
 
+import datetime
+import math
+import time
+
 def local_date_to_utc(d):
     """Local date to UTC"""
     return datetime.datetime.utcfromtimestamp(time.mktime(d.timetuple()))
@@ -30,9 +34,9 @@ def ms_to_minmile(ms):
 
 def _pace(speed):
     if speed > 0:
-        p = 60 / speed;
-        pmin = int(p);
-        psec = int((p - pmin) * 60);
+        p = 60 / speed
+        pmin = math.floor(p)
+        psec = math.floor((p - pmin) * 60)
         return "%d'%02d\"" % (pmin, psec)
     else:
         return ""

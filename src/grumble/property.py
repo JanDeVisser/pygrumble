@@ -431,7 +431,7 @@ class IntegerProperty(ModelProperty):
 
 class FloatProperty(ModelProperty):
     datatype = float
-    sqltype = "DOUBLE PRECISION"
+    sqltype = "REAL"
 
 class BooleanProperty(ModelProperty):
     datatype = bool
