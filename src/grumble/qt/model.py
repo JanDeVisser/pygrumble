@@ -14,24 +14,49 @@ logger = gripe.get_logger(__name__)
 class TableColumn(object):
     def __init__(self, name, **kwargs):
         self.name = name
+        self.path = self.name.split(".")
+        self.propname = self.path[0]
+        self.endprop = self.path[-1]
         for (n,v) in kwargs.items():
             setattr(self, n, v)
             
+    def _set_kind(self, kind):
+        self.prop = getattr(kind, self.propname)
+        self.kind = kind
+            
     def get_header(self):
-        return self.header if hasattr(self, "header") else self.prop.verbose_name
+        if hasattr(self, "header"):
+            return self.header(self) if callable(self.header) else self.header
+        else:
+            return self.prop.verbose_name
     
-    def get_format(self):
-        return self.format if hasattr(self, "format") else "s"
+    def get_format(self, value):
+        if hasattr(self, "format"):
+            return self.format(self) if callable(self.format) else str(self.format)
+        else:
+            if isinstance(value, int):
+                return "d"
+            elif isinstance(value, float):
+                return "f"
+            else:
+                return "s"
     
     def get_value(self, instance):
         if callable(self):
             val = self(instance)
         else:
-            val = self.value(instance) \
-                if hasattr(self, "value") \
-                else getattr(instance, self.name)
-        fmt = "{:" + self.get_format() + "}" 
+            val = self.value(instance)
+        fmt = "{:" + self.get_format(val) + "}" 
         return fmt.format(val) if val is not None else ''
+    
+    def _get_value(self, instance):
+        v = reduce(lambda v, n : getattr(v, n),
+                   self.path,
+                   instance)
+        return v
+    
+    def value(self, instance):
+        return self._get_value(instance)
 
 
 class TableModel(QAbstractTableModel):
@@ -52,8 +77,7 @@ class TableModel(QAbstractTableModel):
                     col = arg
                 else:
                     col = TableColumn(str(arg))
-                col.prop = getattr(self._kind, col.name)
-                col.kind = self._kind
+                col._set_kind(self._kind)
                 ret.append(col)
         return ret
                 

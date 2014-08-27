@@ -546,20 +546,21 @@ class Model():
     def get(cls, id, values = None):
         k = grumble.key.Key(id)
         if cls != Model:
-            cls.seal()
-            ret = gripe.db.Tx.get_from_cache(k)
-            if not ret:
-                ret = super(Model, cls).__new__(cls)
-                assert (cls.kind().endswith(k.kind)) or not k.kind, "%s.get(%s.%s) -> wrong key kind" % (cls.kind(), k.kind, k.name)
-                ret._id = k.id
-                ret._key_name = k.name
-                if ret._key_scoped:
-                    ret._set_ancestors_from_parent(k.scope())
-                if values:
-                    ret._populate(values)
-            else:
-                # print "%s.get - Cache hit" % cls.__name__
-                pass
+            with gripe.db.Tx.begin():
+                cls.seal()
+                ret = gripe.db.Tx.get_from_cache(k)
+                if not ret:
+                    ret = super(Model, cls).__new__(cls)
+                    assert (cls.kind().endswith(k.kind)) or not k.kind, "%s.get(%s.%s) -> wrong key kind" % (cls.kind(), k.kind, k.name)
+                    ret._id = k.id
+                    ret._key_name = k.name
+                    if ret._key_scoped:
+                        ret._set_ancestors_from_parent(k.scope())
+                    if values:
+                        ret._populate(values)
+                else:
+                    # print "%s.get - Cache hit" % cls.__name__
+                    pass
         else:
             return k.modelclass().get(k, values)
         return ret

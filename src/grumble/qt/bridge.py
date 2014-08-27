@@ -527,11 +527,11 @@ class PropertyFormLayout(QGridLayout):
     def _getValues(self, instance):
         instances = set()
         for (p, bridge) in filter(lambda (p, b): b.isModified(), self._properties.items()):
-            v = bridge.getValue(instance)
             path = p.split(".")
             i = reduce(lambda i, n : getattr(i, n),
                        path[:-1],
                        instance)
+            v = bridge.getValue(i)
             setattr(i, path[-1], v)
             instances.add(i)
             bridge.setValue(i)
@@ -547,6 +547,8 @@ class PropertyFormLayout(QGridLayout):
 
 
 class FormPage(QWidget):
+    logmessage = Signal(str)
+
     def __init__(self, parent):
         super(FormPage, self).__init__(parent)
         layout = QVBoxLayout(self)
@@ -564,9 +566,12 @@ class FormPage(QWidget):
     def addLayout(self, sublayout, *args):
         self.form.addLayout(sublayout, *args)
 
+    def log(self, msg):
+        self.logmessage.emit(msg)
+
 
 class FormWidget(FormPage):
-    logmessage = Signal(str)
+    instanceAssigned = Signal(str)
 
     def __init__(self, parent = None):
         super(FormWidget, self).__init__(parent)
@@ -616,6 +621,4 @@ class FormWidget(FormPage):
         if instance:
             self._instance = instance
         self.form.apply(self.instance())
-
-    def log(self, msg):
-        self.logmessage.emit(msg)
+        self.instanceAssigned.emit(str(instance.key()))

@@ -24,6 +24,11 @@ import sweattrails.session
 
 logger = gripe.get_logger(__name__)
 
+
+#----------------------------------------------------------------------------
+#  T A B L E  C O L U M N S
+#----------------------------------------------------------------------------
+
 class TimestampColumn(grumble.qt.model.TableColumn):
     def __init__(self, property = "timestamp", **kwargs):
         super(TimestampColumn, self).__init__(property, **kwargs)
@@ -40,13 +45,66 @@ class TimestampColumn(grumble.qt.model.TableColumn):
             return "%d'%02d\"" % (m, s)
 
 
-class CPDefColumn(grumble.qt.model.TableColumn):
-    def __init__(self, **kwargs):
-        super(CPDefColumn, self).__init__("cpdef", **kwargs)
-
+class PaceSpeedColumn(grumble.qt.model.TableColumn):
+    def __init__(self, interval, property = "speed", **kwargs):
+        super(PaceSpeedColumn, self).__init__(property, **kwargs)
+        self.interval = interval
+        session = self.interval.get_session()
+        self.what = session.sessiontype.speedPace
+        self.units = QCoreApplication.instance().user.get_part("userprofile").units
+        
+    def get_header(self):
+        header = super(PaceSpeedColumn, self).get_header()
+        if self.what == "Speed":
+            suffix = "km/h" if self.units == "metric" else "mph"
+        elif self.what == "Pace":
+            suffix = "min/km" if self.units == "metric" else "min/mile"
+        else:
+            suffix = "min/100m" if self.units == "metric" else "min/100yd"
+        return "{} ({})".format(header, suffix)
+    
     def __call__(self, instance):
-        return instance.cpdef.name
+        value = self._get_value(instance)
+        if self.what == "Speed":
+            return "{:%.1f}".format(gripe.conversions.ms_to_kmh(value)) \
+                if self.units == "metric" \
+                else "{:%.1f}".format(gripe.conversions.ms_to_mph(value))
+        elif self.what == "Pace":
+            return gripe.conversions.ms_to_minkm(value) \
+                if self.units == "metric" \
+                else gripe.conversions.ms_to_minmile(value)
+        else:
+            return "0"
 
+
+class DistanceColumn(grumble.qt.model.TableColumn):
+    def __init__(self, interval, property = "distance", **kwargs):
+        super(DistanceColumn, self).__init__(property, **kwargs)
+        self.units = QCoreApplication.instance().user.get_part("userprofile").units
+        
+    def get_header(self):
+        header = super(DistanceColumn, self).get_header()
+        suffix = "km" if self.units == "metric" else "mile"
+        return "{} ({})".format(header, suffix)
+    
+    def __call__(self, instance):
+        value = self._get_value(instance)
+        d = float(value if value else 0) / 1000.0
+        if self.units != "metric":
+            d = gripe.conversions.km_to_mile(d)
+        if d < 1:
+            return "{:.3f}".format(d)
+        elif d < 10:
+            return "{:.2f}".format(d)
+        elif d < 100:
+            return "{:.1f}".format(d)
+        else:
+            return "{:.0f}".format(d)
+
+
+#----------------------------------------------------------------------------
+#  D I S P L A Y  C O N V E R T E R S
+#----------------------------------------------------------------------------
 
 class SessionTypeIcon(grumble.qt.bridge.DisplayConverter):
     def to_display(self, sessiontype, interval):
@@ -142,26 +200,69 @@ class Distance(grumble.qt.bridge.DisplayConverter):
             return str(value) if value else 0
 
 
+class MeterFeet(grumble.qt.bridge.DisplayConverter):
+    def __init__(self):
+        super(MeterFeet, self).__init__()
+        
+    def suffix(self, instance):
+        if not instance:
+            return True
+        else:
+            session = instance.get_session()
+            units = session.athlete.get_part("userprofile").units
+            return "m" if units == "metric" else "ft"
+
+    def to_display(self, value, instance):
+        session = instance.get_session()
+        units = session.athlete.get_part("userprofile").units
+        m = value if value else 0
+        m = m if units == "metric" else gripe.conversions.m_to_ft(m)
+        return int(round(m))
+    
+    
+#----------------------------------------------------------------------------
+#  Q t  W I D G E T S
+#----------------------------------------------------------------------------
+
+class ElevationGraph(QWidget):
+    def __init__(self, parent, interval):
+        super(ElevationGraph, self).__init__(parent)
+        self.interval = interval
+
+
 class ElevationPage(grumble.qt.bridge.FormPage):
     def __init__(self, parent, instance):
         super(ElevationPage, self).__init__(parent)
+        self.addProperty(sweattrails.session.GeoData, "geodata.max_elev", 0, 0,
+                         readonly = True,
+                         displayconverter = MeterFeet())
+        self.addProperty(sweattrails.session.GeoData, "geodata.min_elev", 1, 0,
+                         readonly = True,
+                         displayconverter = MeterFeet())
+        self.addProperty(sweattrails.session.GeoData, "geodata.elev_gain", 0, 2,
+                         readonly = True,
+                         displayconverter = MeterFeet())
+        self.addProperty(sweattrails.session.GeoData, "geodata.elev_loss", 1, 2,
+                         readonly = True,
+                         displayconverter = MeterFeet())
+        self.form.addWidget(ElevationGraph(self, instance), 2, 0, 1, 4)
 
 
 class CriticalPowerList(grumble.qt.view.TableView):
-    def __init__(self, baseform, parent = None):
+    def __init__(self, parent = None, interval = None):
         super(CriticalPowerList, self).__init__(parent = parent)
-        self.baseform = baseform
+        self.interval = interval
 
         query = sweattrails.session.CriticalPower.query(keys_only = False)
         self.setQueryAndColumns(query,
-                CPDefColumn(header = "Duration"),
+                grumble.qt.model.TableColumn("cpdef.name", header = "Duration"),
                 grumble.qt.model.TableColumn("power", format = "d", header = "Power"),
-                TimestampColumn(header = "Starting at"))
+                TimestampColumn(header = "Starting on"))
         self.setMinimumHeight(150)
         self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
 
     def resetQuery(self):
-        self.query().set_parent(self.baseform.instance().intervalpart)
+        self.query().set_parent(self.interval.intervalpart)
 
 
 class PowerPage(grumble.qt.bridge.FormPage):
@@ -185,7 +286,7 @@ class PowerPage(grumble.qt.bridge.FormPage):
                          readonly = True)
         self.addProperty(sweattrails.session.BikePart, "intervalpart.average_cadence", 1, 2, 
                          readonly = True)
-        self.cplist = CriticalPowerList(parent, self)
+        self.cplist = CriticalPowerList(parent, parent.instance())
         self.form.addWidget(self.cplist, 6, 0, 1, 2)
         
     def selected(self):
@@ -204,20 +305,20 @@ class BikePlugin(object):
 
 
 class CriticalPaceList(grumble.qt.view.TableView):
-    def __init__(self, baseform, parent = None):
+    def __init__(self, parent = None, interval = None):
         super(CriticalPaceList, self).__init__(parent = parent)
-        self.baseform = baseform
+        self.interval = interval
 
         query = sweattrails.session.RunPace.query(keys_only = False)
         self.setQueryAndColumns(query,
-                CPDefColumn(header = "Distance"),
-                grumble.qt.model.TableColumn("speed", format = "d", header = "Speed"),
-                TimestampColumn(header = "Starting at"))
+                grumble.qt.model.TableColumn("cpdef.name", header = "Distance"),
+                PaceSpeedColumn(self.interval),
+                TimestampColumn(header = "Starting on"))
         self.setMinimumHeight(150)
         self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
 
     def resetQuery(self):
-        self.query().set_parent(self.baseform.instance().intervalpart)
+        self.query().set_parent(self.interval.intervalpart)
 
 
 class PacesPage(grumble.qt.bridge.FormPage):
@@ -232,7 +333,7 @@ class PacesPage(grumble.qt.bridge.FormPage):
             self.addProperty(sweattrails.session.BikePart, "intervalpart.average_cadence", row + 1, 0, 
                              readonly = True)
             row += 2
-        self.cplist = CriticalPaceList(parent, self)
+        self.cplist = CriticalPaceList(self, parent.instance())
         self.form.addWidget(self.cplist, row, 0, 1, 2)
         
     def selected(self):
@@ -246,6 +347,37 @@ class RunPlugin(object):
     def handle(self, instance):
         logger.debug("Running Run Plugin")
         self.page.addTab(PacesPage(self.page), "Paces")    
+
+
+class IntervalList(grumble.qt.view.TableView):
+    def __init__(self, parent, interval):
+        super(IntervalList, self).__init__(parent = parent)
+        self.interval = interval
+
+        query = sweattrails.session.Interval.query(
+                   parent = self.interval, keys_only = False)
+        self.setQueryAndColumns(query,
+                TimestampColumn(header = "Start Time"),
+                TimestampColumn("duration", header = "Time"),
+                DistanceColumn("distance", header = "Distance"),
+                PaceSpeedColumn(self.interval, "average_speed"),
+        )
+        self.setMinimumHeight(150)
+        self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
+
+    def resetQuery(self):
+        self.query().set_parent(self.interval)
+
+
+class IntervalListPage(grumble.qt.bridge.FormPage):
+    def __init__(self, parent):
+        super(IntervalListPage, self).__init__(parent)
+        logger.debug("Initializing interval list tab")
+        self.list = IntervalList(self, parent.instance())
+        self.form.addWidget(self.list, 0, 0, 1, 2)
+        
+    def selected(self):
+        self.list.refresh()
 
 
 class IntervalPage(grumble.qt.bridge.FormWidget):
@@ -282,6 +414,10 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
                              displayconverter = PaceSpeed({"Pace": "Best", "Speed": "Maximum"}))
             row += 1
             self.setInstance(interval)
+            intervals = sweattrails.session.Interval.query(parent = interval).fetchall()
+            if len(intervals) > 1:
+                self.addTab(IntervalListPage(self), "Intervals")
+                
             self.partSpecificContent(interval)
                     
             if self.interval.geodata:

@@ -388,13 +388,15 @@ class CompoundProperty(object):
 class StringProperty(ModelProperty):
     datatype = str
     sqltype = "TEXT"
+    
+TextProperty = StringProperty
+StrProperty = StringProperty
 
-class TextProperty(StringProperty):
-    pass
 
 class LinkProperty(StringProperty):
     _default_validators = []
     _default_validators.append(RegExpValidator("(|https?:\/\/[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?^=%&amp;:/~\+#]*[\w\-\@?^=%&amp;/~\+#])?)"))
+
 
 class PasswordProperty(StringProperty):
     def __init__(self, *args, **kwargs):
@@ -428,14 +430,19 @@ class ListProperty(ModelProperty):
 class IntegerProperty(ModelProperty):
     datatype = int
     sqltype = "INTEGER"
+    
+IntProperty = IntegerProperty
+
 
 class FloatProperty(ModelProperty):
     datatype = float
     sqltype = "REAL"
 
+
 class BooleanProperty(ModelProperty):
     datatype = bool
     sqltype = "BOOLEAN"
+
 
 class DateTimeProperty(ModelProperty):
     datatype = datetime.datetime
@@ -457,12 +464,14 @@ class DateTimeProperty(ModelProperty):
     def now(self):
         return datetime.datetime.now()
 
+
 class DateProperty(DateTimeProperty):
     datatype = datetime.date
     sqltype = "DATE"
 
     def now(self):
         return datetime.date.today()
+
 
 class TimeProperty(DateTimeProperty):
     datatype = datetime.time
@@ -471,6 +480,7 @@ class TimeProperty(DateTimeProperty):
     def now(self):
         dt = datetime.datetime.now()
         return datetime.time(dt.hour, dt.minute, dt.second, dt.microsecond)
+
 
 class TimeDeltaProperty(ModelProperty):
     datatype = datetime.timedelta

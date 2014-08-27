@@ -296,6 +296,26 @@ class BestCriticalPower(grumble.Model):
 
 
 @grumble.property.transient
+class AvgSpeedProperty(grumble.property.FloatProperty):
+    def getvalue(self, instance):
+        if not instance.distance or \
+           not instance.duration:
+            return 0.0
+        else:
+            if isinstance(instance.duration, datetime.timedelta):
+                if not instance.duration.seconds:
+                    return 0.0
+                else:
+                    duration = instance.duration.seconds
+            else:
+                duration = instance.duration
+            return float(instance.distance) / float(duration)
+
+    def setvalue(self, instance, value):
+        pass
+
+
+@grumble.property.transient
 class WattsPerKgProperty(grumble.FloatProperty):
     def __init__(self, **kwargs):
         super(WattsPerKgProperty, self).__init__(**kwargs)
@@ -466,7 +486,7 @@ class RunPaceWindow(RollingWindow):
         return self.distance
     
     def _result(self):
-        return float(self.span()) / float(self[-1].seconds - self[0].seconds) 
+        return self[-1].seconds - self[0].seconds 
 
     
 class RunPaceWindowEntry(object):
@@ -494,31 +514,33 @@ class RunPaceReducer(Reducer):
         self.window = RunPaceWindow(self.distance)
         self.starttime = None
         self.atdistance = None
-        self.max_speed = None
+        self.duration = None
 
     def reduce(self, wp):
         if wp.distance is None:
             return
         self.window.append(RunPaceWindowEntry(wp))
-        speed = self.window.result()
-        if speed and (self.max_speed is None or speed > self.max_speed):
-            self.max_speed = speed
+        duration = self.window.result()
+        if duration and (self.duration is None or duration < self.duration):
+            self.duration = duration
             self.starttime = self.window[0].timestamp
             self.atdistance = self.window[0].distance
 
     def reduction(self):
         if self.starttime is not None:
-            self.runpace.speed = self.max_speed
+            self.runpace.duration = self.duration
             self.runpace.timestamp = self.starttime - self.runpace.parent().get_interval().timestamp
-            self.runpace.distance = self.atdistance # FIXME - Offset w/ start of interval
+            self.runpace.atdistance = self.atdistance # FIXME - Offset w/ start of interval
             self.runpace.put()
 
 
 class RunPace(grumble.Model, Reducer):
     cpdef = grumble.ReferenceProperty(sweattrails.config.CriticalPace)
     timestamp = grumble.TimeDeltaProperty()
-    distance = grumble.IntProperty()
-    speed = grumble.IntegerProperty()
+    atdistance = grumble.IntegerProperty()
+    distance = grumble.IntegerProperty()
+    duration = grumble.IntegerProperty()
+    speed = AvgSpeedProperty()
 
     def after_store(self):
         q = BestRunPace.query(parent = self.cpdef).add_sort("snapshotdate")
@@ -534,12 +556,13 @@ class RunPace(grumble.Model, Reducer):
 class BestRunPace(grumble.Model):
     snapshotdate = grumble.DateTimeProperty(auto_now_add = True)
     best = grumble.ReferenceProperty(RunPace)
-    speed = grumble.FloatProperty(default = 0)  # m/s
+    distance = grumble.IntProperty()
+    duration = grumble.IntegerProperty()
 
 
 class RunPart(IntervalPart):
-    average_cadence = grumble.IntegerProperty(default = 0)  # rpm
-    max_cadence = grumble.IntegerProperty(default = 0)  # rpm
+    average_cadence = grumble.IntegerProperty(default = 0, suffix = "strides/min")  # rpm
+    max_cadence = grumble.IntegerProperty(default = 0, suffix = "strides/min")  # rpm
 
     def reducers(self):
         ret = []
@@ -547,13 +570,12 @@ class RunPart(IntervalPart):
             if cpdef.distance <= self.get_interval().distance:
                 p = RunPace(parent = self)
                 p.cpdef = cpdef
+                p.distance = cpdef.distance
                 p.put()
                 ret.append(RunPaceReducer(p))
-        if self.max_cadence:
-            ret.extend([
-                Maximize("cadence", self, "max_cadence"),
-                AverageOverTime("timestamp", "cadence", self, "average_cadence")
-            ])
+        ret.extend([
+            Maximize("cadence", self, "max_cadence"),
+            AverageOverTime("timestamp", "cadence", self, "average_cadence")])
         return ret
 
 
@@ -602,11 +624,14 @@ class SessionTypeReference(grumble.reference.ReferenceProperty):
 
 
 class GeoData(grumble.Model):
-    max_elev = grumble.IntegerProperty(default = -100)  # In meters
-    min_elev = grumble.IntegerProperty(default = 10000)  # In meters
-    elev_gain = grumble.IntegerProperty(default = 0)  # In meters
-    elev_loss = grumble.IntegerProperty(default = 0)  # In meters
+    max_elev = grumble.IntegerProperty(default = -100, verbose_name = "Max. Elevation")  # In meters
+    min_elev = grumble.IntegerProperty(default = 10000, verbose_name = "Min. Elevation")  # In meters
+    elev_gain = grumble.IntegerProperty(default = 0, verbose_name = "Elevation Gain")  # In meters
+    elev_loss = grumble.IntegerProperty(default = 0, verbose_name = "Elevation Loss")  # In meters
     bounding_box = grumble.geopt.GeoBoxProperty()
+    
+    def get_session(self):
+        return self.parent().get_session()
 
 
 class GeoReducer(Reducer):
@@ -621,7 +646,7 @@ class GeoReducer(Reducer):
         self.bounding_box = None
         self.elev_gain = 0
         self.elev_loss = 0
-        self.min_elev = None
+        self.min_elev = 20000
         self.max_elev = None
 
     def reduce(self, wp):
@@ -633,7 +658,7 @@ class GeoReducer(Reducer):
                 else:
                     self.elev_loss += (self.cur_altitude - alt)
             self.min_elev = min(self.min_elev, alt)
-            self.max_elev = min(self.max_elev, alt)
+            self.max_elev = max(self.max_elev, alt)
             self.cur_altitude = alt
         if wp.location is not None:
             if self.bounding_box is not None:
@@ -654,20 +679,6 @@ class GeoReducer(Reducer):
                 geodata.bounding_box = grumble.geopt.GeoBox(self.bounding_box)
             geodata.put()
             self.interval.geodata = geodata
-
-
-@grumble.property.transient
-class AvgSpeedProperty(grumble.property.FloatProperty):
-    def getvalue(self, instance):
-        if not instance.distance or \
-                not instance.duration or \
-                not instance.duration.seconds:
-            return 0.0
-        else:
-            return float(instance.distance) / float(instance.duration.seconds)
-
-    def setvalue(self, instance, value):
-        pass
 
 
 class Interval(grumble.Model, Reducer):

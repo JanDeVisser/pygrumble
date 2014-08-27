@@ -149,14 +149,15 @@ class FITSession(FITLap):
             self.log("Converting session {}/{}", self.index, len(self.container.sessions))
             self.convert_interval(session)
 
-            num = len(self.laps)                
-            self.progress_init("Session {}/{}: Converting {} intervals", self.index, len(self.container.sessions), num)
-            for ix in range(num):
-                lap = self.laps[ix]
-                self.progress(int((float(ix) / float(num)) * 100.0))
-                interval = sweattrails.session.Interval(parent = session)
-                lap.convert_interval(interval)
-            self.progress_end()
+            num = len(self.laps)
+            if num > 1:
+                self.progress_init("Session {}/{}: Converting {} intervals", self.index, len(self.container.sessions), num)
+                for ix in range(num):
+                    lap = self.laps[ix]
+                    self.progress(int((float(ix) / float(num)) * 100.0))
+                    interval = sweattrails.session.Interval(parent = session)
+                    lap.convert_interval(interval)
+                self.progress_end()
 
             num = len(self.records)                
             self.progress_init("Session {}/{}: Converting {} waypoints", self.index, len(self.container.sessions), num)

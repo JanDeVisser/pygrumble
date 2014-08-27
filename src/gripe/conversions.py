@@ -44,3 +44,7 @@ def _pace(speed):
 def km_to_mile(km):
     """Convert a distance in km (kilometers) to miles"""
     return km * 0.621371192
+
+def m_to_ft(m):
+    """Convert a measurement in m (meters) to ft (feet)"""
+    return m * 3.2808399
