@@ -86,7 +86,10 @@ class FITLap(RecordWrapper):
         return interval
 
 class FITRecord(RecordWrapper):
-    def convert(self, session):
+    def convert(self, session, prev):
+        d = self.get_data("distance")
+        if d is None or (prev and prev.distance > d):
+            return
         wp = sweattrails.session.Waypoint(parent = session)
         wp.timestamp = self.get_data("timestamp") - self.session.start_time
         lat = self.get_data("position_lat")
@@ -161,10 +164,11 @@ class FITSession(FITLap):
 
             num = len(self.records)                
             self.progress_init("Session {}/{}: Converting {} waypoints", self.index, len(self.container.sessions), num)
+            prev = None
             for ix in range(num):
                 record = self.records[ix]
                 self.progress(int((float(ix) / float(num)) * 100.0))
-                record.convert(session)
+                prev = record.convert(session, prev) or prev
             self.progress_end()
                                 
             self.progress_init("Analyzing session {}/{}", self.index, len(self.container.sessions))

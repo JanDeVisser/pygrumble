@@ -5,6 +5,7 @@
 __author__ = "jan"
 __date__ = "$3-Oct-2013 8:37:08 AM$"
 
+import bisect
 import datetime
 import json
 import time
@@ -159,6 +160,26 @@ class UpdatePolicy():
 
 
 @grumble.abstract
+class Timestamped(object):
+    def __getattr__(self, name):
+        if name == "seconds":
+            if not hasattr(self, "_seconds"):
+                self._seconds = self.timestamp.seconds
+            return self._seconds
+        raise AttributeError(name)
+
+
+    def __cmp__(self, other):
+        return (
+            self.seconds - other.seconds
+            if hasattr(other, "seconds")
+            else self.seconds - other.timestamp.seconds
+                if hasattr(other, "timestamp")
+                else self.seconds - other
+        )
+
+
+@grumble.abstract
 class IntervalPart(grumble.Model):
     def _get_date(self):
         return self.get_session().start_time
@@ -273,7 +294,7 @@ class CriticalPowerReducer(Reducer):
             self.cp.put()
 
 
-class CriticalPower(grumble.Model, Reducer):
+class CriticalPower(grumble.Model, Timestamped):
     cpdef = grumble.ReferenceProperty(sweattrails.config.CriticalPowerInterval)
     timestamp = grumble.TimeDeltaProperty()
     power = grumble.IntegerProperty()
@@ -534,7 +555,7 @@ class RunPaceReducer(Reducer):
             self.runpace.put()
 
 
-class RunPace(grumble.Model, Reducer):
+class RunPace(grumble.Model, Timestamped):
     cpdef = grumble.ReferenceProperty(sweattrails.config.CriticalPace)
     timestamp = grumble.TimeDeltaProperty()
     atdistance = grumble.IntegerProperty()
@@ -681,7 +702,7 @@ class GeoReducer(Reducer):
             self.interval.geodata = geodata
 
 
-class Interval(grumble.Model, Reducer):
+class Interval(grumble.Model, Timestamped):
     interval_id = grumble.property.StringProperty(is_key = True)
     timestamp = grumble.property.TimeDeltaProperty(verbose_name = "Start at")
     intervalpart = grumble.reference.ReferenceProperty(IntervalPart)
@@ -689,8 +710,8 @@ class Interval(grumble.Model, Reducer):
     elapsed_time = grumble.property.TimeDeltaProperty(verbose_name = "Elapsed time")  # Duration including pauses
     duration = grumble.property.TimeDeltaProperty(verbose_name = "Duration")  # Time excluding pauses
     distance = grumble.property.IntegerProperty(default = 0)  # Distance in meters
-    average_hr = grumble.property.IntegerProperty(default = 0, verbose_name = "Avg. Heartrate")  # bpm
-    max_hr = grumble.property.IntegerProperty(default = 0, verbose_name = "Max. Heartrate")  # bpm
+    average_heartrate = grumble.property.IntegerProperty(default = 0, verbose_name = "Avg. Heartrate")  # bpm
+    max_heartrate = grumble.property.IntegerProperty(default = 0, verbose_name = "Max. Heartrate")  # bpm
     average_speed = AvgSpeedProperty(verbose_name = "Avg. Speed/Pace")
     max_speed = grumble.property.FloatProperty(default = 0, verbose_name = "Max. Speed/Pace")  # m/s
     work = grumble.property.IntegerProperty(default = 0)  # kJ
@@ -760,19 +781,9 @@ class Interval(grumble.Model, Reducer):
     def waypoints(self):
         if not hasattr(self, "_wps"):
             allwps = self.parent().waypoints()
-            first = last = -1
-            end_ts = self.timestamp + self.elapsed_time
-            for ix in range(len(allwps)):
-                wp = allwps[ix]
-                if ix > 0:
-                    assert wp.timestamp > allwps[ix-1].timestamp, \
-                        "waypoints(): Timestamps out of order: %d: %d <= %d" % \
-                        (ix, wp.timestamp.seconds, allwps[ix-1].timestamp.seconds)
-                if first < 0 and wp.timestamp >= self.timestamp:
-                    first = ix
-                last = ix + 1
-                if wp.timestamp > end_ts:
-                    break
+            end_ts = (self.timestamp + self.elapsed_time).seconds
+            first = bisect.bisect_left(allwps, self)
+            last = bisect.bisect_right(allwps, end_ts)
             self._wps = allwps[first:last] if first >= 0 and last >= 0 else []
         return self._wps
 
@@ -859,7 +870,7 @@ class Session(Interval):
         athlete.put()
         return session
 
-class Waypoint(grumble.Model):
+class Waypoint(grumble.Model, Timestamped):
     timestamp = grumble.TimeDeltaProperty()
     location = grumble.geopt.GeoPtProperty()
     altitude = grumble.IntegerProperty(default = 0)  # meters
@@ -876,6 +887,7 @@ class Waypoint(grumble.Model):
 
     def get_athlete(self):
         return self.get_session().get_athlete()
+
 
 class SessionFile(grumble.Model):
     athlete = grumble.ReferenceProperty(reference_class = grizzle.User)
