@@ -16,7 +16,6 @@ import grumble.qt.bridge
 
 logger = gripe.get_logger(__name__)
 
-
 class Graph(object):
     def __init__(self, interval):
         self.interval = interval
