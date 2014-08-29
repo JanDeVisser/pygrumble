@@ -34,7 +34,7 @@ class Graph(object):
 
     
 class AttrGraph(Graph):
-    def __init__(self, attr, interval, max_value):
+    def __init__(self, attr, interval, max_value = 0):
         super(AttrGraph, self).__init__(interval)
         self._attr = attr
         self._scale = max_value
@@ -45,17 +45,14 @@ class AttrGraph(Graph):
         return getattr(wp, self._attr) or 0
 
 
-class ElevationGraph(Graph):
+class ElevationGraph(AttrGraph):
     def __init__(self, interval):
-        super(ElevationGraph, self).__init__(interval)
+        super(ElevationGraph, self).__init__("altitude", interval)
         self.geodata = interval.geodata
         self._scale = (self.geodata.max_elev - self.geodata.min_elev)
-        margin = self._scale / 20
-        self._scale += 2 * margin
-        self._offset = self.geodata.min_elev - margin
-
-    def data(self, wp):
-        return wp.altitude
+        self._margin = self._scale / 20
+        self._scale += 2 * self._margin
+        self._offset = self.geodata.min_elev - self._margin
 
 
 class GraphWidget(QWidget):
