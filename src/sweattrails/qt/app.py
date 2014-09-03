@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from PySide.QtCore import QCoreApplication
+from PySide.QtCore import Signal
 
 from PySide.QtGui import QApplication
 from PySide.QtGui import QIcon
@@ -27,6 +28,8 @@ class SplashScreen(QSplashScreen):
 
 
 class SweatTrailsCore(object):
+    refresh = Signal()
+    
     def init_config(self, user = None, password = None, savecreds = False):
         save = False
         self.user = self.user_id = None

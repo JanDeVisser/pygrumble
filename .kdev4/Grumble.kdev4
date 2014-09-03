@@ -12,10 +12,10 @@ Type=Script Application
 
 [Launch][Launch Configuration 0][Data]
 Arguments=
-EnvironmentGroup=grumble
-Executable=file:///home/jan/workspace/Grumble/src/sweattrails/qtapp.py
+EnvironmentGroup=default
+Executable=file:///home/jan/Projects/Grumble/src/sweattrails/qt/app.py
 Execute on Remote Host=false
 Interpreter=python
 Output Filtering Mode=0
 Remote Host=
-Working Directory=file:///home/jan/workspace/Grumble/src
+Working Directory=file:///home/jan/Projects/Grumble/src

@@ -45,6 +45,17 @@ class ZonesPage(QWidget):
 
     def activate(self):
         pass
+    
+    
+class HealthPage(QWidget):
+    def __init__(self, parent = None):
+        super(HealthPage, self).__init__(parent)
+        self.setMinimumSize(800, 600)
+
+    def activate(self):
+        pass
+    
+    
 
 
 class ProfileTab(sweattrails.qt.stackedpage.StackedPage):
@@ -52,3 +63,4 @@ class ProfileTab(sweattrails.qt.stackedpage.StackedPage):
         super(ProfileTab, self).__init__(parent)
         self.addPage("Settings", SettingsPage())
         self.addPage("Zones and FTP", ZonesPage())
+        self.addPage("Weight and Health", HealthPage())

@@ -10,6 +10,7 @@
     "sweattrails.device.ant": { "flat": true, "destination": "stderr", "level": "info" },
     "__sweattrails.device.fitparse": { "flat": true, "destination": "file" },
     "sweattrails": { "destination": "stderr", "flat": true },
+    "srtm": { "destination": "stderr", "flat": true },
   
     "gripe": { "flat": true },
     "gripe.db": { "flat": true },

@@ -39,7 +39,7 @@ class RecordWrapper(object):
         return self.object()
 
     def get_data(self, key):
-        assert "RecordWrapper.get_data(%s): no FIT record set in class %s" % (key, self.__class__)
+        assert self.fitrecord(), "RecordWrapper.get_data(%s): no FIT record set in class %s" % (key, self.__class__)
         return self.fitrecord().get_data(key)
 
     def log(self, msg, *args):
@@ -99,7 +99,7 @@ class FITRecord(RecordWrapper):
                 gripe.conversions.semicircle_to_degrees(lat),
                 gripe.conversions.semicircle_to_degrees(lon))
         wp.speed = self.get_data("speed")
-        wp.altitude = self.get_data("altitude")
+        wp.elevation = self.get_data("altitude")
         wp.distance = self.get_data("distance")
         wp.cadence = self.get_data("cadence")
         wp.heartrate = self.get_data("heart_rate")

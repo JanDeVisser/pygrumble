@@ -16,6 +16,7 @@ import grumble
 import grumble.geopt
 import grumble.property
 import grumble.reference
+import srtm
 import sweattrails.config
 import sweattrails.userprofile
 
@@ -556,29 +557,46 @@ class RunPaceReducer(Reducer):
 
 
 class RunPace(grumble.Model, Timestamped):
-    cpdef = grumble.ReferenceProperty(sweattrails.config.CriticalPace)
-    timestamp = grumble.TimeDeltaProperty()
-    atdistance = grumble.IntegerProperty()
-    distance = grumble.IntegerProperty()
-    duration = grumble.IntegerProperty()
+    cpdef = grumble.reference.ReferenceProperty(sweattrails.config.CriticalPace)
+    timestamp = grumble.property.TimeDeltaProperty()
+    atdistance = grumble.property.IntegerProperty()
+    distance = grumble.property.IntegerProperty()
+    duration = grumble.property.IntegerProperty()
     speed = AvgSpeedProperty()
 
     def after_store(self):
-        q = BestRunPace.query(parent = self.cpdef).add_sort("snapshotdate")
-        q.add_filter("snapshotdate <= ", self.parent()().get_session().start_time)
-        best = q.get()
-        if not best or self.speed > best.speed:
-            best = BestRunPace(parent = self.cpdef)
-            best.best = self
-            best.speed = self.speed
-            best.put()
+        if self.duration > 0:
+            
+            # See if this is a record at this time, i.e. if there is no 
+            # faster entry dated before this session: 
+            q = BestRunPace.query(parent = self.cpdef).add_sort("snapshotdate")
+            q.add_filter("snapshotdate <= ", self.parent()().get_session().start_time)
+            q.add_filter("duration < ", self.duration)
+            best = q.get()
+            if not best:
+                best = BestRunPace(parent = self.cpdef)
+                best.cpdef = self.cpdef
+                best.snapshotdate = self.parent()().get_session().start_time
+                best.best = self
+                best.duration = self.duration
+                best.distance = self.distance
+                best.put()
+                
+            # Delete records set after this session that are not as good
+            # as this one. This can happen if old sessions are imported.
+            q = BestRunPace.query(parent = self.cpdef).add_sort("snapshotdate")
+            q.add_filter("snapshotdate > ", self.parent()().get_session().start_time)
+            q.add_filter("duration <= ", self.duration)
+            q.delete()
 
 
 class BestRunPace(grumble.Model):
+    cpdef = grumble.ReferenceProperty(sweattrails.config.CriticalPace)
     snapshotdate = grumble.DateTimeProperty(auto_now_add = True)
     best = grumble.ReferenceProperty(RunPace)
     distance = grumble.IntProperty()
     duration = grumble.IntegerProperty()
+    speed = AvgSpeedProperty()
 
 
 class RunPart(IntervalPart):
@@ -663,35 +681,41 @@ class GeoReducer(Reducer):
         return "{}()".format(self.__class__.__name__)
 
     def init_reducer(self):
-        self.cur_altitude = None
+        self.cur_elev = None
         self.bounding_box = None
         self.elev_gain = 0
         self.elev_loss = 0
         self.min_elev = 20000
         self.max_elev = None
+        self.elev_data = srtm.get_data()
+        self.updated = []
 
     def reduce(self, wp):
-        alt = wp.altitude
-        if alt is not None:
-            if self.cur_altitude is not None:
-                if alt > self.cur_altitude:
-                    self.elev_gain += (alt - self.cur_altitude)
-                else:
-                    self.elev_loss += (self.cur_altitude - alt)
-            self.min_elev = min(self.min_elev, alt)
-            self.max_elev = max(self.max_elev, alt)
-            self.cur_altitude = alt
+        wp.corrected_elevation = None
         if wp.location is not None:
             if self.bounding_box is not None:
                 self.bounding_box.extend(wp.location)
             else:
                 self.bounding_box = grumble.geopt.GeoBox(wp.location, wp.location)
+            wp.corrected_elevation = self.elev_data.get_elevation(wp.location.lat, wp.location.lon)
+            if wp.corrected_elevation is not None:
+                self.updated.append(wp)
+        elev = wp.corrected_elevation if wp.corrected_elevation is not None else wp.elevation
+        if elev is not None:
+            if self.cur_elev is not None:
+                if elev > self.cur_elev:
+                    self.elev_gain += (elev - self.cur_elev)
+                else:
+                    self.elev_loss += (self.cur_elev - elev)
+            self.min_elev = min(self.min_elev, elev)
+            self.max_elev = max(self.max_elev, elev)
+            self.cur_elev = elev
         return self
 
     def reduction(self):
-        if self.cur_altitude is not None or self.bounding_box is not None:
+        if self.cur_elev is not None or self.bounding_box is not None:
             geodata = GeoData(parent = self.interval)
-            if self.cur_altitude is not None:
+            if self.cur_elev is not None:
                 geodata.max_elev = self.max_elev
                 geodata.min_elev = self.min_elev
                 geodata.elev_gain = self.elev_gain
@@ -700,6 +724,8 @@ class GeoReducer(Reducer):
                 geodata.bounding_box = grumble.geopt.GeoBox(self.bounding_box)
             geodata.put()
             self.interval.geodata = geodata
+        for wp in self.updated:
+            wp.put()
 
 
 class Interval(grumble.Model, Timestamped):
@@ -707,8 +733,8 @@ class Interval(grumble.Model, Timestamped):
     timestamp = grumble.property.TimeDeltaProperty(verbose_name = "Start at")
     intervalpart = grumble.reference.ReferenceProperty(IntervalPart)
     geodata = grumble.reference.ReferenceProperty(GeoData)
-    elapsed_time = grumble.property.TimeDeltaProperty(verbose_name = "Elapsed time")  # Duration including pauses
-    duration = grumble.property.TimeDeltaProperty(verbose_name = "Duration")  # Time excluding pauses
+    elapsed_time = grumble.property.TimeDeltaProperty()  # Duration including pauses
+    duration = grumble.property.TimeDeltaProperty()  # Time excluding pauses
     distance = grumble.property.IntegerProperty(default = 0)  # Distance in meters
     average_heartrate = grumble.property.IntegerProperty(default = 0, verbose_name = "Avg. Heartrate")  # bpm
     max_heartrate = grumble.property.IntegerProperty(default = 0, verbose_name = "Max. Heartrate")  # bpm
@@ -804,14 +830,21 @@ class Interval(grumble.Model, Timestamped):
 
 
 class Session(Interval):
-    athlete = grumble.ReferenceProperty(grizzle.User)
-    description = grumble.StringProperty()
+    athlete = grumble.reference.ReferenceProperty(grizzle.User)
+    description = grumble.property.StringProperty()
     sessiontype = SessionTypeReference()
-    start_time = grumble.DateTimeProperty(verbose_name = "Date/Time")
-    notes = grumble.StringProperty(multiline = True)
-    posted = grumble.DateTimeProperty(auto_now_add = True, verbose_name = "Posted on")
-    inprogress = grumble.BooleanProperty(default = True)
-    device = grumble.StringProperty(default = "")
+    start_time = grumble.property.DateTimeProperty(verbose_name = "Date/Time")
+    notes = grumble.property.StringProperty(multiline = True)
+    posted = grumble.property.DateTimeProperty(auto_now_add = True, verbose_name = "Posted on")
+    inprogress = grumble.property.BooleanProperty(default = True)
+    device = grumble.property.StringProperty(default = "")
+    
+    def after_insert(self):
+        athlete = self.athlete
+        userprofile = sweattrails.userprofile.UserProfile.get_userpart(athlete)
+        userprofile.uploads += 1
+        userprofile.last_upload = datetime.datetime.now()
+        userprofile.put()
 
     def waypoints(self):
         if not hasattr(self, "_wps"):
@@ -832,7 +865,7 @@ class Session(Interval):
             wp.location = grumble.geopt.GeoPt(float(lat), float(lon))
             wp.speed = float(speed)
             wp.timestamp = datetime.datetime.fromtimestamp(int(timestamp) // 1000)
-            wp.altitude = float(altitude)
+            wp.elevation = float(altitude)
             wp.distance = float(distance)
             wp.put()
 
@@ -844,43 +877,19 @@ class Session(Interval):
         Interval.query(parent = self).delete()
         Waypoint.query(ancestor = self).delete()
 
-    @classmethod
-    def create_session(cls, request, athlete):
-        session = Session(parent = athlete)
-        session.athlete = athlete.user
-        session.description = request.get("description")
-        session.distance = float(request.get("distance"))
-        session.notes = request.get("notes")
-        t = request.get("time", None)
-        if t:
-            secs = float(t)
-        else:
-            secs = int(request.get("seconds")) + int(request.get("minutes")) * 60 + int(request.get("hours")) * 3600
-        session.session_time = Util.seconds_to_time(secs)
-        typ = request.get("type", None)
-        if typ:
-            typ = 'run'
-        session.sessiontype = typ
-        session.put()
-        if not athlete.uploads:
-            athlete.uploads = 1
-        else:
-            athlete.uploads += 1
-        athlete.last_upload = datetime.datetime.now()
-        athlete.put()
-        return session
 
 class Waypoint(grumble.Model, Timestamped):
-    timestamp = grumble.TimeDeltaProperty()
+    timestamp = grumble.property.TimeDeltaProperty()
     location = grumble.geopt.GeoPtProperty()
-    altitude = grumble.IntegerProperty(default = 0)  # meters
-    speed = grumble.FloatProperty(default = 0.0)  # m/s
-    distance = grumble.IntegerProperty(default = 0)  # meters
-    cadence = grumble.IntegerProperty(default = 0)
-    heartrate = grumble.IntegerProperty(default = 0)
-    power = grumble.IntegerProperty(default = 0)
-    torque = grumble.FloatProperty(default = 0)
-    temperature = grumble.IntegerProperty(default = 0)
+    elevation = grumble.property.IntegerProperty(default = 0)  # meters
+    corrected_elevation = grumble.property.IntegerProperty(default = 0)  # meters
+    speed = grumble.property.FloatProperty(default = 0.0)  # m/s
+    distance = grumble.property.IntegerProperty(default = 0)  # meters
+    cadence = grumble.property.IntegerProperty(default = 0)
+    heartrate = grumble.property.IntegerProperty(default = 0)
+    power = grumble.property.IntegerProperty(default = 0)
+    torque = grumble.property.FloatProperty(default = 0)
+    temperature = grumble.property.IntegerProperty(default = 0)
 
     def get_session(self):
         return self.root()

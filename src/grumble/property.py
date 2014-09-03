@@ -12,7 +12,6 @@ import re
 import gripe
 import grumble.converter
 import grumble.errors
-import grumble.model
 import grumble.schema
 
 logger = gripe.get_logger(__name__)
@@ -102,7 +101,10 @@ class ModelProperty(object):
             ModelProperty.property_counter += 1
             ret.name = args[0] if args else None
             ret.column_name = kwargs.get("column_name", cls.column_name if hasattr(cls, "column_name") else None)
-            ret.verbose_name = kwargs.get("verbose_name", cls.verbose_name if hasattr(cls, "verbose_name") else ret.name)
+            ret.verbose_name = kwargs.get("verbose_name", 
+                cls.verbose_name 
+                    if hasattr(cls, "verbose_name") 
+                    else ret.name)
             ret.readonly = kwargs.get("readonly", cls.readonly if hasattr(cls, "readonly") else False)
             ret.default = kwargs.get("default", cls.default if hasattr(cls, "default") else None)
             ret.private = kwargs.get("private", cls.private if hasattr(cls, "private") else False)
@@ -160,8 +162,10 @@ class ModelProperty(object):
         self.name = name
         if not self.column_name:
             self.column_name = name
+            self.config["column_name"] = self.column_name
         if not self.verbose_name:
-            self.verbose_name = name.capitalize()
+            self.verbose_name = name.replace('_', ' ').title()
+            self.config["verbose_name"] = self.verbose_name
 
     def set_kind(self, kind):
         self.kind = kind
@@ -245,7 +249,7 @@ class ModelProperty(object):
                     self.on_assign(instance, old, converted)
                 instance._values[self.name] = converted
                 if self.assigned:
-                    self.assigned(instance, old, new)
+                    self.assigned(instance, old, converted)
         except:
             logger.exception("Exception setting property '%s' to value '%s'", self.name, value)
             raise

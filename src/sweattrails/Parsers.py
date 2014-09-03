@@ -143,7 +143,7 @@ class Analysis:
         self.avg_speed = wp.distance / timediff
 
     def geo_analysis(self, wp):
-        alt = wp.altitude
+        alt = wp.elevation
         if alt:
             if self.cur_altitude is not None:
                 if alt > self.cur_altitude:
@@ -285,8 +285,8 @@ class IntervalContainer():
     def cadence(self, v):
         self.wpt().cadence = int(round(float(v)))
 
-    def altitude(self, value):
-        self.wpt().altitude = int(round(float(value)))
+    def elevation(self, value):
+        self.wpt().elevation = int(round(float(value)))
 
     def location(self, latval, lonval):
         lat = float(latval)
@@ -431,8 +431,8 @@ class FileParser():
     def cadence(self, value):
         self.current.cadence(value)
 
-    def altitude(self, value):
-        self.current.altitude(value)
+    def elevation(self, value):
+        self.current.elevation(value)
 
     def location(self, latval, lonval):
         self.current.location(latval, lonval)
@@ -522,7 +522,7 @@ class CSVParser(FileParser):
         self.heartrate(data[6])
         self.cadence(data[5])
         if self.mode > 0:
-            self.altitude(data[8])
+            self.elevation(data[8])
         if self.mode == 2:
             self.location(data[11], data[12])
 
@@ -571,7 +571,7 @@ def tcx_set_time(context, tstr):
 
 @tcx_parser.for_text_of("Activity/Lap/Track/Trackpoint/AltitudeMeters")
 def tcx_set_altitude(context, alt):
-    context.altitude(alt)
+    context.elevation(alt)
 
 @tcx_parser.for_text_of("Activity/Lap/Track/Trackpoint/DistanceMeters")
 def tcx_set_distance(context, distance):

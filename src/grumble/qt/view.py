@@ -5,11 +5,15 @@ Created on Jul 29, 2014
 '''
 
 from PySide.QtCore import Qt
+from PySide.QtCore import Signal
+
 from PySide.QtGui import QTableView
 
 import grumble.qt.model
 
 class TableView(QTableView):
+    objectSelected = Signal(grumble.key.Key)
+    
     def __init__(self, query = None, columns = None, parent = None):
         super(TableView, self).__init__(parent)
         self._query = None
@@ -24,6 +28,7 @@ class TableView(QTableView):
         hh.setStretchLastSection(True)
         self.resizeColumnsToContents()
         self.setSortingEnabled(True)
+        self.doubleClicked.connect(self.rowSelected)
 
     def refresh(self):
         self.model().beginResetModel()
@@ -48,9 +53,8 @@ class TableView(QTableView):
     def resetQuery(self):
         pass
 
-    def getSelectedObject(self):
-        ix = self.selectedIndexes()[0]
-        ret = self.model().data(ix, Qt.UserRole)
-        return None if ret is None else ret()
-
+    def rowSelected(self, ix):
+        key = self.model().data(ix, Qt.UserRole)
+        if key:
+            self.objectSelected.emit(key)
 

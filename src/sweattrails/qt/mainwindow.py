@@ -27,6 +27,7 @@ from PySide.QtGui import QWidget
 
 
 # import grizzle
+import sweattrails.qt.fitnesstab
 import sweattrails.qt.profiletab
 import sweattrails.qt.sessiontab
 import sweattrails.qt.imports
@@ -74,12 +75,15 @@ class STMainWindow(QMainWindow):
         self.createActions()
         self.createMenus()
         layout = QVBoxLayout()
-        self.sessiontab = sweattrails.qt.sessiontab.SessionTab(self)
-        self.profiletab = sweattrails.qt.profiletab.ProfileTab(self)
         self.tabs = QTabWidget()
+        self.tabs.setTabPosition(QTabWidget.West)
         self.tabs.currentChanged[int].connect(self.tabChanged)
+        self.sessiontab = sweattrails.qt.sessiontab.SessionTab(self)
         self.tabs.addTab(self.sessiontab, "Sessions")
-        self.tabs.addTab(self.profiletab, "Profile")
+        self.tabs.addTab(sweattrails.qt.fitnesstab.FitnessTab(self),
+                         "Fitness")
+        self.tabs.addTab(sweattrails.qt.profiletab.ProfileTab(self),
+                         "Profile")
         # if QCoreApplication.instance().user.is_admin():
         #    self.usertab = sweattrails.qt.usertab.UserTab()
         #    self.tabs.addTab(self.usertab, "Users")
@@ -183,7 +187,7 @@ class STMainWindow(QMainWindow):
     #
 
     def refresh(self):
-        self.sessiontab.refresh()
+        QCoreApplication.instance().refresh.emit()
         self.log("")
 
     def tabChanged(self, tabix):
