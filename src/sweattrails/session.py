@@ -565,7 +565,7 @@ class RunPace(grumble.Model, Timestamped):
     speed = AvgSpeedProperty()
 
     def after_store(self):
-        if self.duration > 0:
+        if (self.duration > 0) and isinstance(self.parent()(), Session):
             
             # See if this is a record at this time, i.e. if there is no 
             # faster entry dated before this session: 
@@ -610,7 +610,6 @@ class RunPart(IntervalPart):
                 p = RunPace(parent = self)
                 p.cpdef = cpdef
                 p.distance = cpdef.distance
-                p.put()
                 ret.append(RunPaceReducer(p))
         ret.extend([
             Maximize("cadence", self, "max_cadence"),
@@ -840,6 +839,7 @@ class Session(Interval):
     device = grumble.property.StringProperty(default = "")
     
     def after_insert(self):
+        super(Session, self).after_insert()
         athlete = self.athlete
         userprofile = sweattrails.userprofile.UserProfile.get_userpart(athlete)
         userprofile.uploads += 1
@@ -874,14 +874,14 @@ class Session(Interval):
         self.put()
 
     def on_delete(self):
-        Interval.query(parent = self).delete()
+        super(Session, self).on_delete()
         Waypoint.query(ancestor = self).delete()
 
 
 class Waypoint(grumble.Model, Timestamped):
     timestamp = grumble.property.TimeDeltaProperty()
     location = grumble.geopt.GeoPtProperty()
-    elevation = grumble.property.IntegerProperty(default = 0)  # meters
+    elevation = grumble.property.FloatProperty(default = 0)  # meters
     corrected_elevation = grumble.property.IntegerProperty(default = 0)  # meters
     speed = grumble.property.FloatProperty(default = 0.0)  # m/s
     distance = grumble.property.IntegerProperty(default = 0)  # meters

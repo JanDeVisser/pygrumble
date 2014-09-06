@@ -149,12 +149,12 @@ class FITSession(FITLap):
             sessiontype = profile.get_default_SessionType(self.get_data("sport"))
             assert sessiontype, "fitparse.upload(): User %s has no default session type for sport %s" % (athlete.uid(), self.get_data("sport"))
             session.sessiontype = sessiontype
-            self.log("Converting session {}/{}", self.index, len(self.container.sessions))
+            self.log("Converting session {}/{} ({:s})", self.index+1, len(self.container.sessions), sessiontype.name)
             self.convert_interval(session)
 
             num = len(self.laps)
             if num > 1:
-                self.progress_init("Session {}/{}: Converting {} intervals", self.index, len(self.container.sessions), num)
+                self.progress_init("Session {}/{}: Converting {} intervals", self.index+1, len(self.container.sessions), num)
                 for ix in range(num):
                     lap = self.laps[ix]
                     self.progress(int((float(ix) / float(num)) * 100.0))
@@ -163,7 +163,7 @@ class FITSession(FITLap):
                 self.progress_end()
 
             num = len(self.records)                
-            self.progress_init("Session {}/{}: Converting {} waypoints", self.index, len(self.container.sessions), num)
+            self.progress_init("Session {}/{}: Converting {} waypoints", self.index+1, len(self.container.sessions), num)
             prev = None
             for ix in range(num):
                 record = self.records[ix]
@@ -171,7 +171,7 @@ class FITSession(FITLap):
                 prev = record.convert(session, prev) or prev
             self.progress_end()
                                 
-            self.progress_init("Analyzing session {}/{}", self.index, len(self.container.sessions))
+            self.progress_init("Analyzing session {}/{}", self.index+1, len(self.container.sessions))
             def callback(percentage):
                 self.progress(percentage)
             session.analyze(callback)

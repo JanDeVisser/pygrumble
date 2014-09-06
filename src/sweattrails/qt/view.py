@@ -56,9 +56,10 @@ class PaceSpeedColumn(grumble.qt.model.TableColumn):
     def __call__(self, instance):
         value = self._get_value(instance)
         if self.what == "Speed":
-            return "{:%.1f}".format(gripe.conversions.ms_to_kmh(value)) \
+            val = gripe.conversions.ms_to_kmh(value) \
                 if self.units == "metric" \
-                else "{:%.1f}".format(gripe.conversions.ms_to_mph(value))
+                else gripe.conversions.ms_to_mph(value)
+            return "{:.1f}".format(val)
         elif self.what == "Pace":
             return gripe.conversions.ms_to_minkm(value) \
                 if self.units == "metric" \

@@ -238,7 +238,7 @@ class GraphPage(grumble.qt.bridge.FormPage):
                     color = Qt.red))
         if instance.geodata:
             self.graphs.addGraph(ElevationGraph(instance))
-        if parent.plugin:
+        if parent.plugin and hasattr(parent.plugin, "addGraphs"):
             parent.plugin.addGraphs(self.graphs, instance)
         self.form.addWidget(self.graphs, 0, 0)
 
@@ -323,15 +323,15 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
             self.setInstance(interval)
 
     def partSpecificContent(self, instance):
+        self.plugin = None
         part = instance.intervalpart
         if not part:
+            logger.debug("No part? That's odd")
             return
         pluginClass = self.getPartPluginClass(part)
         if pluginClass:
             self.plugin = pluginClass(self, instance)
             self.plugin.handle(instance)
-        else:
-            self.plugin = None
 
     _plugins = { 
         sweattrails.session.BikePart: BikePlugin,
@@ -340,12 +340,16 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
     @classmethod
     def getPartPluginClass(cls, part):
         if part.__class__ in cls._plugins:
+            logger.debug("Hardcoded plugin %s", cls._plugins[part.__class__])
             return cls._plugins[part.__class__]
         pluginclass = None
         pluginname = gripe.Config.sweattrails.get(part.__class__.__name__)
         if pluginname:
+            logger.debug("Configured plugin %s", pluginname)
             pluginclass = gripe.resolve(pluginname)
             cls._plugins[part.__class__] = pluginclass
+        else:
+            logger.debug("No plugin")
         return pluginclass
 
 
