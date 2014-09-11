@@ -24,7 +24,7 @@ class Model():
     classes = {}
     acl = { "admin": "RUDQC", "owner": "R" }
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, **kwargs):
         cls.seal()
         ret = super(Model, cls).__new__(cls)
         ret._brandnew = True
@@ -200,7 +200,7 @@ class Model():
             if include_key_name:
                 values['_key_name'] = self._key_name
             if not self._flat:
-                p = self.parent()
+                p = self.parent_key()
                 values['_parent'] = str(p) if p else None
                 values['_ancestors'] = self._ancestors
             values["_acl"] = self._acl.to_json()
@@ -239,7 +239,7 @@ class Model():
     def label(self):
         return getattr(self, self.label_prop) if hasattr(self, "label_prop") else str(self)
 
-    def parent(self):
+    def parent_key(self):
         """
             Returns the parent Model of this Model, as a Key, or None if this
             Model does not have a parent.
@@ -247,6 +247,14 @@ class Model():
         if not(hasattr(self, "_parent")):
             self._load()
         return self._parent
+
+    def parent(self):
+        """
+            Returns the parent Model of this Model, or None if this
+            Model does not have a parent.
+        """
+        k = self.parent_key()
+        return k() if k else None
 
     def set_parent(self, parent):
         assert not self._flat, "Cannot set parent of flat Model %s" % self.kind()
@@ -272,8 +280,10 @@ class Model():
         if not self._key_name:
             return None
         else:
-            return (grumble.key.Key(self.kind(), self.parent(), self._key_name) if self._key_scoped
-                    else grumble.key.Key(self.kind(), self._key_name))
+            return (
+                grumble.key.Key(self.kind(), self.parent(), self._key_name) 
+                if self._key_scoped
+                else grumble.key.Key(self.kind(), self._key_name))
 
     def path(self):
         a = self.ancestors()
@@ -328,7 +338,7 @@ class Model():
             if detector.loop:
                 logger.info("to_dict: Loop detected. %s is already serialized", self)
                 return { "key": self.id() }
-            p = self.parent()
+            p = self.parent_key()
             ret = { "key": self.id(), 'parent': p.id if p else None }
             detector.add(self.id())
             logger.debug("to_dict: Added %s to loop detector", self)
@@ -514,6 +524,13 @@ class Model():
             cls.add_property(propname, grumble.property.ModelProperty(propdef))
 
     @classmethod
+    def samekind(cls, model, sub = False):
+        kinds = [cls.kind()]
+        if sub:
+            kinds += cls.subclasses()
+        return model.kind() in kinds
+
+    @classmethod
     def kind(cls):
         return cls._kind
 
@@ -551,7 +568,8 @@ class Model():
                 ret = gripe.db.Tx.get_from_cache(k)
                 if not ret:
                     ret = super(Model, cls).__new__(cls)
-                    assert (cls.kind().endswith(k.kind)) or not k.kind, "%s.get(%s.%s) -> wrong key kind" % (cls.kind(), k.kind, k.name)
+                    assert (cls.kind().endswith(k.kind())) or not k.kind(), \
+                        "%s.get(%s.%s) -> wrong key kind" % (cls.kind(), k.kind(), k.name)
                     ret._id = k.id
                     ret._key_name = k.name
                     if ret._key_scoped:
@@ -573,7 +591,8 @@ class Model():
         ret = gripe.db.Tx.get_from_cache(k)
         if not ret:
             ret = super(Model, cls).__new__(cls)
-            assert (cls.kind().endswith(k.kind)) or not k.kind, "%s.get_by_key(%s:%s) -> wrong key kind" % (cls.kind(), k.kind, k.name)
+            assert (cls.kind().endswith(k.kind())) or not k.kind(), \
+                "%s.get_by_key(%s:%s) -> wrong key kind" % (cls.kind(), k.kind(), k.name)
             ret._id = k.id
             ret._key_name = k.name
             if ret._key_scoped:

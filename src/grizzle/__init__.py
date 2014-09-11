@@ -49,7 +49,7 @@ class GroupManager():
 @grumble.abstract
 class UserPart(grumble.Model):
     def get_user(self):
-        return self.parent()()
+        return self.parent()
 
     @classmethod
     def get_userpart(cls, user):

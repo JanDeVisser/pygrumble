@@ -100,8 +100,8 @@ class WeightMgmt(grizzle.UserPart):
 class BMIProperty(grumble.FloatProperty):
     transient = True
     def getvalue(self, instance):
-        user = instance.parent().get().parent()
-        profile = user().get_part(UserProfile)
+        user = instance.root()
+        profile = user.get_part(UserProfile)
         h_m = float(profile.height) / 100
         return instance.weight / (h_m * h_m)
 

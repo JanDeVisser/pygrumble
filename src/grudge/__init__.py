@@ -448,7 +448,7 @@ class Process(object):
                         _queue.put_action(a, process = self)
                     if self._exitpoint:
                         p = self.parent()
-                        p().stop()
+                        p.stop()
         cls.stop = stop
 
         def has_status(self, status):

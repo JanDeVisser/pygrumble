@@ -302,7 +302,7 @@ class CriticalPower(grumble.Model, Timestamped):
 
     def after_store(self):
         q = BestCriticalPower.query(parent = self.cpdef).add_sort("snapshotdate")
-        q.add_filter("snapshotdate <= ", self.parent()().get_session().start_time)
+        q.add_filter("snapshotdate <= ", self.parent().get_session().start_time)
         best = q.get()
         if not best or self.power > best.power:
             best = BestCriticalPower(parent = self.cpdef)
@@ -565,29 +565,37 @@ class RunPace(grumble.Model, Timestamped):
     speed = AvgSpeedProperty()
 
     def after_store(self):
-        if (self.duration > 0) and isinstance(self.parent()(), Session):
-            
+        logger.debug("RunPace.after_store: %s in %s", self.cpdef.name, self.duration)
+        if (self.duration > 0) and Session.samekind(self.parent().get_interval()):
+
             # See if this is a record at this time, i.e. if there is no 
             # faster entry dated before this session: 
             q = BestRunPace.query(parent = self.cpdef).add_sort("snapshotdate")
-            q.add_filter("snapshotdate <= ", self.parent()().get_session().start_time)
+            q.add_filter("snapshotdate <= ", self.parent().get_session().start_time)
             q.add_filter("duration < ", self.duration)
             best = q.get()
             if not best:
+                logger.debug("RunPace.after_store: this is a record")
                 best = BestRunPace(parent = self.cpdef)
                 best.cpdef = self.cpdef
-                best.snapshotdate = self.parent()().get_session().start_time
+                best.snapshotdate = self.parent().get_session().start_time
                 best.best = self
                 best.duration = self.duration
                 best.distance = self.distance
                 best.put()
-                
+            else:
+                logger.debug("RunPace.after_store: didn't beat existing record -> %s in %s", self.cpdef.name, best.duration)
+
             # Delete records set after this session that are not as good
             # as this one. This can happen if old sessions are imported.
             q = BestRunPace.query(parent = self.cpdef).add_sort("snapshotdate")
-            q.add_filter("snapshotdate > ", self.parent()().get_session().start_time)
+            q.add_filter("snapshotdate > ", self.parent().get_session().start_time)
             q.add_filter("duration <= ", self.duration)
+            for brp in q:
+                logger.debug("RunPace.after_store: cleaning up superceded record %s in %s", self.cpdef.name, brp.duration)
             q.delete()
+        else:
+            logger.debug("RunPace.after_store: skipping, %s", self.parent().get_interval().__class__.__name__)
 
 
 class BestRunPace(grumble.Model):

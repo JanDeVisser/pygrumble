@@ -8,8 +8,8 @@ __date__ = "$3-Oct-2013 8:40:17 AM$"
 import gripe
 import gripe.db
 import grizzle
-import grumble
 import grumble.image
+import grumble.meta
 import grumble.property
 
 logger = gripe.get_logger(__name__)
@@ -168,7 +168,7 @@ class NodeTypeDefinition(object):
         ref = getattr(node, self.name())
         assert ref, "%s.update_node: no reference" % self.name()
         profile = node.get_profile()
-        if ref.parent() == profile.parent():
+        if ref.parent_key() == profile.parent_key():
             ref.update(descriptor)
         dirty = False
         d = dict(descriptor)
@@ -233,7 +233,7 @@ class NodeTypeDefinition(object):
     def duplicate_node(self, original, profile):
         orig_ref = getattr(original, self.name())
         ref = self.get_or_duplicate_reference(orig_ref, profile)
-        if isinstance(original.parent(), original.__class__):
+        if original.samekind(original.parent()):
             parent = self.get_or_duplicate_node(original.parent(), profile)
         else:
             parent = profile
@@ -277,8 +277,12 @@ class NodeBase(grumble.Model):
     def get_profile(self):
         if not hasattr(self, "_profile"):
             path = self.pathlist()
-            # FIXME Ugly
-            self._profile = path[0] if path[0].kind() == 'sweattrails.config.activityprofile' else path[1]
+            # FIXME Ugly -- sort of fixed it but still ugly
+            # Should registered parts inject a 'get_bla_part' method
+            # in the User class? Would require new metaclass...
+            self._profile = path[0] \
+                if grumble.meta.Registry.get("activityprofile").samekind(path[0]) \
+                else path[1]
         return self._profile
 
     def sub_to_dict(self, d, **flags):
@@ -306,7 +310,6 @@ class TreeNodeBase(NodeBase):
         p = self.parent()
         if p is None:
             return None
-        p = p()
         return p.get_root_property(prop) if hasattr(p, "get_root_property") else None
 
     def get_subtypes(self, all = False):

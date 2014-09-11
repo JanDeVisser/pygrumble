@@ -2,7 +2,7 @@
     "author": "Jan de Visser",
     "version": "1.0",
     "dbtype": "postgresql",
-    "__postgresql": {
+    "postgresql": {
         "user": {
             "user_id": "jan",
             "password": "wbw417"
@@ -14,10 +14,10 @@
 		"host": "localhost",
         "database": "jan",
         "schema": "grumble",
-        "_wipe_schema": true,
+        "wipe_schema": true,
         "wipe_database": false
     },
-    "sqlite3": {
+    "__sqlite3": {
         "user": {
             "user_id": "jan",
             "password": "wbw417"

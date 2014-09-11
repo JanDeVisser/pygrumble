@@ -199,7 +199,7 @@ class ModelQuery(object):
             else:
                 assert isinstance(key, grumble.key.Key), "ModelQuery.get requires a valid key object"
             q = ModelQuery().set_key(key)
-            r = ModelQueryRenderer(key.kind, q)
+            r = ModelQueryRenderer(key.kind(), q)
             return r.execute(QueryType.Columns).single_row_bycolumns()
 
     @classmethod
@@ -214,7 +214,7 @@ class ModelQuery(object):
             else:
                 assert isinstance(key, grumble.key.Key), "ModelQuery.get requires a valid key object, not a %s" % type(key)
             q = ModelQuery().set_key(key)
-            r = ModelQueryRenderer(key.kind, q)
+            r = ModelQueryRenderer(key.kind(), q)
             r.execute(QueryType.Insert if insert else QueryType.Update, values)
 
     @classmethod

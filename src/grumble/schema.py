@@ -66,7 +66,7 @@ class Sqlite3Adapter(DbAdapter):
 
 class PostgresqlAdapter(DbAdapter):
     def __init__(self, modelmanager):
-        super(Sqlite3Adapter, self).__init__(modelmanager)
+        super(PostgresqlAdapter, self).__init__(modelmanager)
         self._mm.schema = gripe.Config.database.postgresql.schema
         self._mm.tableprefix = '"%s".' % gripe.Config.database.postgresql.schema \
             if gripe.Config.database.postgresql.schema else ""
