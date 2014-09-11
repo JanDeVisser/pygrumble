@@ -6,12 +6,15 @@ Created on Jul 27, 2014
 
 from PySide.QtCore import QCoreApplication
 from PySide.QtCore import Qt
+from PySide.QtCore import QUrl
 
 from PySide.QtGui import QSizePolicy 
 from PySide.QtGui import QSplitter
 from PySide.QtGui import QTabWidget
 from PySide.QtGui import QVBoxLayout
 from PySide.QtGui import QWidget
+
+from PySide.QtWebKit import QWebView
 
 import gripe
 import grumble.qt.bridge
@@ -151,12 +154,6 @@ class PacesPage(grumble.qt.bridge.FormPage):
         logger.debug("Initializing paces tab")
         row = 0
         part = parent.instance().intervalpart
-        if part.max_cadence:
-            self.addProperty(sweattrails.session.BikePart, "intervalpart.max_cadence", row, 0,
-                             readonly = True)
-            self.addProperty(sweattrails.session.BikePart, "intervalpart.average_cadence", row + 1, 0, 
-                             readonly = True)
-            row += 2
         self.cplist = CriticalPaceList(self, parent.instance())
         self.form.addWidget(self.cplist, row, 0, 1, 2)
         
@@ -194,6 +191,7 @@ class RunPlugin(object):
                              page.row + 1, 0, 
                              readonly = True)
             page.row += 2
+
 
 class ElevationGraph(sweattrails.qt.graphs.Graph):
     def __init__(self, interval):
@@ -241,6 +239,18 @@ class GraphPage(grumble.qt.bridge.FormPage):
         if parent.plugin and hasattr(parent.plugin, "addGraphs"):
             parent.plugin.addGraphs(self.graphs, instance)
         self.form.addWidget(self.graphs, 0, 0)
+        
+class MapPage(QWidget):
+    def __init__(self, parent, instance):
+        super(MapPage, self).__init__(parent)
+        layout = QVBoxLayout(self)
+        self.map = QWebView(self)
+        self.map.load(QUrl("http://www.google.com"))
+        self.map.setContentsMargins(0, 0, 0, 0);
+        self.map.page().view().setContentsMargins(0, 0, 0, 0);
+        self.map.setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        self.map.setAcceptDrops(false);
+        layout.addWidget(self.map)
 
 
 class IntervalList(grumble.qt.view.TableView):
@@ -318,6 +328,7 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
                 page.list.objectSelected.connect(parent.addInterval)
             self.partSpecificContent(interval)
             self.addTab(GraphPage(self, interval), "Graphs")
+            self.addTab(MapPage(self, interval), "Map")
             self.addTab(MiscDataPage(self, interval), "Other Data")
             self.logmessage.connect(QCoreApplication.instance().log)
             self.setInstance(interval)
