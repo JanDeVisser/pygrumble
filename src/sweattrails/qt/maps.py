@@ -25,6 +25,8 @@ from PySide.QtCore import QCoreApplication
 from PySide.QtCore import QObject
 from PySide.QtCore import Qt
 from PySide.QtCore import QUrl
+from PySide.QtCore import Slot
+from PySide.QtCore import Signal
 
 from PySide.QtGui import QSizePolicy 
 from PySide.QtGui import QWidget
@@ -42,16 +44,53 @@ logger = gripe.get_logger(__name__)
 
 
 class IntervalJsBridge(QObject):
-    def __init__(self, control):
+    def __init__(self, control, interval):
         super(IntervalJsBridge, self).__init__()
         self.control = control
+        self.interval = interval
         
+    @Slot()
     def getBoundingBox(self):
-        gd = xx
+        logger.debug("bridge.getBoundingBox")
+        box = self.interval.geodata.bounding_box
+        ret = []
+        ret.extend(box.sw().tuple())
+        ret.extend(box.ne().tuple())
+        logger.debug("bridge.getBoundingBox ret = %s", ret)
+        return ret
+    
+    @Slot()
+    def intervalCount(self):
+        q = sweattrails.session.Interval.query(parent = self.interval)
+        num = q.count()
+        # If there is only one interval, that's the entire session, so
+        # there is no separate object for that.
+        logger.debug("bridge.intervalCount %s", num if num else 1)
+        return num if num else 1
+    
+    @Slot(int)
+    def getLatLons(self, intervalnum):
+        ret = []
+        if not intervalnum:
+            wps = self.interval.waypoints()
+            for wp in wps:
+                ret.extend(wp.location.tuple())
+        else:
+            # TODO
+            pass
+        logger.debug("bridge.getLatLons %s", len(ret))
+        return ret
+    
+    @Slot()
+    def drawOverlays(self):
+        # TODO
+        pass
+
 
 class IntervalMap(QWebView):
     def __init__(self, parent, interval):
         super(IntervalMap, self).__init__(parent)
+        assert interval.geodata, "IntervalMap only works with an interval with geodata"
         self.interval = interval
         self.setContentsMargins(0, 0, 0, 0)
         self.page().view().setContentsMargins(0, 0, 0, 0)
@@ -62,8 +101,9 @@ class IntervalMap(QWebView):
         
         self.generateHTML()
 
+    @Slot()
     def updateFrame(self):
-        self._bridge = IntervalJsBridge(self.interval)
+        self._bridge = IntervalJsBridge(self, self.interval)
         self.page().mainFrame().addToJavaScriptWindowObject("bridge", self._bridge);
 
     def generateHTML(self):
@@ -71,8 +111,8 @@ class IntervalMap(QWebView):
             html = fd.read()
             templ = string.Template(html)
             html = templ.substitute(
-                bgcolor = xx, 
-                fgcolor = yy, 
-                mapskey = zz)
+                bgcolor = "#343434", 
+                fgcolor = "#FFFFFF", 
+                mapskey = gripe.Config.app["config"].google_api_key)
             self.page().mainFrame().setHtml(html);
 
