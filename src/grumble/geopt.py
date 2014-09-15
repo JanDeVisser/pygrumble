@@ -22,10 +22,7 @@ from math import pow
 from math import sqrt
 from math import atan2
 from math import radians
-
 import re
-import sqlite3
-import psycopg2.extensions
 
 import gripe.db
 import grumble.property
@@ -301,10 +298,14 @@ class GeoBox(object):
         point = GeoPt(*point)
         if point:
             if self:
-                self._sw.lat = min(self._sw.lat, point.lat)
-                self._sw.lon = min(self._sw.lon, point.lon)
-                self._ne.lat = max(self._ne.lat, point.lat)
-                self._ne.lon = max(self._ne.lon, point.lon)
+                if self._sw.lat > point.lat:
+                    self._sw.lat = point.lat
+                if self._sw.lon > point.lon:
+                    self._sw.lon = point.lon
+                if self._ne.lat < point.lat:
+                    self._ne.lat = point.lat
+                if self._ne.lon < point.lon:
+                    self._ne.lon = point.lon
             else:
                 self._sw = GeoPt(point)
                 self._ne = GeoPt(point)
@@ -314,6 +315,7 @@ class GeoBox(object):
         other = GeoBox(*other)
         self.extend(other.sw())
         self.extend(other.ne())
+        return self
 
     def contains(self, *point):
         point = GeoPt(*point)
@@ -393,6 +395,8 @@ class GeoBoxProperty(grumble.property.ModelProperty):
 
 
 if gripe.db.Tx.database_type == "postgresql":
+    import psycopg2.extensions
+    
     #
     # psycopg2 machinery to cast pgsql datatypes to ours and vice versa.
     #
@@ -431,6 +435,8 @@ if gripe.db.Tx.database_type == "postgresql":
     
     
 elif gripe.db.Tx.database_type == "sqlite3":
+    import sqlite3
+    
     def adapt_point(geopt):
         return repr(geopt)
     

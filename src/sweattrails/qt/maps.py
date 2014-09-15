@@ -48,43 +48,54 @@ class IntervalJsBridge(QObject):
         super(IntervalJsBridge, self).__init__()
         self.control = control
         self.interval = interval
+        with gripe.db.Tx.begin():
+            q = sweattrails.session.Interval.query(parent = self.interval)
+            q.add_sort("timestamp")
+            self._intervals = [i for i in q]
+            self._wps = self.interval.waypoints()
         
-    @Slot()
+    @Slot(result = 'QVariantList')
     def getBoundingBox(self):
-        logger.debug("bridge.getBoundingBox")
         box = self.interval.geodata.bounding_box
         ret = []
         ret.extend(box.sw().tuple())
         ret.extend(box.ne().tuple())
-        logger.debug("bridge.getBoundingBox ret = %s", ret)
         return ret
     
-    @Slot()
+    @Slot(result = int)
     def intervalCount(self):
-        q = sweattrails.session.Interval.query(parent = self.interval)
-        num = q.count()
+        num = len(self._intervals)
         # If there is only one interval, that's the entire session, so
         # there is no separate object for that.
-        logger.debug("bridge.intervalCount %s", num if num else 1)
         return num if num else 1
     
-    @Slot(int)
+    @Slot(int, result = 'QVariantList')
     def getLatLons(self, intervalnum):
-        ret = []
         if not intervalnum:
-            wps = self.interval.waypoints()
-            for wp in wps:
-                ret.extend(wp.location.tuple())
+            i = self.interval
         else:
-            # TODO
-            pass
-        logger.debug("bridge.getLatLons %s", len(ret))
+            if not self._intervals and intervalnum == 1:
+                i = self.interval
+            else:
+                assert intervalnum <= len(self._intervals)
+                i = self._intervals[intervalnum - 1]
+        ret = []
+        for wp in i.waypoints(self._wps):
+            ret.extend(wp.location.tuple())
         return ret
     
     @Slot()
     def drawOverlays(self):
-        # TODO
+        self.control.drawShadedRoute()
         pass
+    
+    @Slot(int)
+    def toggleInterval(self, intervalnum):
+        pass
+    
+    @Slot(str)
+    def log(self, msg):
+        logger.info("JS-Bridge: %s", msg)
 
 
 class IntervalMap(QWebView):
@@ -98,15 +109,14 @@ class IntervalMap(QWebView):
         self.setAcceptDrops(False)
 
         self.page().mainFrame().javaScriptWindowObjectCleared.connect(self.updateFrame)
-        
-        self.generateHTML()
 
     @Slot()
     def updateFrame(self):
         self._bridge = IntervalJsBridge(self, self.interval)
         self.page().mainFrame().addToJavaScriptWindowObject("bridge", self._bridge);
 
-    def generateHTML(self):
+    @Slot()
+    def drawMap(self):
         with open("sweattrails/qt/maps.html") as fd:
             html = fd.read()
             templ = string.Template(html)
@@ -116,3 +126,5 @@ class IntervalMap(QWebView):
                 mapskey = gripe.Config.app["config"].google_api_key)
             self.page().mainFrame().setHtml(html);
 
+    def drawShadedRoute(self):
+        pass

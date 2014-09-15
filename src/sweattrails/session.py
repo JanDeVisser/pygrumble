@@ -700,10 +700,9 @@ class GeoReducer(Reducer):
     def reduce(self, wp):
         wp.corrected_elevation = None
         if wp.location is not None:
-            if self.bounding_box is not None:
-                self.bounding_box.extend(wp.location)
-            else:
-                self.bounding_box = grumble.geopt.GeoBox(wp.location, wp.location)
+            if self.bounding_box is None:
+                self.bounding_box = grumble.geopt.GeoBox()
+            self.bounding_box.extend(wp.location)
             wp.corrected_elevation = self.elev_data.get_elevation(wp.location.lat, wp.location.lon)
             if wp.corrected_elevation is not None:
                 self.updated.append(wp)
@@ -811,9 +810,9 @@ class Interval(grumble.Model, Timestamped):
     def get_geodata(self):
         return GeoData.query(parent = self).get()
 
-    def waypoints(self):
+    def waypoints(self, allwps = None):
         if not hasattr(self, "_wps"):
-            allwps = self.parent().waypoints()
+            allwps = allwps or self.parent().waypoints()
             end_ts = (self.timestamp + self.elapsed_time).seconds
             first = bisect.bisect_left(allwps, self)
             last = bisect.bisect_right(allwps, end_ts)
@@ -854,11 +853,14 @@ class Session(Interval):
         userprofile.last_upload = datetime.datetime.now()
         userprofile.put()
 
-    def waypoints(self):
+    def waypoints(self, allwps = None):
         if not hasattr(self, "_wps"):
-            q = Waypoint.query(parent = self, keys_only = False)
-            q.add_sort("timestamp")
-            self._wps = q.fetchall()
+            if allwps:
+                self._wps = allwps
+            else:
+                q = Waypoint.query(parent = self, keys_only = False)
+                q.add_sort("timestamp")
+                self._wps = q.fetchall()
         return self._wps
 
     def upload_slice(self, request):

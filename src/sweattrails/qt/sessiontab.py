@@ -247,6 +247,9 @@ class MapPage(QWidget):
         layout = QVBoxLayout(self)
         self.map = sweattrails.qt.maps.IntervalMap(self, instance)
         layout.addWidget(self.map)
+        
+    def selected(self):
+        self.map.drawMap()
 
 
 class IntervalList(grumble.qt.view.TableView):
