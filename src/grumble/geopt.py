@@ -1,8 +1,20 @@
-# To change this template, choose Tools | Templates
-# and open the template in the editor.
-
-__author__ = "jan"
-__date__ = "$11-Feb-2013 8:28:51 AM$"
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
 from math import cos
 from math import sin
@@ -10,10 +22,7 @@ from math import pow
 from math import sqrt
 from math import atan2
 from math import radians
-
 import re
-import sqlite3
-import psycopg2.extensions
 
 import gripe.db
 import grumble.property
@@ -289,10 +298,14 @@ class GeoBox(object):
         point = GeoPt(*point)
         if point:
             if self:
-                self._sw.lat = min(self._sw.lat, point.lat)
-                self._sw.lon = min(self._sw.lon, point.lon)
-                self._ne.lat = max(self._ne.lat, point.lat)
-                self._ne.lon = max(self._ne.lon, point.lon)
+                if self._sw.lat > point.lat:
+                    self._sw.lat = point.lat
+                if self._sw.lon > point.lon:
+                    self._sw.lon = point.lon
+                if self._ne.lat < point.lat:
+                    self._ne.lat = point.lat
+                if self._ne.lon < point.lon:
+                    self._ne.lon = point.lon
             else:
                 self._sw = GeoPt(point)
                 self._ne = GeoPt(point)
@@ -302,10 +315,11 @@ class GeoBox(object):
         other = GeoBox(*other)
         self.extend(other.sw())
         self.extend(other.ne())
+        return self
 
     def contains(self, *point):
         point = GeoPt(*point)
-        if not self or not other:
+        if not self or not point:
             return False
         else:
             return (self.sw().lat <= point.lat and
@@ -381,6 +395,8 @@ class GeoBoxProperty(grumble.property.ModelProperty):
 
 
 if gripe.db.Tx.database_type == "postgresql":
+    import psycopg2.extensions
+    
     #
     # psycopg2 machinery to cast pgsql datatypes to ours and vice versa.
     #
@@ -419,6 +435,8 @@ if gripe.db.Tx.database_type == "postgresql":
     
     
 elif gripe.db.Tx.database_type == "sqlite3":
+    import sqlite3
+    
     def adapt_point(geopt):
         return repr(geopt)
     

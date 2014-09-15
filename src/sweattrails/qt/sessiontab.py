@@ -21,8 +21,9 @@ import grumble.qt.bridge
 import grumble.qt.model
 import grumble.qt.view
 import sweattrails.qt.graphs
-import sweattrails.session
+import sweattrails.qt.maps
 import sweattrails.qt.view
+import sweattrails.session
 
 logger = gripe.get_logger(__name__)
 
@@ -244,13 +245,11 @@ class MapPage(QWidget):
     def __init__(self, parent, instance):
         super(MapPage, self).__init__(parent)
         layout = QVBoxLayout(self)
-        self.map = QWebView(self)
-        self.map.load(QUrl("http://www.google.com"))
-        self.map.setContentsMargins(0, 0, 0, 0);
-        self.map.page().view().setContentsMargins(0, 0, 0, 0);
-        self.map.setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        self.map.setAcceptDrops(false);
+        self.map = sweattrails.qt.maps.IntervalMap(self, instance)
         layout.addWidget(self.map)
+        
+    def selected(self):
+        self.map.drawMap()
 
 
 class IntervalList(grumble.qt.view.TableView):
