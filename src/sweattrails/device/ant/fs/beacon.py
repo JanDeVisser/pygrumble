@@ -22,7 +22,7 @@
 
 import struct
 
-class Beacon:
+class Beacon(object):
     
     class ClientDeviceState:
         LINK           = 0x00 # 0b0000

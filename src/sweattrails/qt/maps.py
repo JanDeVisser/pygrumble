@@ -21,24 +21,15 @@
 
 import string
 
-from PySide.QtCore import QCoreApplication
 from PySide.QtCore import QObject
-from PySide.QtCore import Qt
-from PySide.QtCore import QUrl
 from PySide.QtCore import Slot
-from PySide.QtCore import Signal
 
 from PySide.QtGui import QSizePolicy 
-from PySide.QtGui import QWidget
 
 from PySide.QtWebKit import QWebView
 
 import gripe
-import grumble.qt.bridge
-import grumble.qt.model
-import grumble.qt.view
 import sweattrails.session
-import sweattrails.qt.view
 
 logger = gripe.get_logger(__name__)
 

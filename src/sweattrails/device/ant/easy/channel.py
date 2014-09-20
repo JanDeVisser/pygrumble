@@ -33,7 +33,7 @@ import gripe
 
 _logger = gripe.get_logger(__name__)
 
-class Channel():
+class Channel(object):
     
     class Type:
         BIDIRECTIONAL_RECEIVE         = 0x00

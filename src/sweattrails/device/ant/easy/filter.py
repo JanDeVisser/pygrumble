@@ -26,6 +26,7 @@ from sweattrails.device.ant.easy.exception import AntException, TransferFailedEx
 import gripe
 
 _logger = gripe.get_logger(__name__)
+debug_protocol = False
 
 def wait_for_message(match, process, queue, condition):
     """
@@ -34,14 +35,17 @@ def wait_for_message(match, process, queue, condition):
     message as a parameter and returns a boolean). The messages is
     processed by the *process* function before returning it.
     """
-    _logger.debug("wait for message matching %r", match)
+    if debug_protocol:
+        _logger.debug("wait for message matching %r", match)
     condition.acquire()
     for _ in range(10):
-        _logger.debug("looking for matching message in %r", queue)
+        if debug_protocol:
+            _logger.debug("looking for matching message in %r", queue)
         #_logger.debug("wait for response to %#02x, checking", mId)
         for message in queue:
             if match(message):
-                _logger.debug(" - response found %r", message)
+                if debug_protocol:
+                    _logger.debug(" - response found %r", message)
                 queue.remove(message)
                 condition.release()
                 return process(message)
@@ -52,7 +56,8 @@ def wait_for_message(match, process, queue, condition):
                 queue.remove(message)
                 condition.release()
                 raise TransferFailedException()
-        _logger.debug(" - could not find response matching %r", match)
+        if debug_protocol:
+            _logger.debug(" - could not find response matching %r", match)
         condition.wait(1.0)
     condition.release()
     raise AntException("Timed out while waiting for message")

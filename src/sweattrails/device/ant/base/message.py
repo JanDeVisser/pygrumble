@@ -31,7 +31,7 @@ import gripe
 
 _logger = gripe.get_logger(__name__)
 
-class Message:
+class Message(object):
 
     class ID:
         INVALID                            = 0x00

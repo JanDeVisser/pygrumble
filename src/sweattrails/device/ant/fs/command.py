@@ -28,6 +28,7 @@ import struct
 import gripe
 
 _logger = gripe.get_logger(__name__)
+debug_protocol = False
 
 class Command(object):
     
@@ -72,10 +73,8 @@ class Command(object):
         return self._id
 
     def get(self):
-        _logger.debug("%s.get()", self.__class__.__name__)
         data = struct.pack(self._format, *self._get_arguments())
         lst  = array.array('B', data)
-        _logger.debug("packed %r in %r,%s", data, lst, type(lst))
         return lst
 
     @classmethod
@@ -339,7 +338,8 @@ _classes = {
     Command.Type.UPLOAD_DATA_RESPONSE:  UploadDataResponse}
 
 def parse(data):
-    _logger.debug("parsing data %r", data)
+    if debug_protocol:
+        _logger.debug("parsing data %r", data)
     mark, command_type  = struct.unpack("<BB", data[0:2])
     assert mark == 0x44
     command_class = _classes[command_type]

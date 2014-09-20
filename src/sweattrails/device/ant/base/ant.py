@@ -37,7 +37,9 @@ import gripe
 
 _logger = gripe.get_logger(__name__)
 
-class Ant():
+debug_protocol = False
+
+class Ant(object):
 
     def __init__(self, idVendor, idProduct):
 
@@ -125,7 +127,7 @@ class Ant():
 
     def stop(self):
         if self._running:
-            _logger.debug("Stoping ant.base")
+            _logger.debug("Stopping ant.base")
             self._running = False
             self._worker_thread.join()
 
@@ -199,35 +201,39 @@ class Ant():
                     elif message._id == Message.ID.BURST_TRANSFER_DATA:
                         self._on_burst_data(message)
                     elif message._id == Message.ID.RESPONSE_CHANNEL:
-                        _logger.debug("Got channel event, %r", message)
+                        if debug_protocol:
+                            _logger.debug("Got channel event, %r", message)
                         self._events.put(('event', (message._data[0],
                                 message._data[1], message._data[2:])))
-                    else:
+                    elif debug_protocol:
                         _logger.warning("Got unknown message, %r", message)
-                else:
-                    _logger.debug("No new data this period")
+                elif debug_protocol:
+                        _logger.debug("No new data this period")
 
                 # Send messages in queue, on indicated time slot
                 if message._id == Message.ID.BROADCAST_DATA:
                     time.sleep(0.1)
-                    _logger.debug("Got broadcast data, examine queue to see if we should send anything back")
+                    if debug_protocol:
+                        _logger.debug("Got broadcast data, examine queue to see if we should send anything back")
                     if self._message_queue_cond.acquire(blocking=False):
                         while len(self._message_queue) > 0:
                             m = self._message_queue.popleft()
                             self.write_message(m)
-                            _logger.debug(" - sent message from queue, %r", m)
+                            if debug_protocol:
+                                _logger.debug(" - sent message from queue, %r", m)
                             
                             if(m._id != Message.ID.BURST_TRANSFER_DATA or \
                                m._data[0] & 0b10000000):# or m._data[0] == 0):
                                 break
-                        else:
-                            _logger.debug(" - no messages in queue")
+                            elif debug_protocol:
+                                _logger.debug(" - no messages in queue")
                         self._message_queue_cond.release()
 
                 self._last_data = message._data
 
             except usb.USBError as e:
-                _logger.warning("%s, %r", type(e), e.args)
+                if e.errno != 110:
+                    _logger.warning("%s, %r", type(e), e.args)
 
         _logger.debug("Ant runner stopped")
 
@@ -254,7 +260,8 @@ class Ant():
     def write_message(self, message):
         data = message.get()
         self._out.write(data + array.array('B', [0x00, 0x00]))
-        _logger.debug("Write data: %s", format_list(data))
+        if debug_protocol:
+            _logger.debug("Write data: %s", format_list(data))
 
 
     def read_message(self):
@@ -268,8 +275,9 @@ class Ant():
         else:
             data = self._in.read(4096)
             self._buffer.extend(data)
-            _logger.debug("Read data: %s (now have %s in buffer)",
-                          format_list(data), format_list(self._buffer))
+            if debug_protocol:
+                _logger.debug("Read data: %s (now have %s in buffer)",
+                              format_list(data), format_list(self._buffer))
             return self.read_message()
 
     # Ant functions
@@ -323,7 +331,7 @@ class Ant():
         self.write_message(message)
 
     def send_acknowledged_data(self, channel, data):
-        assert len(data) == 8
+        assert len(data) <= 8
         message = Message(Message.ID.ACKNOWLEDGE_DATA,
                           array.array('B', [channel]) + data)
         self.write_message_timeslot(message)
@@ -335,8 +343,9 @@ class Ant():
         self.write_message_timeslot(message)
 
     def send_burst_transfer(self, channel, data):
-        assert len(data) % 8 == 0
-        _logger.debug("Send burst transfer, chan %s, data %s", channel, data)
+        assert len(data) % 8 == 0, "Ant.send_burst_transfer: data packet length %s" % len(data)
+        if debug_protocol:
+            _logger.debug("Send burst transfer, chan %s, data %s", channel, data)
         packets = len(data) / 8
         for i in range(packets):
             sequence = i % 4
@@ -344,7 +353,8 @@ class Ant():
                 sequence = sequence | 0b100
             channel_seq = channel | sequence << 5
             packet_data = data[i * 8:i * 8 + 8]
-            _logger.debug("Send burst transfer, packet %d, data %s", i, packet_data)
+            if debug_protocol:
+                _logger.debug("Send burst transfer, packet %d, data %s", i, packet_data)
             self.send_burst_transfer_packet(channel_seq, packet_data, first=i==0)
 
     def response_function(self, channel, event, data):

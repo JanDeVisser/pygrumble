@@ -27,7 +27,9 @@ import gripe
 
 _logger = gripe.get_logger(__name__)
 
-class Directory:
+debug_protocol = False
+
+class Directory(object):
     def __init__(self, version, time_format, current_system_time,
             last_modified, files):
         self._version = version
@@ -44,7 +46,8 @@ class Directory:
 
     @staticmethod
     def parse(data):
-        _logger.debug("Parse '%s' as directory", data)
+        if debug_protocol:
+            _logger.debug("Parse '%s' as directory", data)
 
         # Header
         version, structure_length, time_format, current_system_time, \
@@ -56,13 +59,14 @@ class Directory:
         files = []
         for offset in range(16 , len(data), 16):
             item_data = data[offset:offset + 16]
-            _logger.debug(" - (%d - %d) %d, %s", offset, offset + 16, len(item_data), item_data)
+            if debug_protocol:
+                _logger.debug(" - (%d - %d) %d, %s", offset, offset + 16, len(item_data), item_data)
             files.append(File.parse(item_data))
         return Directory((version_major, version_minor), time_format,
                 current_system_time, last_modified, files)
 
 
-class File:
+class File(object):
 
     class Type:
         FIT     = 0x80
@@ -96,7 +100,8 @@ class File:
 
     @staticmethod
     def parse(data):
-        _logger.debug("Parse '%s' (%d) as file %s", data, len(data), type(data))
+        if debug_protocol:
+            _logger.debug("Parse '%s' (%d) as file %s", data, len(data), type(data))
 
         # i1, i2, i3 -> three byte integer, not supported by struct
         (index, data_type, data_i1, data_i2, data_i3, data_flags, flags, \

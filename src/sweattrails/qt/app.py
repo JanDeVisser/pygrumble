@@ -1,6 +1,21 @@
-# To change this license header, choose License Headers in Project Properties.
-# To change this template file, choose Tools | Templates
-# and open the template in the editor.
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
+
 
 import argparse
 import sys
@@ -110,14 +125,19 @@ class SweatTrailsCore(object):
     def file_import_error(self, filename, msg):
         self.log("ERROR importing file {}: {}", filename, msg)
         
+    def _download_done(self):
+        if hasattr(self, "after_download"):
+            self.after_download()
+        
     def download(self):
-        t = sweattrails.qt.imports.DownloadThread()
+        t = sweattrails.qt.imports.DownloadThread(self.getDownloadManager())
         t.logmessage.connect(self.log)
         t.progressInit.connect(self.reset_progress)
         t.progressUpdate.connect(self.progress)
         t.progressEnd.connect(self.progress_done)
-        if isinstance(app, SweatTrailsCmdLine):
-            t.finished.connect(self.quit)
+        if hasattr(self, "before_download"):
+            self.before_download(t)
+        t.finished.connect(self._download_done)
         t.start()
 
 
@@ -133,6 +153,9 @@ class SweatTrailsCmdLine(QCoreApplication, SweatTrailsCore):
     def setup_quit(self, filename):
         t = sweattrails.qt.imports.ImportThread.get_thread()
         t.queueEmpty.connect(self.quit)
+        
+    def after_download(self):
+        self.quit()
         
     def log(self, msg, *args):
         print msg.format(*args)
@@ -151,8 +174,14 @@ class SweatTrailsCmdLine(QCoreApplication, SweatTrailsCore):
     def progress_done(self):
         sys.stdout.write("]\n")
         sys.stdout.flush()
-
         
+    def getDownloadManager(self):
+        return self
+    
+    def selectActivities(self, antfiles):
+        return antfiles
+
+
 class SweatTrails(QApplication, SweatTrailsCore):
     def __init__(self, argv):
         super(SweatTrails, self).__init__(argv)            
@@ -184,6 +213,21 @@ class SweatTrails(QApplication, SweatTrailsCore):
     def progress_done(self):
         self.mainwindow.progress_done()
         
+    def before_download(self, thread):
+        # Disable menu items:
+        #  * Download
+        #  * User switch
+        #  * Exit
+        pass
+        
+    def after_download(self):
+        # Reset menu items
+        pass
+        
+    def getDownloadManager(self):
+        return sweattrails.qt.imports.SelectActivities()
+
+
 #===============================================================================
 # Parse command line
 #===============================================================================

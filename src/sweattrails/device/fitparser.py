@@ -1,4 +1,22 @@
 #!/usr/bin/python
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
+
 
 import sys
 import traceback
@@ -8,7 +26,6 @@ import gripe.conversions
 import gripe.db
 import grizzle
 import grumble.geopt
-import grumble.model
 import sweattrails.device.exceptions
 import sweattrails.device.fitparse
 import sweattrails.config
@@ -179,16 +196,25 @@ class FITSession(FITLap):
             return session
 
 class FITParser(object):
-    def __init__(self, user, filename, logger = None):
-        self.user = user
+    def __init__(self, filename):
         self.filename = filename
         self.activity = None
         self.sessions = []
         self.laps = []
         self.records = []
+        self.user = None
+        self.logger = None
+        
+    def setAthlete(self, athlete):
+        self.user = athlete
+        
+    def setLogger(self, logger):
         self.logger = logger
 
     def parse(self):
+        assert self.user, "No user set on FIT parser"
+        assert self.filename, "No filename set on FIT parser"
+        assert gripe.exists(self.filename), "FIT parser: file '%s' does not exist" % self.filename
         try:
             self.log("Reading FIT file {}", self.filename)
             self.activity = sweattrails.device.fitparse.Activity(self.filename)
@@ -298,7 +324,9 @@ if __name__ == "__main__":
             return 0
 
         try:
-            parser = FITParser(user, sys.argv[3], Logger())
+            parser = FITParser(sys.argv[3])
+            parser.setAthlete(user)
+            parser.setLogger(Logger())
             parser.parse()
             return 0
         except:

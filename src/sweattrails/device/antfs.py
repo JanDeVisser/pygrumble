@@ -1,13 +1,29 @@
-'''
-Created on Aug 16, 2014
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
+# This module uses ideas and code from:
+# Copyright (c) 2012 Gustav Tiger (gustav@tiger.name)
+#
 
-@author: jan
-'''
 
 import base64
 import math
-import os.path
 import sys
+import traceback
 
 import sweattrails.device.ant.fs.manager
 
@@ -45,6 +61,9 @@ class BackendBridge(object):
     def exists(self, antfile):
         return False
     
+    def select(self, antfiles):
+        return antfiles
+    
     def process(self, antfile, data):
         """
             antfile - ANT-FS file structure (ant.fs.file.File)
@@ -59,9 +78,9 @@ class GarminBridge(sweattrails.device.ant.fs.manager.Application):
 
     PRODUCT_NAME = "sweattrails"
 
-    def __init__(self, bridge):
+    def __init__(self, bridge, **kwargs):
         self.bridge = bridge
-        super(GarminBridge, self).__init__(bridge)
+        super(GarminBridge, self).__init__(bridge, **kwargs)
         
     def log(self, msg, *args):
         if self.bridge:
@@ -111,17 +130,28 @@ class GarminBridge(sweattrails.device.ant.fs.manager.Application):
                 return False
 
     def on_transport(self, beacon):
-        directory = self.download_directory()
-        antfiles = directory.get_files()[2:]
-
-        downloading = filter(lambda f: not self.bridge.exists(f), antfiles)
-        l = len(downloading)
+        if not hasattr(self, "_downloading"):
+            try:
+                directory = self.download_directory()
+                antfiles = directory.get_files()[2:]
+        
+                newfiles = filter(lambda f: not self.bridge.exists(f), antfiles)
+                self._downloading = self.bridge.select(newfiles) or []
+            except:
+                logger.exception("Exception getting ANT device directory")
+                raise
+        l = len(self._downloading)
         self.log("Downloading {} file{}", l, "" if l == 1 else "s")
 
         # Download missing files:
-        for f in downloading:
+        while self._downloading:
+            f = self._downloading[0]
             self.download_file(f)
+            del self._downloading[0]
+        del self._downloading
 
+    def downloads_pending(self):
+        return hasattr(self, "_downloading") and self._downloading
 
     def download_file(self, f):
         try:
@@ -131,9 +161,13 @@ class GarminBridge(sweattrails.device.ant.fs.manager.Application):
             data = self.download(f.get_index(), callback)
             self.bridge.progress_end()
             self.log("Processing activity from {} ", f.get_date().strftime("%d %b %Y %H:%M"))
-            self.bridge.process(f, data)
+            try:
+                self.bridge.process(f, data)
+            except:
+                logger.exception("Exception processing ANT file")
         except:
-            traceback.print_exc()
+            logger.exception("Exception downloading ANT file")
+            raise
 
 
 class GripeConfigBridge(BackendBridge):
@@ -167,54 +201,51 @@ class GripeConfigBridge(BackendBridge):
 #
 
 if __name__ == "__main__":
-    import traceback
+    import time
 
-    class FileBridge(GripeConfigBridge):
+    class TestBridge(GripeConfigBridge):
         def __init__(self):
-            super(FileBridge, self).__init__()
+            super(TestBridge, self).__init__()
             self.init_config()
-            self.basedir = self.config.get("basedir", "fit")
-            gripe.mkdir(self.basedir)
-            
+
         def log(self, msg, *args):
-            print msg.format(args)
-            
+            print msg.format(*args)
+
         def progress_init(self, msg, *args):
             self.curr_progress = 0
             sys.stdout.write((msg + " [").format(*args))
             sys.stdout.flush()
-            
+
         def progress(self, new_progress):
-            diff = int((new_progress - self.curr_progress) / 10.0) 
+            diff = new_progress/10 - self.curr_progress 
             sys.stderr.write("." * diff)
             sys.stdout.flush()
-            self.curr_progress = new_progress
-            
+            self.curr_progress = new_progress/10
+
         def progress_end(self):
             sys.stdout.write("]\n")
             sys.stdout.flush()
-            
+
         def exists(self, antfile):
-            return os.access(self.get_filepath(antfile), os.F_OK)
-        
+            print("{0} / {1:02x} / {2}".format(
+                antfile.get_date().strftime("%Y %b %d %H:%M"),
+                antfile.get_type(), antfile.get_size()))
+            return False
+
+        def select(self, antfiles):
+            time.sleep(15)
+            return antfiles[-1:]
+
         def process(self, antfile, data):
-            with open(self.get_filepath(antfile), "w") as fd:
-                data.tofile(fd)
-        
-        def get_filename(self, antfile):
-            return str.format("{0}-{1:02x}-{2}.fit",
-                    antfile.get_date().strftime("%Y-%m-%d_%H-%M-%S"),
-                    antfile.get_type(), antfile.get_size())
-    
-        def get_filepath(self, antfile):
-            return os.path.join(self.basedir, str(self.serial),
-                    "fit", self.get_filename(antfile))
-    
-    
+            print("Downloaded {0} / {1:02x} / {2}".format(
+                antfile.get_date().strftime("%Y %b %d %H:%M"),
+                antfile.get_type(), antfile.get_size()))
+
+
     def main():    
         try:
-            fb = FileBridge()
-            g = GarminBridge(fb)
+            fb = TestBridge()
+            g = GarminBridge(fb, keep_alive = True)
             g.start()
         except (Exception, KeyboardInterrupt):
             traceback.print_exc()

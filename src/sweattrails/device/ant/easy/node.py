@@ -33,7 +33,7 @@ import gripe
 
 _logger = gripe.get_logger(__name__)
 
-class Node():
+class Node(object):
     
     def __init__(self, idVendor, idProduct):
         
