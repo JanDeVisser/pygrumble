@@ -74,8 +74,8 @@ class SweatTrailsCore(object):
     def start(self, user = None, password = None, savecreds = False):
         self.init_config(user, password, savecreds)
         t = sweattrails.qt.imports.ImportThread.get_thread()
-        t.logmessage.connect(self.log)
-        t.progressInit.connect(self.reset_progress)
+        t.statusMessage.connect(self.status_message)
+        t.progressInit.connect(self.progress_init)
         t.progressUpdate.connect(self.progress)
         t.progressEnd.connect(self.progress_done)
         t.importing.connect(self.file_import_started)
@@ -117,22 +117,23 @@ class SweatTrailsCore(object):
         t.addfiles(filenames)
 
     def file_import_started(self, filename):
-        self.log("Importing file {}", filename)
+        self.status_message("Importing file {}", filename)
                 
     def file_imported(self, filename):
-        self.log("File {} successfully imported", filename)
+        self.status_message("File {} successfully imported", filename)
 
     def file_import_error(self, filename, msg):
-        self.log("ERROR importing file {}: {}", filename, msg)
+        self.status_message("ERROR importing file {}: {}", filename, msg)
         
     def _download_done(self):
+        sweattrails.qt.imports.DownloadThread.disconnect()
         if hasattr(self, "after_download"):
             self.after_download()
         
     def download(self):
         t = sweattrails.qt.imports.DownloadThread(self.getDownloadManager())
-        t.logmessage.connect(self.log)
-        t.progressInit.connect(self.reset_progress)
+        t.statusMessage.connect(self.status_message)
+        t.progressInit.connect(self.progress_init)
         t.progressUpdate.connect(self.progress)
         t.progressEnd.connect(self.progress_done)
         if hasattr(self, "before_download"):
@@ -157,10 +158,10 @@ class SweatTrailsCmdLine(QCoreApplication, SweatTrailsCore):
     def after_download(self):
         self.quit()
         
-    def log(self, msg, *args):
+    def status_message(self, msg, *args):
         print msg.format(*args)
         
-    def reset_progress(self, msg, *args):
+    def progress_init(self, msg, *args):
         self.curr_progress = 0
         sys.stdout.write((msg + " [").format(*args))
         sys.stdout.flush()
@@ -201,11 +202,11 @@ class SweatTrails(QApplication, SweatTrailsCore):
         self.splash.finish(self.mainwindow)
         self.splash = None
 
-    def log(self, msg, *args):
-        self.mainwindow.log(msg, *args)
+    def status_message(self, msg, *args):
+        self.mainwindow.status_message(msg, *args)
 
-    def reset_progress(self, msg, *args):
-        self.mainwindow.reset_progress(msg, *args)
+    def progress_init(self, msg, *args):
+        self.mainwindow.progress_init(msg, *args)
         
     def progress(self, percentage):
         self.mainwindow.progress(percentage)

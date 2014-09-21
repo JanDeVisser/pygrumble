@@ -50,8 +50,8 @@ class Channel(object):
         self._node = node
         self._ant = ant
 
-    def wait_for_event(self, ok_codes):
-        return wait_for_event(ok_codes, self._node._events, self._node._event_cond)
+    def wait_for_event(self, ok_codes, ignore_timeout = False):
+        return wait_for_event(ok_codes, self._node._events, self._node._event_cond, ignore_timeout)
 
     def wait_for_response(self, event_id):
         return wait_for_response(event_id, self._node._responses, self._node._responses_cond)
@@ -96,11 +96,11 @@ class Channel(object):
         _logger.debug("done requesting message %#02x", messageId)
         return self.wait_for_special(messageId)
 
-    def send_acknowledged_data(self, data):
+    def send_acknowledged_data(self, data, ignore_timeout = False):
         try:
             _logger.debug("send acknowledged data %s", self.id)
             self._ant.send_acknowledged_data(self.id, data)
-            self.wait_for_event([Message.Code.EVENT_TRANSFER_TX_COMPLETED])
+            self.wait_for_event([Message.Code.EVENT_TRANSFER_TX_COMPLETED], ignore_timeout)
             _logger.debug("done sending acknowledged data %s", self.id)
         except TransferFailedException:
             _logger.warning("failed to send acknowledged data %s, retrying", self.id)

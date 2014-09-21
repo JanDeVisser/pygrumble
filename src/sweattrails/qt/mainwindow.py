@@ -200,28 +200,26 @@ class STMainWindow(QMainWindow):
 
     def refresh(self):
         QCoreApplication.instance().refresh.emit()
-        self.log("")
+        self.status_message("")
 
     def tabChanged(self, tabix):
         w = self.tabs.currentWidget()
         if hasattr(w, "setValues"):
             w.setValues()
 
-    def log(self, msg, *args):
+    def status_message(self, msg, *args):
         self.statusmessage.setText(msg.format(*args))
 
-    def reset_progress(self, msg, *args):
+    def progress_init(self, msg, *args):
         self.progressbar.setValue(0)
-        self.log(msg, *args)
+        self.status_message(msg, *args)
 
     def progress(self, percentage):
         self.progressbar.setValue(percentage)
         
     def progress_done(self):
-        self.progressbar.setValue(0) 
+        self.progressbar.reset() 
 
     def about(self):
         QMessageBox.about(self, "About SweatTrails",
                           "SweatTrails is a training log application")
-
-

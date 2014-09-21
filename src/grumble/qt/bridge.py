@@ -559,7 +559,7 @@ class PropertyFormLayout(QGridLayout):
 
 
 class FormPage(QWidget):
-    logmessage = Signal(str)
+    statusMessage = Signal(str)
 
     def __init__(self, parent):
         super(FormPage, self).__init__(parent)
@@ -578,8 +578,8 @@ class FormPage(QWidget):
     def addLayout(self, sublayout, *args):
         self.form.addLayout(sublayout, *args)
 
-    def log(self, msg):
-        self.logmessage.emit(msg)
+    def status_message(self, msg, *args):
+        self.statusMessage.emit(msg.format(*args))
 
 
 class FormWidget(FormPage):
@@ -622,9 +622,9 @@ class FormWidget(FormPage):
     def save(self):
         try:
             self.form.retrieve(self.instance())
-            self.log("Saved")
+            self.statusMessage("Saved")
         except:
-            self.log("Save failed...")
+            self.statusMessage("Save failed...")
             raise
         self.setInstance()
 

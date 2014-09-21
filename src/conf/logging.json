@@ -7,7 +7,7 @@
     },
     "__main__": { "destination": "stderr" },
   
-    "sweattrails.device.ant": { "flat": true, "destination": "stderr", "level": "info" },
+    "sweattrails.device.ant": { "flat": true, "destination": "file", "level": "debug" },
     "__sweattrails.device.fitparse": { "flat": true, "destination": "file" },
     "sweattrails": { "destination": "stderr", "flat": true },
     "srtm": { "destination": "stderr", "flat": true },

@@ -50,26 +50,54 @@ class AntFSException(Exception):
     pass
 
 class AntFSDownloadException(AntFSException):
-    
     def __init__(self, error):
         self.error = error
 
 class AntFSAuthenticationException(AntFSException):
-    
     def __init__(self, error):
         self.error = error
 
-class Application(object):
-    
+class AntConnectionException(AntFSException):
+    def __str__(self):
+        return "Could not connect to device"
+
+
+class Manager(object):
+    _vendor_id  = 0x0fcf
+    _vendor_name = "ant.py"
+    _product_id = 0x1008
+    _product_name = "ant-fs manager"
     _serial_number = 1337
+    
     _frequency     = 19    # 0 to 124, x - 2400 (in MHz)
     
-    def __init__(self, logger, **kwargs):
-        _logger.debug("Application __init__")
-        self.logger = logger
-        self.logger.log("Initializing ANT-FS Application")
+    def __init__(self, **kwargs):
+        _logger.debug("Initializing ANT-FS Manager")
+        self._statuslogger = kwargs.get("statuslogger")
+        self._callback = kwargs.get("callback")
+        if (not self._statuslogger and 
+                self._callback and
+                hasattr(self._callback, "status_message")):
+            self._statuslogger = self._callback
+        self._status_msg("Initializing ANT-FS Manager")
+            
+        if self._callback and hasattr(self._callback, "get_ant_product_ids"):
+            ids = self._callback.get_ant_product_ids(self)
+            if len(ids) == 5:
+                (self._vendor_id, self._product_id,
+                 self._vendor_name, self._product_name,
+                 self._serial_number) = ids
+            elif len(ids) == 3:
+                (self._vendor_name, self._product_name,
+                 self._serial_number) = ids
+            
+        _logger.debug("Vendor: %x (%s)", self._vendor_id, self._vendor_name)
+        _logger.debug("Product: %x (%s)", self._product_id, self._product_name)
+        _logger.debug("Serial#: %x", self._serial_number)
         
         self.keep_alive = kwargs.get("keep_alive", True)
+        _logger.debug("Keep-alive: %s", self.keep_alive)
+        
         self._timer = None
         if self.keep_alive:
             self._timer_lock = threading.RLock()
@@ -78,66 +106,15 @@ class Application(object):
         self._queue = Queue.Queue()
         self._beacons = Queue.Queue()
 
-        self._node = Node(0x0fcf, 0x1008)
-        _logger.debug("Application: Node initialized")
-
-        self.logger.log("Request basic information...")
-        m = self._node.request_message(Message.ID.RESPONSE_VERSION)
-        self.logger.log("  ANT version:   {}", struct.unpack("<10sx", m[2])[0])
-        m = self._node.request_message(Message.ID.RESPONSE_CAPABILITIES)
-        self.logger.log("  Capabilities:  {}", m[2])
-        m = self._node.request_message(Message.ID.RESPONSE_SERIAL_NUMBER)
-        self.logger.log("  Serial number: {}", struct.unpack("<I", m[2])[0])
-        _logger.debug("Application: retrieved basic info")
-
-        self.logger.log("Starting system...")
-
-        NETWORK_KEY= [0xa8, 0xa4, 0x23, 0xb9, 0xf5, 0x5e, 0x63, 0xc1]
-
-        self._node.reset_system()
-        self._node.set_network_key(0x00, NETWORK_KEY)
-        _logger.debug("Application: Node initialized")
-
-        self._channel = self._node.new_channel(Channel.Type.BIDIRECTIONAL_RECEIVE)
-        self._channel.on_broadcast_data = self._on_data
-        self._channel.on_burst_data = self._on_data
-        _logger.debug("Application: New channel created")
         
-        self.setup_channel(self._channel)
-        _logger.debug("Application: New channel initialized")
+    #===========================================================================
+    # P R I V A T E  M E T H O D S
+    #===========================================================================
+    
+    def _status_msg(self, msg, *args):
+        if self._statuslogger:
+            self._statuslogger.status_message(msg, *args)
         
-        self._worker_thread = threading.Thread(target=self._worker, name="ant.fs")
-        self._worker_thread.start()
-        _logger.debug("Application: Thread created and started")
-
-    def _worker(self):
-        self._node.start()
-
-    def _main(self):
-        try:
-            _logger.debug("Link level")
-            beacon = self._get_beacon()
-            if self.on_link(beacon):
-                for _ in range(0, 5):
-                    beacon = self._get_beacon()
-                    if beacon.get_client_device_state() == Beacon.ClientDeviceState.AUTHENTICATION:
-                        _logger.debug("Auth layer")
-                        if self.on_authentication(beacon):
-                            _logger.debug("Authenticated")
-                            beacon = self._get_beacon()
-                            self._keep_alive(False)
-                            try:
-                                self.on_transport(beacon)
-                            finally:
-                                self._cancel_keep_alive()
-                        self.disconnect()
-                        break
-        except:
-            _logger.exception("Exception in ANT manager main loop")
-            raise
-        finally:
-            self.stop()
-
     def _on_beacon(self, data):
         b = Beacon.parse(data)
         self._beacons.put(b)
@@ -166,14 +143,26 @@ class Application(object):
         self._queue.task_done()
         return c
     
-    def _send_command(self, c):
+    def _send_command(self, c, ignore_timeout = False):
         _logger.debug("Sending '%s' command", c.__class__.__name__)
         data = c.get()
         if len(data) <= 8:
-            self._channel.send_acknowledged_data(data)
+            self._channel.send_acknowledged_data(data, ignore_timeout)
         else:
             self._channel.send_burst_transfer(data)
             
+    def _setup_channel(self):
+        # FIXME: Make channel params configurable by callback
+        self._channel.set_period(4096)
+        self._channel.set_search_timeout(255)
+        self._channel.set_rf_freq(50)
+        self._channel.set_search_waveform([0x53, 0x00])
+        self._channel.set_id(0, 0x01, 0)
+        
+        self._channel.open()
+        #channel.request_message(Message.ID.RESPONSE_CHANNEL_STATUS)
+        self._status_msg("Searching...")
+
     def _keep_alive(self, ping_now = True):
         if self.keep_alive:
             _logger.debug("Sending keep-alive Ping command")
@@ -183,7 +172,6 @@ class Application(object):
                     self.ping()
                 self._timer = threading.Timer(1, self._keep_alive)
                 self._timer.start()
-            _logger.debug("Keep-alive Ping succeeded")
         
     def _cancel_keep_alive(self):
         if self.keep_alive:
@@ -193,30 +181,106 @@ class Application(object):
                     self._timer.cancel()
                     self._timer = None
     
-    # Application actions are defined from here
-    # =======================================================================
+    #===========================================================================
+    # P U B L I C  M E T H O D S
+    #===========================================================================
     
-    # These should be overloaded:
-    
-    def setup_channel(self, channel):
-        pass
-    
-    def on_link(self, beacon):
-        pass
-    
-    def on_authentication(self, beacon):
-        pass
-    
-    def on_transport(self, beacon):
-        pass
-    
-    # Shouldn't have to touch these:
-    
-    def start(self):
-        self._main()
+    def authenticate(self, callback = None):
+        callback = callback or self._callback
+        if hasattr(callback, "on_authentication"):
+            callback.on_authentication(self)
+        if hasattr(callback, "get_ant_serial_number"):
+            self._serial_number = callback.get_ant_serial_number(self)
+        self._peer_serial, self._peer_name = self.authentication_serial()
+        passkey = callback.get_passkey(self, self._peer_serial)
+        self._status_msg("Authenticating with {} ({})...", self._peer_name, self._peer_serial)
+        _logger.debug("serial %s, %r, %r", self._peer_name, self._peer_serial, passkey)
+        
+        if passkey is not None:
+            self._status_msg("Authenticating with {} ({})... Passkey... ", self._peer_name, self._peer_serial)
+            try:
+                self.authentication_passkey(passkey)
+                self._status_msg("Authenticating with {} ({})... Passkey... OK.", self._peer_name, self._peer_serial)
+            except sweattrails.device.ant.fs.manager.AntFSAuthenticationException:
+                self._status_msg("Authenticating with {} ({})... Passkey... FAILED", self._peer_name, self._peer_serial)
+                raise
+        else:
+            self.log("Authenticating with {} ({})... Pairing... ", self._peer_name, self._peer_serial)
+            try:
+                passkey = self.authentication_pair(callback.get_ant_product_name())
+                callback.set_passkey(self, self._peer_serial, passkey)
+                self._status_msg("Authenticating with {} ({})... Pairing... OK.", self._peer_name, self._peer_serial)
+            except sweattrails.device.ant.fs.manager.AntFSAuthenticationException:
+                self._status_msg("Authenticating with {} ({})... Pairing... FAILED", self._peer_name, self._peer_serial)
+                raise
+        if hasattr(callback, "authenticated"):
+            callback.authenticated(self)
 
-    def stop(self):
+    def connect(self, callback = None):
+        callback = callback or self._callback
+        if callback and hasattr(callback, "on_connect"):
+            callback.on_connect(self)
+        try:
+            self._beacon = self._get_beacon()
+            if self.link(callback):
+                _logger.debug("connect: Link established")
+                for _ in range(0, 5):
+                    self._beacon = self._get_beacon()
+                    if self._beacon.get_client_device_state() == Beacon.ClientDeviceState.AUTHENTICATION:
+                        _logger.debug("connect: Beacon found")
+                        self.authenticate(callback)
+                        self._beacon = self._get_beacon()
+                        self._keep_alive(False)
+                        if callback and hasattr(callback, "connected"):
+                            callback.connected(self)
+                        return
+            raise AntConnectionException()
+        except:
+            _logger.exception("ANT Manager connect")
+            raise
+        
+    def start(self, callback = None):
+        callback = callback or self._callback
+        if callback and hasattr(callback, "on_start"):
+            callback.on_start(self)
+            
+        self._node = Node(self._vendor_id, self._product_id)
+        _logger.debug("Manager: Node initialized")
+
+        self._status_msg("Request basic information...")
+        m = self._node.request_message(Message.ID.RESPONSE_VERSION)
+        self._status_msg("  ANT version:   {}", struct.unpack("<10sx", m[2])[0])
+        m = self._node.request_message(Message.ID.RESPONSE_CAPABILITIES)
+        self._status_msg("  Capabilities:  {}", m[2])
+        m = self._node.request_message(Message.ID.RESPONSE_SERIAL_NUMBER)
+        self._status_msg("  Serial number: {}", struct.unpack("<I", m[2])[0])
+        _logger.debug("Application: retrieved basic info")
+
+        self._status_msg("Starting system...")
+
+        NETWORK_KEY= [0xa8, 0xa4, 0x23, 0xb9, 0xf5, 0x5e, 0x63, 0xc1]
+
+        self._node.reset_system()
+        self._node.set_network_key(0x00, NETWORK_KEY)
+
+        self._channel = self._node.new_channel(Channel.Type.BIDIRECTIONAL_RECEIVE)
+        self._channel.on_broadcast_data = self._on_data
+        self._channel.on_burst_data = self._on_data
+        self._setup_channel()
+            
+        self._worker_thread = threading.Thread(target=self._node.start, name="ant.fs")
+        self._worker_thread.start()
+        
+        if callback and hasattr(callback, "started"):
+            callback.started(self)
+
+    def stop(self, callback = None):
+        callback = callback or self._callback
+        if callback and hasattr(callback, "on_stop"):
+            callback.on_stop(self)
         self._node.stop()
+        if callback and hasattr(callback, "stopped"):
+            callback.stopped(self)
     
     def erase(self, index):
         pass
@@ -225,8 +289,8 @@ class Application(object):
         pass
     
     def download(self, index, callback = None):
+        callback = callback or self._callback
         offset  = 0
-        initial = True
         crc     = 0
         data    = array.array('B')
         with self._lock:
@@ -246,7 +310,11 @@ class Application(object):
                             _logger.debug("remaining %d offset %d total %d size %d", remaining, offset, total, response._get_argument("size"))
                         data[offset:total] = response._get_argument("data")[:remaining]
                         if callback != None:
-                            callback(float(total) / float(response._get_argument("size")))
+                            progress = int((float(total) / float(response._get_argument("size"))) * 100)
+                            if hasattr(callback, "progress"):
+                                callback.progress(progress)
+                            else:
+                                callback(progress)
                         if total == size:
                             return data
                         crc = response._get_argument("crc")
@@ -273,7 +341,16 @@ class Application(object):
         with self._lock:
             self._send_command(PingCommand())
 
-    def link(self):
+    def get_beacon(self):
+        return self._beacon
+    
+    def get_channel(self):
+        return self._channel
+
+    def link(self, callback = None):
+        callback = callback or self._callback
+        if callback and hasattr(callback, "on_link"):
+            callback.on_link(self)
         with self._lock:
             self._channel.request_message(Message.ID.RESPONSE_CHANNEL_ID)
             self._send_command(LinkCommand(self._frequency, 4, self._serial_number))
@@ -282,6 +359,9 @@ class Application(object):
             self._channel.set_period(4096)
             self._channel.set_search_timeout(3)
             self._channel.set_rf_freq(self._frequency)
+        if callback and hasattr(callback, "linked"):
+            callback.on_linked(self)
+        return True
 
     def authentication_serial(self):
         with self._lock:
@@ -316,8 +396,33 @@ class Application(object):
             else:
                 raise AntFSAuthenticationException(response._get_argument("type"))
 
-    def disconnect(self):
+    def disconnect(self, callback = None):
+        callback = callback or self._callback
+        if callback and hasattr(callback, "on_disconnect"):
+            callback.on_disconnect(self)
+        self._cancel_keep_alive()
         with self._lock:
             d = DisconnectCommand(DisconnectCommand.Type.RETURN_LINK, 0, 0)
-            self._send_command(d)
+            self._send_command(d, True)
+        if callback and hasattr(callback, "disconnected"):
+            callback.disconnected(self)
 
+
+class Application(Manager):
+    def __init__(self, **kwargs):
+        super(Application, self).__init__(**kwargs)
+
+    def run(self, callback = None):
+        callback = callback or self._callback
+        self.start(callback)
+        try:
+            self.connect(callback)
+            try:
+                callback.on_transport(self)
+            finally:
+                self.disconnect(callback)
+        except:
+            _logger.exception("Exception in ANT manager main loop")
+            raise
+        finally:
+            self.stop(callback)

@@ -21,9 +21,7 @@
 
 
 import base64
-import math
 import sys
-import traceback
 
 import sweattrails.device.ant.fs.manager
 
@@ -31,153 +29,30 @@ import gripe
 
 logger = gripe.get_logger(__name__)
 
-ID_VENDOR  = 0x0fcf
-ID_PRODUCT = 0x1008
-
-PRODUCT_NAME = "sweattrails"
-
-class BackendBridge(object):
-    def __init__(self):
-        pass
-        
-    def get_passkey(self, serial):
-        return None
-        
-    def set_passkey(self, serial, passkey):
-        pass
-
-    def log(self, msg, *args):
-        logger.info(msg, *args)
-        
-    def progress_init(self, msg, *args):
-        pass
-    
-    def progress(self, num):
-        pass
-        
-    def progress_end(self):
-        pass
-        
-    def exists(self, antfile):
-        return False
-    
-    def select(self, antfiles):
-        return antfiles
-    
-    def process(self, antfile, data):
-        """
-            antfile - ANT-FS file structure (ant.fs.file.File)
-            data - An array.array object with typecode 'b'.
-        """
-        pass
-
-
-class GarminBridge(sweattrails.device.ant.fs.manager.Application):
-    ID_VENDOR  = 0x0fcf
-    ID_PRODUCT = 0x1008
-
-    PRODUCT_NAME = "sweattrails"
-
-    def __init__(self, bridge, **kwargs):
+class GarminBridge(object):
+    def __init__(self, bridge = None, **kwargs):
+        logger.debug("__init__")
         self.bridge = bridge
-        super(GarminBridge, self).__init__(bridge, **kwargs)
+        kwargs["callback"] = self
+        self._garmin = kwargs.get("manager", 
+            sweattrails.device.ant.fs.manager.Application(**kwargs))
+        logger.debug("Created/assigned Garmin manager")
+        self.init_config()
         
-    def log(self, msg, *args):
-        if self.bridge:
-            self.bridge.log(msg, *args)
+    def status_message(self, msg, *args):
+        if self.bridge and hasattr(self.bridge, "status_message"):
+            self.bridge.status_message(msg, *args)
 
-    def setup_channel(self, channel):
-        channel.set_period(4096)
-        channel.set_search_timeout(255)
-        channel.set_rf_freq(50)
-        channel.set_search_waveform([0x53, 0x00])
-        channel.set_id(0, 0x01, 0)
-        
-        channel.open()
-        #channel.request_message(Message.ID.RESPONSE_CHANNEL_STATUS)
-        self.log("Searching...")
-
-    def on_link(self, beacon):
-        logger.debug("on link, %r, %r", beacon.get_serial(), beacon.get_descriptor())
-        self.link()
-        return True
-
-    def on_authentication(self, beacon):
-        logger.debug("on authentication")
-        self.serial, self.name = self.authentication_serial()
-        self.passkey = self.bridge.get_passkey(self.serial)
-        self.log("Authenticating with {} ({})...", self.name, self.serial)
-        logger.debug("serial %s, %r, %r", self.name, self.serial, self.passkey)
-        
-        if self.passkey is not None:
-            self.log("Authenticating with {} ({})... Passkey... ", self.name, self.serial)
-            try:
-                self.authentication_passkey(self.passkey)
-                self.log("Authenticating with {} ({})... Passkey... OK.", self.name, self.serial)
-                return True
-            except sweattrails.device.ant.fs.manager.AntFSAuthenticationException:
-                self.log("Authenticating with {} ({})... Passkey... FAILED", self.name, self.serial)
-                return False
-        else:
-            self.log("Authenticating with {} ({})... Pairing... ", self.name, self.serial)
-            try:
-                self.passkey = self.authentication_pair(self.PRODUCT_NAME)
-                self.bridge.set_passkey(self.serial, self.passkey)
-                self.log("Authenticating with {} ({})... Pairing... OK.", self.name, self.serial)
-                return True
-            except sweattrails.device.ant.fs.manager.AntFSAuthenticationException:
-                self.log("Authenticating with {} ({})... Pairing... FAILED", self.name, self.serial)
-                return False
-
-    def on_transport(self, beacon):
-        if not hasattr(self, "_downloading"):
-            try:
-                directory = self.download_directory()
-                antfiles = directory.get_files()[2:]
-        
-                newfiles = filter(lambda f: not self.bridge.exists(f), antfiles)
-                self._downloading = self.bridge.select(newfiles) or []
-            except:
-                logger.exception("Exception getting ANT device directory")
-                raise
-        l = len(self._downloading)
-        self.log("Downloading {} file{}", l, "" if l == 1 else "s")
-
-        # Download missing files:
-        while self._downloading:
-            f = self._downloading[0]
-            self.download_file(f)
-            del self._downloading[0]
-        del self._downloading
-
-    def downloads_pending(self):
-        return hasattr(self, "_downloading") and self._downloading
-
-    def download_file(self, f):
-        try:
-            self.bridge.progress_init("Downloading activity from {} ", f.get_date().strftime("%d %b %Y %H:%M"))
-            def callback(progress):
-                self.bridge.progress(int(math.floor(progress * 100.0)))
-            data = self.download(f.get_index(), callback)
-            self.bridge.progress_end()
-            self.log("Processing activity from {} ", f.get_date().strftime("%d %b %Y %H:%M"))
-            try:
-                self.bridge.process(f, data)
-            except:
-                logger.exception("Exception processing ANT file")
-        except:
-            logger.exception("Exception downloading ANT file")
-            raise
-
-
-class GripeConfigBridge(BackendBridge):
     def init_config(self):
         if "garmin" not in gripe.Config:
             self.config = gripe.Config.set("garmin", {})
         else:
             self.config = gripe.Config.garmin
+            
+    def get_ant_product_ids(self, garmin):
+        return ("finiandarcy.com", "Gripe", 0xBEEF)
         
-    def get_passkey(self, serial):
+    def get_passkey(self, garmin, serial):
         self.serial = serial 
         s = str(serial)
         if s not in self.config or \
@@ -186,13 +61,124 @@ class GripeConfigBridge(BackendBridge):
         else:
             return base64.b64decode(self.config[s]["passkey"])
         
-    def set_passkey(self, serial, passkey):
+    def set_passkey(self, garmin, serial, passkey):
         s = str(serial)
         if s not in self.config:
             self.config[s] = {}
         self.config[s]["passkey"] = base64.b64encode(passkey)
         self.config = gripe.Config.set("garmin", self.config)
     
+    def exists(self, antfile):
+        if self.bridge and hasattr(self.bridge, "exists"):
+            return self.bridge.exists(antfile)
+        
+    def select(self, antfiles):
+        if self.bridge and hasattr(self.bridge, "select"):
+            return self.bridge.select(antfiles)
+        
+    def process(self, antfile, data):
+        if self.bridge and hasattr(self.bridge, "process"):
+            self.bridge.process(antfile, data)
+        
+    def progress_init(self, msg, *args):
+        if self.bridge and hasattr(self.bridge, "progress_init"):
+            self.bridge.progress_init(msg, *args)
+
+    def progress(self, new_progress):
+        if self.bridge and hasattr(self.bridge, "progress"):
+            self.bridge.progress(new_progress)
+        
+    def progress_end(self):
+        if self.bridge and hasattr(self.bridge, "progress_end"):
+            self.bridge.progress_end()
+            
+    def start(self):
+        self._garmin.start()
+        
+    def on_start(self, garmin):
+        logger.debug("on_start")
+        
+    def started(self, garmin):
+        logger.debug("started")
+        
+    def connect(self):
+        logger.debug("connect()")
+        self._garmin.connect()
+        
+    def on_connect(self, garmin):
+        logger.debug("on_connect")
+        
+    def connected(self, garmin):
+        logger.debug("connected")
+        
+    def on_authentication(self, garmin):
+        logger.debug("on_authentication")
+        
+    def authenticated(self, garmin):
+        logger.debug("authenticated")
+        
+    def run(self):
+        logger.debug("run()")
+        self._garmin.run()
+        
+    def disconnect(self):
+        logger.debug("disconnect()")
+        self._garmin.disconnect()
+
+    def on_disconnect(self, garmin):
+        logger.debug("on_disconnect")
+        
+    def disconnected(self, garmin):
+        logger.debug("disconnected")
+        
+    def stop(self):
+        logger.debug("stop()")
+        self._garmin.stop()
+        
+    def on_stop(self, garmin):
+        logger.debug("on_stop")
+        
+    def stopped(self, garmin):
+        logger.debug("stopped")
+        
+    def on_transport(self, garmin = None):
+        if not hasattr(self, "_downloading"):
+            try:
+                self.progress_init("Downloading device directory")
+                antfiles = self.download_files(garmin)
+                self.progress_end()
+        
+                newfiles = filter(lambda f: not self.exists(f), antfiles)
+                self._downloading = self.select(newfiles) or []
+            except:
+                logger.exception("Exception getting ANT device directory")
+                raise
+        l = len(self._downloading)
+        self.status_message("Downloading {} file{}", l, "" if l == 1 else "s")
+
+        # Download selected files:
+        while self._downloading:
+            f = self._downloading[0]
+            self.progress_init("Downloading activity from {} ", f.get_date().strftime("%d %b %Y %H:%M"))
+            data = self.download_file(f, garmin)
+            self.progress_end()
+            self.status_message("Processing activity from {} ", f.get_date().strftime("%d %b %Y %H:%M"))
+            self.process(f, data)
+            self.status_message("")
+            del self._downloading[0]
+        del self._downloading
+
+    def download_file(self, f, garmin = None):
+        garmin = garmin or self._garmin
+        return garmin.download(f.get_index(), self)
+        
+    def download_files(self, garmin = None):
+        garmin = garmin or self._garmin
+        directory = garmin.download_directory(self)
+        return directory.get_files()[2:]
+        
+    def downloads_pending(self):
+        return hasattr(self, "_downloads") and self._downloads
 
 #
 # ---------------------------------------------------------------------------
@@ -202,13 +188,10 @@ class GripeConfigBridge(BackendBridge):
 
 if __name__ == "__main__":
     import time
+    import traceback
 
-    class TestBridge(GripeConfigBridge):
-        def __init__(self):
-            super(TestBridge, self).__init__()
-            self.init_config()
-
-        def log(self, msg, *args):
+    class TestBridge(GarminBridge):
+        def status_message(self, msg, *args):
             print msg.format(*args)
 
         def progress_init(self, msg, *args):
@@ -217,7 +200,7 @@ if __name__ == "__main__":
             sys.stdout.flush()
 
         def progress(self, new_progress):
-            diff = new_progress/10 - self.curr_progress 
+            diff = int(new_progress/10 - self.curr_progress) 
             sys.stderr.write("." * diff)
             sys.stdout.flush()
             self.curr_progress = new_progress/10
@@ -242,15 +225,16 @@ if __name__ == "__main__":
                 antfile.get_type(), antfile.get_size()))
 
 
-    def main():    
-        try:
-            fb = TestBridge()
-            g = GarminBridge(fb, keep_alive = True)
-            g.start()
-        except (Exception, KeyboardInterrupt):
+    def main():
+        try:    
+            bridge = TestBridge(keep_alive = True)
+            try:
+                bridge.run()
+            except (Exception, KeyboardInterrupt):
+                bridge.stop()
+        except:
             traceback.print_exc()
             print "Interrupted"
-            g.stop()
             sys.exit(1)
 
     sys.exit(main())
