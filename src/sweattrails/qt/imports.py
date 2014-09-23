@@ -320,7 +320,7 @@ class DownloadThread(LoggingThread):
         with gripe.db.Tx.begin():
             path = os.path.join(gripe.root_dir(), 
                                 gripe.user_dir(self.athlete.uid()), 
-                                "done",
+                                "inbox",
                                 self.get_filename(antfile))
             with open(path, "w") as fd:
                 data.tofile(fd)
