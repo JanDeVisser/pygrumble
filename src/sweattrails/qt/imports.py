@@ -40,9 +40,8 @@ import sweattrails.device.fitparser
 
 logger = gripe.get_logger(__name__)
 
-
 class LoggingThread(QThread):
-    logmessage = Signal(str)
+    statusMessage = Signal(str)
     progressInit = Signal(str)
     progressUpdate = Signal(int)
     progressEnd = Signal()
@@ -58,8 +57,8 @@ class LoggingThread(QThread):
     def stop(self):
         self._stopped = True
         
-    def log(self, msg, *args):
-        self.logmessage.emit(msg.format(*args))
+    def status_message(self, msg, *args):
+        self.statusMessage.emit(msg.format(*args))
         
     def progress_init(self, msg, *args):
         self.progressInit.emit(msg.format(*args))
@@ -139,31 +138,36 @@ class ImportThread(LoggingThread):
         gripe.mkdir(self.done)
         inboxfiles = gripe.listdir(self.inbox)
         for f in inboxfiles:
+            logger.debug("Inbox: Found file %s", f)
             gripe.rename(os.path.join(self.inbox, f), os.path.join(self.queue, f))
             self.addfile(os.path.join(gripe.root_dir(), self.queue, f))
 
     def import_file(self, filename):
+        logger.debug("ImportThread: Importing file %s", filename)
         self.importing.emit(filename)
         try:
             f = os.path.basename(filename)
-            (_, _, ext) = filename.rpartition(".")
+            parser = None
+            
+            (_, _, ext) = f.rpartition(".")
             factory = ImportThread._parser_factories_by_ext.get(ext)
-            if hasattr(factory, "create_parser"):
-                parser = factory.create_parser(filename)
-            else:
-                parser = factory(filename)
+            if factory:
+                if hasattr(factory, "create_parser"):
+                    parser = factory.create_parser(filename)
+                else:
+                    parser = factory(filename)
             if not parser:
                 for factory in ImportThread._parser_factories:
                     if hasattr(factory, "create_parser"):
-                        parser = factory.createParser(filename)
+                        parser = factory.create_parser(filename)
                     if parser:
                         break
                 if not parser:
                     logger.warning("No parser registered for %s", f)
                     return
             athlete = QCoreApplication.instance().user
-            parser.setAthlete(athlete)
-            parser.setLogger(self)
+            parser.set_athlete(athlete)
+            parser.set_logger(self)
             with gripe.db.Tx.begin():
                 q = ImportedFITFile.query('"filename" =', f, parent = athlete)
                 fitfile = q.get()
@@ -257,19 +261,37 @@ class SelectActivities(QDialog):
         self.lock.release()
 
 
-class DownloadThread(LoggingThread, sweattrails.device.antfs.GripeConfigBridge):
+class DownloadThread(LoggingThread):
     def __init__(self, manager):
+        assert not hasattr(DownloadThread, "_singleton"), "DownloadThread is a singleton"
+        DownloadThread._singleton = self
         super(DownloadThread, self).__init__()
+        self._garmin = sweattrails.device.antfs.GarminBridge(self)
         self.manager = manager
         self.athlete = QCoreApplication.instance().user
-        logger.debug("Creating bridge")
-        self.garminbridge = sweattrails.device.antfs.GarminBridge(self)
-        self.init_config()
+        logger.debug("Created download thread")
+        
+    @classmethod
+    def disconnect(cls):
+        assert hasattr(cls, "_singleton"), "No DownloadThread singleton present"
+        logger.debug("Disconnecting singleton")
+        garmin = cls._singleton._garmin
+        try:
+            garmin.disconnect()
+        finally:
+            garmin.stop()
+        del cls._singleton
+        
+    def start(self):
+        logger.debug("Starting download thread")
+        self._garmin.start()
+        self._garmin.connect()
+        super(DownloadThread, self).start()
         
     def run(self):
-        logger.debug("DownloadThread.run")
+        logger.debug("Running download thread")
         try:
-            self.garminbridge.start()
+            self._garmin.on_transport()
         except:
             logger.exception("Exception in download thread")
         logger.debug("DownloadThread finished")

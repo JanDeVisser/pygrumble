@@ -59,9 +59,9 @@ class RecordWrapper(object):
         assert self.fitrecord(), "RecordWrapper.get_data(%s): no FIT record set in class %s" % (key, self.__class__)
         return self.fitrecord().get_data(key)
 
-    def log(self, msg, *args):
+    def status_message(self, msg, *args):
         if self.container is not None:
-            self.container.log(msg, *args)
+            self.container.status_message(msg, *args)
 
     def progress_init(self, msg, *args):
         if self.container is not None:
@@ -166,12 +166,12 @@ class FITSession(FITLap):
             sessiontype = profile.get_default_SessionType(self.get_data("sport"))
             assert sessiontype, "fitparse.upload(): User %s has no default session type for sport %s" % (athlete.uid(), self.get_data("sport"))
             session.sessiontype = sessiontype
-            self.log("Converting session {}/{} ({:s})", self.index+1, len(self.container.sessions), sessiontype.name)
+            self.status_message("Converting session {}/{} ({:s})", self.index, len(self.container.sessions), sessiontype.name)
             self.convert_interval(session)
 
             num = len(self.laps)
             if num > 1:
-                self.progress_init("Session {}/{}: Converting {} intervals", self.index+1, len(self.container.sessions), num)
+                self.progress_init("Session {}/{}: Converting {} intervals", self.index, len(self.container.sessions), num)
                 for ix in range(num):
                     lap = self.laps[ix]
                     self.progress(int((float(ix) / float(num)) * 100.0))
@@ -180,7 +180,7 @@ class FITSession(FITLap):
                 self.progress_end()
 
             num = len(self.records)                
-            self.progress_init("Session {}/{}: Converting {} waypoints", self.index+1, len(self.container.sessions), num)
+            self.progress_init("Session {}/{}: Converting {} waypoints", self.index, len(self.container.sessions), num)
             prev = None
             for ix in range(num):
                 record = self.records[ix]
@@ -188,10 +188,8 @@ class FITSession(FITLap):
                 prev = record.convert(session, prev) or prev
             self.progress_end()
                                 
-            self.progress_init("Analyzing session {}/{}", self.index+1, len(self.container.sessions))
-            def callback(percentage):
-                self.progress(percentage)
-            session.analyze(callback)
+            self.progress_init("Analyzing session {}/{}", self.index, len(self.container.sessions))
+            session.analyze(self)
             self.progress_end()
             return session
 
@@ -205,10 +203,10 @@ class FITParser(object):
         self.user = None
         self.logger = None
         
-    def setAthlete(self, athlete):
+    def set_athlete(self, athlete):
         self.user = athlete
         
-    def setLogger(self, logger):
+    def set_logger(self, logger):
         self.logger = logger
 
     def parse(self):
@@ -216,31 +214,31 @@ class FITParser(object):
         assert self.filename, "No filename set on FIT parser"
         assert gripe.exists(self.filename), "FIT parser: file '%s' does not exist" % self.filename
         try:
-            self.log("Reading FIT file {}", self.filename)
+            self.status_message("Reading FIT file {}", self.filename)
             self.activity = sweattrails.device.fitparse.Activity(self.filename)
-            self.log("Parsing FIT file {}", self.filename)
+            self.status_message("Parsing FIT file {}", self.filename)
             self.activity.parse()
-            self.log("Processing FIT file {}", self.filename)
+            self.status_message("Processing FIT file {}", self.filename)
             self._process()
-            self.log("FIT file {} converted", self.filename)
+            self.status_message("FIT file {} converted", self.filename)
             return None
         except sweattrails.device.fitparse.FitParseError as exception:
             raise sweattrails.device.exceptions.FileImportError(exception)
 
-    def log(self, msg, *args):
-        if self.logger is not None:
-            self.logger.log(msg, *args)
+    def status_message(self, msg, *args):
+        if self.logger and hasattr(self.logger, "status_message"):
+            self.logger.status_message(msg, *args)
 
     def progress_init(self, msg, *args):
-        if self.logger is not None:
+        if self.logger and hasattr(self.logger, "progress_init"):
             self.logger.progress_init(msg, *args)
     
     def progress(self, num):
-        if self.logger is not None:
+        if self.logger and hasattr(self.logger, "progress"):
             self.logger.progress(num)
         
     def progress_end(self):
-        if self.logger is not None:
+        if self.logger and hasattr(self.logger, "progress_end"):
             self.logger.progress_end()
         
     def find_session_for_obj(self, obj):
@@ -283,7 +281,7 @@ class FITParser(object):
 
 if __name__ == "__main__":
     class Logger(object):
-        def log(self, msg, *args):
+        def status_message(self, msg, *args):
             print >> sys.stderr, msg.format(args)
             
         def progress_init(self, msg, *args):
@@ -292,10 +290,10 @@ if __name__ == "__main__":
             sys.stdout.flush()
             
         def progress(self, new_progress):
-            diff = int((new_progress - self.curr_progress) / 10.0) 
+            diff = new_progress/10 - self.curr_progress 
             sys.stderr.write("." * diff)
             sys.stdout.flush()
-            self.curr_progress = new_progress
+            self.curr_progress = new_progress/10
             
         def progress_end(self):
             sys.stdout.write("]\n")
@@ -325,8 +323,8 @@ if __name__ == "__main__":
 
         try:
             parser = FITParser(sys.argv[3])
-            parser.setAthlete(user)
-            parser.setLogger(Logger())
+            parser.set_athlete(user)
+            parser.set_logger(Logger())
             parser.parse()
             return 0
         except:

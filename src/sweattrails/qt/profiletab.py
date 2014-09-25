@@ -32,7 +32,7 @@ class SettingsPage(grumble.qt.bridge.FormWidget):
         self.addProperty(sweattrails.userprofile.UserProfile,
                          "_userprofile.units", 5, 0,
                          style = "radio")
-        self.logmessage.connect(QCoreApplication.instance().log)
+        self.statusMessage.connect(QCoreApplication.instance().status_message)
 
     def activate(self):
         self.setInstance(QCoreApplication.instance().user)

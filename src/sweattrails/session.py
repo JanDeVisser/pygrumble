@@ -778,8 +778,8 @@ class Interval(grumble.Model, Timestamped):
         intervals = Interval.query(parent = self).fetchall()
         num = len(intervals) + (1 if part else 2)
         ix = 0
-        if callback:
-            callback(int((float(ix) / float(num)) * 100.0))
+        if callback and hasattr(callback, "progress"):
+            callback.progress(int((float(ix) / float(num)) * 100.0))
         logger.debug("Interval.analyze(): Getting reducers")
         reducers.extend([
             Maximize("heartrate", self, "max_hr"),
@@ -802,15 +802,15 @@ class Interval(grumble.Model, Timestamped):
 
         if part:
             ix += 1
-            if callback:
-                callback(int((float(ix) / float(num)) * 100.0))
+            if callback and hasattr(callback, "progress"):
+                callback.progress(int((float(ix) / float(num)) * 100.0))
             logger.debug("Interval.analyze(): Analyzing part")
             part.analyze()
         for i in intervals:
             ix += 1
             logger.debug("Interval.analyze(): Analyzing interval %d/%d", ix - 1, num - 2)
-            if callback:
-                callback(int((float(ix) / float(num)) * 100.0))
+            if callback and hasattr(callback, "progress"):
+                callback.progress(int((float(ix) / float(num)) * 100.0))
             i.analyze()
 
     def get_session(self):

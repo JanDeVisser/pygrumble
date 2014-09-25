@@ -342,7 +342,7 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
             self.addTab(GraphPage(self, interval), "Graphs")
             self.addTab(MapPage(self, interval), "Map")
             self.addTab(MiscDataPage(self, interval), "Other Data")
-            self.logmessage.connect(QCoreApplication.instance().log)
+            self.statusMessage.connect(QCoreApplication.instance().status_message)
             self.setInstance(interval)
 
     def partSpecificContent(self, instance):

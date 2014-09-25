@@ -28,7 +28,7 @@ import gripe
 _logger = gripe.get_logger(__name__)
 debug_protocol = False
 
-def wait_for_message(match, process, queue, condition):
+def wait_for_message(match, process, queue, condition, ignore_timeout = False):
     """
     Wait for a specific message in the *queue* guarded by the *condition*
     matching the function *match* (which is a function that takes a
@@ -60,14 +60,15 @@ def wait_for_message(match, process, queue, condition):
             _logger.debug(" - could not find response matching %r", match)
         condition.wait(1.0)
     condition.release()
-    raise AntException("Timed out while waiting for message")
+    if not ignore_timeout:
+        raise AntException("Timed out while waiting for message")
     
-def wait_for_event(ok_codes, queue, condition):
+def wait_for_event(ok_codes, queue, condition, ignore_timeout = False):
     def match((channel, event, data)):
         return data[0] in ok_codes
     def process((channel, event, data)):
         return (channel, event, data)
-    return wait_for_message(match, process, queue, condition)
+    return wait_for_message(match, process, queue, condition, ignore_timeout)
 
 def wait_for_response(event_id, queue, condition):
     """
