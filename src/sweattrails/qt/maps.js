@@ -25,6 +25,18 @@ var intervalList; // array of intervals
 var markerList; // array of markers
 var polyList; // array of polylines
 
+Config = JSON.parse(bridge.getConfig());
+
+function initialize() {
+	var script = document.createElement('script');
+	script.type = 'text/javascript';
+	script.src = 'https://maps.googleapis.com/maps/api/js?key=' + 
+		Config.app.config.google_api_key + 
+		'&sensor=false&callback=initMap';
+	document.body.appendChild(script);
+}
+
+
 // Draw the entire route, we use a local js bridge object
 // to supply the data to
 // a) reduce bandwidth and
@@ -98,7 +110,7 @@ function drawIntervals() {
 }
 
 // initialise function called when map loaded
-function initialize() {
+function initMap() {
 	try {
 		// TERRAIN style map please and make it draggable
 		// note that because QT webkit offers touch/gesture
@@ -158,7 +170,7 @@ function initialize() {
 		// bridge.drawIntervals.connect(drawIntervals)
 		bridge.drawOverlays();
 	} catch (e) {
-		bridge.log("initialize(): " + e);
+		console.log("initialize(): " + e);
 		throw e;
 	}
 }

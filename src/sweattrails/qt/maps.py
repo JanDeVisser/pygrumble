@@ -19,13 +19,17 @@
 # Copyright (c) 2009 Greg Lonnon (greg.lonnon@gmail.com)
 #               2011 Mark Liversedge (liversedge@gmail.com)
 
+import os.path
 import string
 
 from PySide.QtCore import QObject
+from PySide.QtCore import QUrl
 from PySide.QtCore import Slot
 
 from PySide.QtGui import QSizePolicy 
 
+from PySide.QtWebKit import QWebPage
+from PySide.QtWebKit import QWebSettings
 from PySide.QtWebKit import QWebView
 
 import gripe
@@ -44,7 +48,11 @@ class IntervalJsBridge(QObject):
             q.add_sort("timestamp")
             self._intervals = [i for i in q]
             self._wps = self.interval.waypoints()
-        
+            
+    @Slot(result = str)
+    def getConfig(self):
+        return gripe.Config.as_json()
+
     @Slot(result = 'QVariantList')
     def getBoundingBox(self):
         box = self.interval.geodata.bounding_box
@@ -71,7 +79,7 @@ class IntervalJsBridge(QObject):
                 assert intervalnum <= len(self._intervals)
                 i = self._intervals[intervalnum - 1]
         ret = []
-        for wp in i.waypoints(self._wps):
+        for wp in (wp for wp in i.waypoints(self._wps) if wp.location):
             ret.extend(wp.location.tuple())
         return ret
     
@@ -89,12 +97,19 @@ class IntervalJsBridge(QObject):
         logger.info("JS-Bridge: %s", msg)
 
 
+class ConsoleLoggerWebPage(QWebPage):
+    def javaScriptConsoleMessage(self, message, lineNumber, sourceID):
+        logger.debug("JS-Console (%s/%d): %s", sourceID, lineNumber, message)
+
+
 class IntervalMap(QWebView):
     def __init__(self, parent, interval):
         super(IntervalMap, self).__init__(parent)
         assert interval.geodata, "IntervalMap only works with an interval with geodata"
         self.interval = interval
         self.setContentsMargins(0, 0, 0, 0)
+        self.setPage(ConsoleLoggerWebPage())
+        QWebSettings.globalSettings().setAttribute(QWebSettings.DeveloperExtrasEnabled, True)
         self.page().view().setContentsMargins(0, 0, 0, 0)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setAcceptDrops(False)
@@ -108,14 +123,16 @@ class IntervalMap(QWebView):
 
     @Slot()
     def drawMap(self):
-        with open("sweattrails/qt/maps.html") as fd:
-            html = fd.read()
-            templ = string.Template(html)
-            html = templ.substitute(
-                bgcolor = "#343434", 
-                fgcolor = "#FFFFFF", 
-                mapskey = gripe.Config.app["config"].google_api_key)
-            self.page().mainFrame().setHtml(html);
+        #=======================================================================
+        # with open("sweattrails/qt/maps.html") as fd:
+        #     html = fd.read()
+        #     templ = string.Template(html)
+        #     html = templ.substitute(
+        #         bgcolor = "#343434", 
+        #         fgcolor = "#FFFFFF", 
+        #         mapskey = gripe.Config.app["config"].google_api_key)
+        #=======================================================================
+        self.setUrl(QUrl.fromLocalFile(os.path.join(gripe.root_dir(), "sweattrails/qt/maps.html")))
 
     def drawShadedRoute(self):
         pass

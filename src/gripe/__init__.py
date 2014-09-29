@@ -329,6 +329,14 @@ class Config(object):
         return resolve(value, default)
 
     @classmethod
+    def as_dict(cls):
+        return { section: getattr(cls, section) for section in cls._sections }
+
+    @classmethod
+    def as_json(cls):
+        return json.dumps(cls.as_dict())
+
+    @classmethod
     def set(cls, section, config):
         config = gripe.json_util.JSONObject(config) \
             if not isinstance(config, gripe.json_util.JSONObject) \
@@ -340,7 +348,7 @@ class Config(object):
         config.file_write(os.path.join("conf", "%s.json" % section), 4)
         setattr(cls, section, config)
         return config
-
+    
     @classmethod
     def _load(cls):
         for f in os.listdir(os.path.join(root_dir(), "conf")):
