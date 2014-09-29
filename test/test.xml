@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="windows-1252"?>
+
+<!--
+    Document   : test.xml
+    Created on : March 12, 2012, 11:56 AM
+    Author     : jan
+    Description:
+        Purpose of the document follows.
+-->
+
+<root xmlns:ns2="http://www.garmin.com/xmlschemas/UserProfile/v2">
+    <test foo="knarf" quux="42">
+	<frob>Dit is text</frob>
+	<fruuz>
+	    Text
+	    Multiline
+	</fruuz>
+    </test>
+    <ns2:JarJar>
+        <binks/>
+    </ns2:JarJar>
+</root>
