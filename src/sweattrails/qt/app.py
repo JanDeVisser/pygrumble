@@ -16,7 +16,6 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-
 import argparse
 import sys
 
@@ -35,7 +34,11 @@ import grumble.property
 import sweattrails.qt.imports
 import sweattrails.qt.mainwindow
 
-logger = gripe.get_logger("sweattrails.qt.app")
+logger = gripe.get_logger(__name__)
+
+class NotAuthenticatedException(gripe.AuthException):
+    def __str__(self):
+        return "Not authenticated"
 
 class SplashScreen(QSplashScreen):
     def __init__(self):
@@ -65,7 +68,7 @@ class SweatTrailsCore(object):
                 uid = user_settings.user_id if "user_id" in user_settings else None
                 password = user_settings.password if "password" in user_settings else None
                 logger.debug("Auto-login uid %s", uid)
-                if uid is None or not self.authenticate(uid, password, False):
+                if not uid or not self.authenticate(uid, password, False):
                     del self.config.settings["user"]
                     save = True
         if save:
@@ -87,6 +90,10 @@ class SweatTrailsCore(object):
         if not hasattr(self, "_user_manager"):
             self._user_manager = grizzle.UserManager()
         return self._user_manager
+    
+    def has_users(self):
+        mgr = self.user_manager()
+        return mgr.has_users()
 
     def authenticate(self, uid, password, savecreds = False):
         logger.debug("Authenticating uid %s", uid)
@@ -106,8 +113,18 @@ class SweatTrailsCore(object):
                     logger.debug("Authenticated. Setting self.user")
                 self.user_id = uid
                 self.user = user
+                self.refresh.emit()
                 ret = True
         return ret
+    
+    # FIXME When creating a new user from within the app, should not confirm.
+    # probably best to just add a new method for that.
+    def add_user(self, uid, password, display_name, savecreds):
+        um = self.user_manager()
+        with gripe.db.Tx.begin():
+            user = um.add(uid, password = password, display_name = display_name)
+            user.confirm()
+        return self.authenticate(uid, password, savecreds)
 
     def is_authenticated(self):
         return self.user is not None
@@ -145,6 +162,11 @@ class SweatTrailsCore(object):
 class SweatTrailsCmdLine(QCoreApplication, SweatTrailsCore):
     def __init__(self, argv):
         super(SweatTrailsCmdLine, self).__init__(argv)
+        
+    def start(self, user, password, savecredentials):
+        super(SweatTrails, self).start(user, password, savecredentials)
+        if not self.is_authenticated():
+            raise NotAuthenticatedException()
         
     def file_import(self, filenames):            
         t = sweattrails.qt.imports.ImportThread.get_thread()
@@ -191,10 +213,8 @@ class SweatTrails(QApplication, SweatTrailsCore):
         self.splash = SplashScreen()
 
     def start(self, user, password, savecredentials):
-        self.processEvents()
-        self.splash.show()
-        self.processEvents()
         super(SweatTrails, self).start(user, password, savecredentials)
+        self.splash.show()
         self.processEvents()
         with gripe.db.Tx.begin():
             self.mainwindow = sweattrails.qt.mainwindow.STMainWindow()
@@ -264,10 +284,13 @@ appcls = SweatTrailsCmdLine if args.imp or args.download else SweatTrails
 app = appcls(sys.argv)
 app.start(args.user, args.password, args.savecredentials)
 
-if args.imp:
-    app.file_import(args.imp)
-
-if args.download:
-    app.download()
+try:
+    if args.imp:
+        app.file_import(args.imp)
+    
+    if args.download:
+        app.download()
+except Exception as e:
+    print(e)
 
 app.exec_()

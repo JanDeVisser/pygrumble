@@ -169,14 +169,15 @@ class XMLProcessor(xml.sax.handler.ContentHandler):
             p.on_text(context, value)
         context.xmlp_current = savecurrent
 
-    def process(self, xmltext, context=None):
+    def process(self, xml_file_or_stream, context=None):
         ch = self.ContentHandler(self, context)
-        parser = xml.sax.make_parser()
-        parser.setContentHandler(ch)
         while ch.context.xmlp_repeat:
             ch.context.xmlp_repeat = False
-            parser.parse(StringIO.StringIO(xmltext))
+            xml.sax.parse(xml_file_or_stream, ch)
             ch.context.xmlp_cycle += 1
+
+    def process_string(self, xmltext, context=None):
+        return self.process(StringIO.StringIO(xmltext), context)
 
 if __name__ == "__main__":
     import os.path
@@ -220,5 +221,16 @@ if __name__ == "__main__":
     def frob(context, text):
         print(context.indent + "The frob value is --" + text + "--")
 
-    f = open(os.path.join(gripe.root_dir(), "..", "test", "test.xml"))
-    processor.process(f.read())
+    fname = os.path.join(gripe.root_dir(), "..", "test", "test.xml")
+
+    print("===== process(filename)")
+    processor.process(fname)
+
+    print("===== process(stream)")
+    with open(fname) as f:
+        processor.process(f)
+
+    print("===== process_string()")
+    with open(fname) as f:
+        xmltext = f.read()
+        processor.process_string(xmltext)

@@ -425,7 +425,7 @@ class SessionList(grumble.qt.view.TableView):
         user = QCoreApplication.instance().user
         self.query().clear_filters()
         self.query().add_filter("athlete", "=", user)
-
+        
 
 class SessionTab(QSplitter):
     def __init__(self, parent = None):
@@ -433,6 +433,6 @@ class SessionTab(QSplitter):
         self.sessions = SessionList(parent = self)
         self.addWidget(self.sessions)
         self.details = SessionDetails(self)
-        self.sessions.objectSelected.connect(self.details.setSession)
         self.addWidget(self.details)
+        self.sessions.objectSelected.connect(self.details.setSession)
 

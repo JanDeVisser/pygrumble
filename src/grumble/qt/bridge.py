@@ -16,6 +16,8 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
+
+import collections
 import datetime
 import math
 
@@ -424,7 +426,47 @@ class CheckBox(WidgetBridge):
         return self.widget.isChecked()
 
 
-class ComboBox(WidgetBridge):
+class Choices():
+    def _initialize_choices(self):
+        if not hasattr(self, "_choices"):
+            self._choices = collections.OrderedDict()
+            if hasattr(self, "choices") and self.choices:
+                if hasattr(self, "required") and not self.required:
+                    self._choices[None] = ""
+                for c in self.choices:
+                    # self.choices can be a listy thing or a dicty thing
+                    # we try to access it as a dicty thing first, and if
+                    # that bombs we assume it's a listy thing.
+                    try:
+                        self._choices[c] = self.choices[c]
+                    except:
+                        self._choices[c] = c
+                
+    def choicesdict(self):
+        self._initialize_choices()
+        return self._choices
+    
+    def index(self, value):
+        self._initialize_choices();
+        count = 0;
+        for c in self._choices:
+            if c == value:
+                return count
+            count += 1
+        return -1
+
+
+    def at(self, index):
+        self._initialize_choices();
+        count = 0;
+        for c in self._choices:
+            if count == index:
+                return c
+            count += 1
+        return None
+
+
+class ComboBox(WidgetBridge, Choices):
     _qttype = QComboBox
 
     def __init__(self, parent, kind, propname, **kwargs):
@@ -433,28 +475,18 @@ class ComboBox(WidgetBridge):
     def customize(self, widget):
         assert self.choices, "ComboBox: Cannot build widget bridge without choices"
         self.required = "required" in self.config
-        if not self.required:
-            widget.addItem("")
-        widget.addItems(self.choices)
-
+        for (key, text) in self.choicesdict().items():
+            widget.addItem(text, key)
+                
     def apply(self, value):
         self.assigned = value
-        if not self.required:
-            ix = 0 if not value else self.choices.index(value) + 1
-        else:
-            ix = self.choices.index(value)
-        self.widget.setCurrentIndex(ix)
+        self.widget.setCurrentIndex(self.index(value))
 
     def retrieve(self):
-        ix = self.widget.currentIndex()
-        if not self.required:
-            ret = None if ix == 0 else self.choices[ix - 1]
-        else:
-            ret = self.choices[ix]
-        return ret
+        return self.at(self.widget.currentIndex())
 
 
-class RadioButtons(WidgetBridge):
+class RadioButtons(WidgetBridge, Choices):
     _qttype = QGroupBox
 
     def customize(self, widget):
@@ -468,10 +500,12 @@ class RadioButtons(WidgetBridge):
             box = QVBoxLayout()
         else:
             box = QHBoxLayout()
-        for c in self.choices:
-            rb = QRadioButton(c, self.parent)
+        ix = 1
+        for text in self.choicesdict().values():
+            rb = QRadioButton(text, self.parent)
             box.addWidget(rb)
-            self.buttongroup.addButton(rb)
+            self.buttongroup.addButton(rb, ix)
+            ix += 1
         widget.setLayout(box)
         hbox.addWidget(widget)
         hbox.addStretch(1)
@@ -479,11 +513,14 @@ class RadioButtons(WidgetBridge):
 
     def apply(self, value):
         for b in self.buttongroup.buttons():
-            b.setChecked(b.text() == value)
+            b.setChecked(False)
+        b = self.buttongroup.button(self.index(value) + 1)
+        if b:
+            b.setChecked(True)
 
     def retrieve(self):
-        b = self.buttongroup.checkedButton()
-        return b.text()
+        ix = self.buttongroup.checkedId()
+        return self.at(ix - 1) if ix > 0 else None
 
 
 class PropertyFormLayout(QGridLayout):

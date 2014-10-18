@@ -116,15 +116,17 @@ def customize_user_class(cls):
             propdef = UserPartToggle(name, verbose_name = partdef.label,
                 default = partdef.default)
             cls.add_property(name, propdef)
+            
 
 class User(grumble.Model, gripe.auth.AbstractUser):
     _flat = True
     _customizer = staticmethod(customize_user_class)
     email = grumble.TextProperty(is_key = True)
     password = grumble.PasswordProperty()
-    status = grumble.TextProperty(choices = UserStatus, default = 'Unconfirmed')
+    status = grumble.TextProperty(choices = UserStatus, default = 'Unconfirmed', required = True)
     display_name = grumble.TextProperty(is_label = True)
-    has_roles = grumble.ListProperty()
+    has_roles = grumble.ListProperty(verbose_name = "Roles", 
+        choices = { r: role["label"] for r, role in gripe.Config.app["roles"].items() })
 
     def uid(self):
         return self.email
@@ -238,7 +240,10 @@ class UserManager():
             user = User(**attrs)
             user.put()
             logger.debug("UserManager.add(%s) OK", attrs)
-            return user.uid()
+            return user
+        
+    def has_users(self):
+        return User.all(keys_only = True).count() > 0
 
 app = webapp2.WSGIApplication([
         webapp2.Route(

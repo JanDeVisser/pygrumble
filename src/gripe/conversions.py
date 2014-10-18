@@ -1,8 +1,20 @@
-'''
-Created on Aug 12, 2014
-
-@author: jan
-'''
+#
+# Copyright (c) 2012-2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
 import datetime
 import math
@@ -12,9 +24,27 @@ def local_date_to_utc(d):
     """Local date to UTC"""
     return datetime.datetime.utcfromtimestamp(time.mktime(d.timetuple()))
 
+def seconds_to_time(secs):
+    t = int(secs)
+    minutes = int(t // 60);
+    seconds = t % 60;
+    hours = minutes // 60;
+    minutes %= 60;
+    return datetime.time(hours, minutes, seconds)
+
+def time_to_seconds(t):
+    return t.hour * 3600 + t.minute * 60 + t.second if t else 0
+
+def time_after_offset(t, offset):
+    return seconds_to_time(time_to_seconds(t) - offset)
+
 def semicircle_to_degrees(semicircles):
     """Convert a number in semicircles to degrees"""
     return semicircles * (180.0 / 2.0 ** 31)
+
+def degrees_to_semicircles(degrees):
+    """Convert a number in degrees to semicircles"""
+    return degrees * (2.0 ** 31 / 180.0)
 
 def ms_to_kmh(ms):
     """Convert a speed in m/s (meters per second) to km/h (kilometers per hour)"""

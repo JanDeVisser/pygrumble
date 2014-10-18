@@ -53,9 +53,10 @@ class RunFitnessPage(QWidget):
         self.tabs = QTabWidget(self)
         layout.addWidget(self.tabs)
         user = QCoreApplication.instance().user
-        profile = sweattrails.config.ActivityProfile.get_profile(user)
-        for cpdef in profile.get_all_linked_references(sweattrails.config.CriticalPace):
-            self.tabs.addTab(CriticalPaceTab(self, cpdef), cpdef.name)
+        if user:
+            profile = sweattrails.config.ActivityProfile.get_profile(user)
+            for cpdef in profile.get_all_linked_references(sweattrails.config.CriticalPace):
+                self.tabs.addTab(CriticalPaceTab(self, cpdef), cpdef.name)
         self.setMinimumSize(800, 600)
 
 

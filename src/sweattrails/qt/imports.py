@@ -37,6 +37,7 @@ import grumble.property
 import sweattrails.device.antfs
 import sweattrails.device.exceptions
 import sweattrails.device.fitparser
+import sweattrails.device.tcxparser
 
 logger = gripe.get_logger(__name__)
 
@@ -84,7 +85,8 @@ class ImportThread(LoggingThread):
     _singleton = None
     
     _parser_factories_by_ext = {
-        "fit": sweattrails.device.fitparser.FITParser
+        "fit": sweattrails.device.fitparser.FITParser,
+        "tcx": sweattrails.device.tcxparser.TCXParser
     }
     
     _parser_factories = []
@@ -129,18 +131,20 @@ class ImportThread(LoggingThread):
         #
         # FIXME - gripe should read from the session, which qt.app.SweatTrails 
         # should manage
-        userdir = gripe.user_dir(QCoreApplication.instance().user.uid())
-        self.inbox = os.path.join(userdir, "inbox")
-        gripe.mkdir(self.inbox)
-        self.queue =  os.path.join(userdir, "queue")
-        gripe.mkdir(self.queue)
-        self.done =  os.path.join(userdir, "done")
-        gripe.mkdir(self.done)
-        inboxfiles = gripe.listdir(self.inbox)
-        for f in inboxfiles:
-            logger.debug("Inbox: Found file %s", f)
-            gripe.rename(os.path.join(self.inbox, f), os.path.join(self.queue, f))
-            self.addfile(os.path.join(gripe.root_dir(), self.queue, f))
+        user = QCoreApplication.instance().user
+        if user:
+            userdir = gripe.user_dir(user.uid())
+            self.inbox = os.path.join(userdir, "inbox")
+            gripe.mkdir(self.inbox)
+            self.queue =  os.path.join(userdir, "queue")
+            gripe.mkdir(self.queue)
+            self.done =  os.path.join(userdir, "done")
+            gripe.mkdir(self.done)
+            inboxfiles = gripe.listdir(self.inbox)
+            for f in inboxfiles:
+                logger.debug("Inbox: Found file %s", f)
+                gripe.rename(os.path.join(self.inbox, f), os.path.join(self.queue, f))
+                self.addfile(os.path.join(gripe.root_dir(), self.queue, f))
 
     def import_file(self, filename):
         logger.debug("ImportThread: Importing file %s", filename)
@@ -150,6 +154,8 @@ class ImportThread(LoggingThread):
             parser = None
             
             (_, _, ext) = f.rpartition(".")
+            if ext:
+                ext = ext.lower()
             factory = ImportThread._parser_factories_by_ext.get(ext)
             if factory:
                 if hasattr(factory, "create_parser"):
@@ -160,6 +166,8 @@ class ImportThread(LoggingThread):
                 for factory in ImportThread._parser_factories:
                     if hasattr(factory, "create_parser"):
                         parser = factory.create_parser(filename)
+                    else:
+                        parser = factory(filename)
                     if parser:
                         break
                 if not parser:

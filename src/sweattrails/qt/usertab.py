@@ -1,102 +1,74 @@
-'''
-Created on Jul 27, 2014
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
-@author: jan
-'''
 
-from PySide.QtGui import QCheckBox
-from PySide.QtGui import QComboBox
-from PySide.QtGui import QFormLayout
-from PySide.QtGui import QGroupBox
-from PySide.QtGui import QHBoxLayout
-from PySide.QtGui import QLabel
-from PySide.QtGui import QLineEdit
+from PySide.QtCore import QCoreApplication
+
 from PySide.QtGui import QPushButton
+from PySide.QtGui import QSplitter
 from PySide.QtGui import QVBoxLayout
 from PySide.QtGui import QWidget
 
 import gripe
-import gripe.db
 import grizzle
-import grumble.qt
+import grumble.qt.bridge
+import grumble.qt.view
 
-class UserList(grumble.qt.GrumbleTableView):
+logger = gripe.get_logger(__name__)
+
+class UserList(grumble.qt.view.TableView):
     def __init__(self, parent = None):
         super(UserList, self).__init__(parent = parent)
         query = grizzle.User.query(keys_only = False)
         query.add_sort("email")
         self.setQueryAndColumns(query, "email", "display_name", "status")
-        self.setMinimumSize(400, 600)
+        #self.setMinimumSize(400, 600)
+        QCoreApplication.instance().refresh.connect(self.refresh)
         
 
-class UserDetails(QWidget):
+class UserDetails(grumble.qt.bridge.FormWidget):
     def __init__(self, user, parent = None):
         super(UserDetails, self).__init__(parent)
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-        form1 = QFormLayout()
-        layout.addLayout(form1)
-        self.email = QLineEdit(self)
-        self.email.setReadOnly(True)
-        form1.addRow("User email:", self.email)
-        self.display_name = QLineEdit(self)
-        self.display_name.setReadOnly(True)
-        form1.addRow("Display Name:", self.display_name)
-        hbox = QHBoxLayout()
-        self.status = QComboBox(self)
-        for s in grizzle.UserStatus:
-            self.status.addItem(s)
-        self.status.hide()
-        self.statuslabel = QLabel()
-        hbox.addWidget(self.status)
-        hbox.addWidget(self.statuslabel)
-        form1.addRow("Status:", hbox)
-        rolebox = QGroupBox("Roles", self)
-        rb_layout = QVBoxLayout()
-        self.roles = {}
-        for (role, definition) in gripe.Config.app.roles.items():
-            cb = QCheckBox(definition.label, self)
-            #cb.setCheckable(False)
-            self.roles[role] = (definition, cb)
-            rb_layout.addWidget(cb)
-        rolebox.setLayout(rb_layout)
-        form1.addRow(rolebox)
-        self.setUser(user)
+        self.addProperty(grizzle.User, "email", 0, 0, readonly = True)
+        self.addProperty(grizzle.User, "display_name", 1, 0)
+        self.addProperty(grizzle.User, "status", 2, 0)
+        self.addProperty(grizzle.User, "has_roles", 3 , 0)
+        self.statusMessage.connect(QCoreApplication.instance().status_message)
 
     def setUser(self, user):
-        with gripe.db.Tx.begin():
-            self.user = user
-            self.email.setText(user.email)
-            self.display_name.setText(user.display_name)
-            self.status.setEditText(user.status)
-            self.statuslabel.setText(user.status)
-            for (role, (_, cb)) in self.roles.items():
-                cb.setChecked(role in user.has_roles)
+        self.setInstance(user)
 
 
-class UserTab(QWidget):
+class UserTab(QSplitter):
     def __init__(self, parent = None):
         super(UserTab, self).__init__(parent)
+        self.leftPanel = QWidget(self)
         self.users = UserList(self)
-        self.users.doubleClicked.connect(self.userSelected)
-        layout = QHBoxLayout()
-        vbox = QVBoxLayout()
-        layout.addLayout(vbox)
+        vbox = QVBoxLayout(self.leftPanel)
         vbox.addWidget(self.users)
         self.addButton = QPushButton("New...", self)
         self.addButton.clicked.connect(self.newUser)
         vbox.addWidget(self.addButton)
-        user = self.users.query().get()
-        self.details = UserDetails(user, self)
-        layout.addWidget(self.details)
-        self.setLayout(layout)
+        self.addWidget(self.leftPanel)
+        self.details = UserDetails(self)
+        self.addWidget(self.details)
+        self.users.objectSelected.connect(self.details.setUser)
 
-    def userSelected(self, index):
-        self.details.setUser(self.users.getSelectedObject())
-
-    def refresh(self):
-        self.users.refresh()
-        
     def newUser(self):
         pass
 

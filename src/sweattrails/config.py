@@ -511,7 +511,7 @@ class ActivityProfile(grizzle.UserPart):
 
     def get_default_SessionType(self, sport):
         q = SessionTypeNode.query(ancestor = self)
-        q.add_filter("defaultfor", " = ", sport)
+        q.add_filter("defaultfor", " = ", sport.lower())
         node = q.get()
         ret = node.sessionType if node else None
         return ret

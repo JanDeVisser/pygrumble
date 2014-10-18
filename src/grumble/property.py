@@ -31,18 +31,24 @@ class RequiredValidator(Validator):
         if value is None:
             raise grumble.errors.PropertyRequired(self.prop.name)
 
+
 class ChoicesValidator(Validator, set):
     def __init__(self, choices = None):
         if choices:
-            if isinstance(choices, (list, set, tuple)):
+            if isinstance(choices, (list, set, tuple, dict)):
                 for c in choices:
                     self.add(c)
             else:
                 self.add(choices)
 
     def __call__(self, instance, value):
-        if (value is not None) and (value not in self):
-            raise grumble.errors.InvalidChoice(self.prop.name, value)
+        if isinstance(value, (list, tuple)):
+            for v in value:
+                self(instance, v)
+        else:
+            if (value is not None) and (value not in self):
+                raise grumble.errors.InvalidChoice(self.prop.name, value)
+
 
 class RegExpValidator(Validator):
     def __init__(self, pat = None):

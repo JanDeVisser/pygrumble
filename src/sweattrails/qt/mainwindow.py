@@ -18,6 +18,7 @@
 
 
 from PySide.QtCore import QCoreApplication
+from PySide.QtCore import Qt
 
 from PySide.QtGui import QAction
 from PySide.QtGui import QApplication
@@ -34,16 +35,19 @@ from PySide.QtGui import QMessageBox
 from PySide.QtGui import QPixmap
 from PySide.QtGui import QProgressBar
 from PySide.QtGui import QTabWidget
+from PySide.QtGui import QValidator
 from PySide.QtGui import QVBoxLayout
 from PySide.QtGui import QWidget
 
-
+import gripe
 # import grizzle
 import sweattrails.qt.fitnesstab
 import sweattrails.qt.profiletab
 import sweattrails.qt.sessiontab
 import sweattrails.qt.imports
-# import sweattrails.qt.usertab
+import sweattrails.qt.usertab
+
+logger = gripe.get_logger(__name__)
 
 class SelectUser(QDialog):
     def __init__(self, window = None):
@@ -53,7 +57,7 @@ class SelectUser(QDialog):
         fm = self.email.fontMetrics()
         self.email.setMaximumWidth(30 * fm.maxWidth() + 11)
         layout.addRow("&User ID:", self.email)
-        self.pwd = QLineEdit()
+        self.pwd = QLineEdit(self)
         self.pwd.setEchoMode(QLineEdit.Password)
         fm = self.pwd.fontMetrics()
         self.pwd.setMaximumWidth(30 * fm.width('*') + 11)
@@ -61,7 +65,8 @@ class SelectUser(QDialog):
         self.savecreds = QCheckBox("&Save Credentials (unsafe)")
         layout.addRow(self.savecreds)
         self.buttonbox = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, 
+            Qt.Horizontal, self)
         self.buttonbox.accepted.connect(self.authenticate)
         self.buttonbox.rejected.connect(self.reject)
         layout.addRow(self.buttonbox)
@@ -73,13 +78,88 @@ class SelectUser(QDialog):
 
     def authenticate(self):
         password = self.pwd.text()
-        uid = self.combo.itemData(self.combo.currentIndex()).name
+        uid = self.email.text()
         savecreds = self.savecreds.isChecked()
         if QCoreApplication.instance().authenticate(uid, password, savecreds):
             self.accept()
         else:
             QMessageBox.critical(self, "Wrong Password",
                 "The user ID and password entered do not match.")
+
+
+class RepeatPasswordValidator(QValidator):
+    def __init__(self, pwdControl):
+        super(RepeatPasswordValidator, self).__init__()
+        self.pwdControl = pwdControl
+        
+    def validate(self, input, pos):
+        pwd = self.pwdControl.text()
+        if len(input) > len(pwd):
+            return QValidator.Invalid
+        elif input == pwd:
+            return QValidator.Acceptable
+        elif pwd.startswith(input):
+            return QValidator.Intermediate
+        else:
+            return QValidator.Invalid
+
+
+class CreateUser(QDialog):
+    def __init__(self, window = None):
+        super(CreateUser, self).__init__(window)
+        layout = QFormLayout(self)
+        
+        self.email = QLineEdit(self)
+        fm = self.email.fontMetrics()
+        self.email.setMaximumWidth(30 * fm.maxWidth() + 11)
+        layout.addRow("&User ID:", self.email)
+        
+        self.pwd = QLineEdit(self)
+        self.pwd.setEchoMode(QLineEdit.Password)
+        fm = self.pwd.fontMetrics()
+        self.pwd.setMaximumWidth(30 * fm.width('*') + 11)
+        layout.addRow("&Password:", self.pwd)
+        
+        self.pwd_again = QLineEdit(self)
+        self.pwd_again.setEchoMode(QLineEdit.Password)
+        fm = self.pwd_again.fontMetrics()
+        self.pwd_again.setMaximumWidth(30 * fm.width('*') + 11)
+        validator = RepeatPasswordValidator(self.pwd)
+        self.pwd_again.setValidator(validator)
+        layout.addRow("Password (&again):", self.pwd_again)
+        
+        self.display_name = QLineEdit(self)
+        fm = self.display_name.fontMetrics()
+        self.display_name.setMaximumWidth(50 * fm.maxWidth() + 11)
+        layout.addRow("&Name", self.display_name)
+        
+        self.savecreds = QCheckBox("&Save Credentials (unsafe)")
+        layout.addRow(self.savecreds)
+        
+        self.buttonbox = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self)
+        self.buttonbox.accepted.connect(self.create)
+        self.buttonbox.rejected.connect(self.reject)
+        layout.addRow(self.buttonbox)
+        self.setLayout(layout)
+
+    def create(self):
+        password = self.pwd.text()
+        if password != self.pwd_again.text():
+            QMessageBox.critical(self, "Passwords don't match",
+                "The passwords entered are different")
+            self.reject()
+        try:
+            QCoreApplication.instance().add_user(self.email.text(), 
+                                                 password,
+                                                 self.display_name.text(), 
+                                                 self.savecreds.isChecked()) 
+            self.accept()
+        except Exception as e:
+            logger.exception("Exception creating user")
+            QMessageBox.critical(self, "Error", str(e))
+            self.reject()
+
 
 class STMainWindow(QMainWindow):
     def __init__(self):
@@ -96,9 +176,9 @@ class STMainWindow(QMainWindow):
                          "Fitness")
         self.tabs.addTab(sweattrails.qt.profiletab.ProfileTab(self),
                          "Profile")
-        # if QCoreApplication.instance().user.is_admin():
-        #    self.usertab = sweattrails.qt.usertab.UserTab()
-        #    self.tabs.addTab(self.usertab, "Users")
+        self.usertab = sweattrails.qt.usertab.UserTab()
+        self.tabs.addTab(self.usertab, "Users")
+        self.usertab.hide()
         layout.addWidget(self.tabs)
         w = QWidget(self)
         w.setLayout(layout)
@@ -115,6 +195,7 @@ class STMainWindow(QMainWindow):
         self.setWindowIconText("SweatTrails")
         icon = QPixmap("image/sweatdrops.png")
         self.setWindowIcon(QIcon(icon))
+        QCoreApplication.instance().refresh.connect(self.userSet)
         
         
     def createActions(self):
@@ -164,11 +245,21 @@ class STMainWindow(QMainWindow):
         pass
 
     def select_user(self):
-        dialog = SelectUser(self)
-        dialog.select()
-        ret = QCoreApplication.instance().is_authenticated()
-        if ret:
-            self.refresh()
+        ret = False
+        if QCoreApplication.instance().user:
+            return True
+        elif QCoreApplication.instance().has_users():
+            dialog = SelectUser(self)
+            dialog.select()
+            ret = QCoreApplication.instance().is_authenticated()
+            if ret:
+                self.refresh()
+        else:
+            dialog = CreateUser(self)
+            dialog.exec_()
+            ret = QCoreApplication.instance().is_authenticated()
+            if ret:
+                self.refresh()
         return ret
 
     #
@@ -197,6 +288,10 @@ class STMainWindow(QMainWindow):
     #
     # END FILE IMPORT
     #
+    
+    # =====================================================================
+    # S I G N A L  H A N D L E R S
+    # =====================================================================
 
     def refresh(self):
         QCoreApplication.instance().refresh.emit()
@@ -206,6 +301,11 @@ class STMainWindow(QMainWindow):
         w = self.tabs.currentWidget()
         if hasattr(w, "setValues"):
             w.setValues()
+            
+    def userSet(self):
+        user = QCoreApplication.instance().user
+        if user.is_admin():
+            self.usertab.show()
 
     def status_message(self, msg, *args):
         self.statusmessage.setText(msg.format(*args))
