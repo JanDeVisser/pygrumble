@@ -50,6 +50,7 @@ from PySide.QtGui import QWidget
 import gripe
 import gripe.db
 import grumble.property
+from PyQt4.QtGui import QSpacerItem
 
 logger = gripe.get_logger(__name__)
 
@@ -607,12 +608,23 @@ class FormPage(QWidget):
         self.form = PropertyFormLayout()
         self.vbox.addLayout(self.form)
         self.vbox.addStretch(1)
+        self._has_stretch = True
         layout.addWidget(formframe)
-
+        
+    def _removeStretch(self):
+        if self._has_stretch:
+            self.vbox.removeItem(self.vbox.itemAt(self.vbox.count() - 1))
+            self._has_stretch = False;
+        
     def addProperty(self, kind, path, row, col, *args, **kwargs):
         self.form.addProperty(self, kind, path, row, col, *args, **kwargs)
 
+    def addWidget(self, widget, *args):
+        self._removeStretch()
+        self.form.addWidget(widget, *args)
+
     def addLayout(self, sublayout, *args):
+        self._removeStretch()
         self.form.addLayout(sublayout, *args)
 
     def status_message(self, msg, *args):
@@ -644,7 +656,10 @@ class FormWidget(FormPage):
         if self.tabs is None:
             self.tabs = QTabWidget(self)
             self.tabs.currentChanged[int].connect(self.tabChanged)
-            self.vbox.insertWidget(self.vbox.count() - 1, self.tabs, 1)
+            
+            # Remove stretch at the bottom:
+            self._removeStretch()
+            self.vbox.addWidget(self.tabs, 1)
         if isinstance(widget, FormPage):
             self.form.addSubLayout(widget.form)
         self.tabs.addTab(widget, title)
@@ -659,9 +674,9 @@ class FormWidget(FormPage):
     def save(self):
         try:
             self.form.retrieve(self.instance())
-            self.statusMessage("Saved")
+            self.statusMessage.emit("Saved")
         except:
-            self.statusMessage("Save failed...")
+            self.statusMessage.emit("Save failed...")
             raise
         self.setInstance()
 

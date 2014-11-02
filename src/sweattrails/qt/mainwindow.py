@@ -176,7 +176,7 @@ class STMainWindow(QMainWindow):
                          "Fitness")
         self.tabs.addTab(sweattrails.qt.profiletab.ProfileTab(self),
                          "Profile")
-        self.usertab = sweattrails.qt.usertab.UserTab()
+        self.usertab = sweattrails.qt.usertab.UserTab(self)
         self.tabs.addTab(self.usertab, "Users")
         self.usertab.hide()
         layout.addWidget(self.tabs)
@@ -200,7 +200,6 @@ class STMainWindow(QMainWindow):
         
     def createActions(self):
         self.switchUserAct = QAction("&Switch User", self, shortcut = "Ctrl+U", statusTip = "Switch User", triggered = self.switch_user)
-        self.createUserAct = QAction("&Create User", self, shortcut = "Ctrl+N", statusTip = "Create User", triggered = self.create_user)
         self.importFileAct = QAction("&Import", self, shortcut = "Ctrl+I", statusTip = "Import Session", triggered = self.file_import)
         self.downloadAct = QAction("&Download", self, shortcut = "Ctrl+D", 
                                    statusTip = "Download activities from device", 
@@ -214,7 +213,6 @@ class STMainWindow(QMainWindow):
     def createMenus(self):
         self.fileMenu = self.menuBar().addMenu(self.tr("&File"))
         self.fileMenu.addAction(self.switchUserAct)
-        self.fileMenu.addAction(self.createUserAct)
         self.fileMenu.addSeparator()
         self.fileMenu.addAction(self.importFileAct)
         self.fileMenu.addAction(self.downloadAct)
@@ -239,9 +237,6 @@ class STMainWindow(QMainWindow):
             self.close()
 
     def switch_user(self):
-        pass
-
-    def create_user(self):
         pass
 
     def select_user(self):
@@ -299,6 +294,8 @@ class STMainWindow(QMainWindow):
 
     def tabChanged(self, tabix):
         w = self.tabs.currentWidget()
+        if hasattr(w, "activate"):
+            w.activate(0)
         if hasattr(w, "setValues"):
             w.setValues()
             

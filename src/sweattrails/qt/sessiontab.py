@@ -87,8 +87,6 @@ class CriticalPowerList(grumble.qt.view.TableView):
                 grumble.qt.model.TableColumn("cpdef.name", header = "Duration"),
                 grumble.qt.model.TableColumn("power", format = "d", header = "Power"),
                 sweattrails.qt.view.TimestampColumn(header = "Starting on"))
-        self.setMinimumHeight(150)
-        self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
 
     def resetQuery(self):
         self.query().set_parent(self.interval.intervalpart)
@@ -116,7 +114,7 @@ class PowerPage(grumble.qt.bridge.FormPage):
         self.addProperty(sweattrails.session.BikePart, "intervalpart.average_cadence", 1, 2, 
                          readonly = True)
         self.cplist = CriticalPowerList(parent, parent.instance())
-        self.form.addWidget(self.cplist, 6, 0, 1, 4)
+        self.addWidget(self.cplist, 6, 0, 1, 4)
         
     def selected(self):
         self.cplist.refresh()
@@ -155,21 +153,17 @@ class CriticalPaceList(grumble.qt.view.TableView):
                 grumble.qt.model.TableColumn("cpdef.name", header = "Distance"),
                 sweattrails.qt.view.PaceSpeedColumn(interval = interval),
                 sweattrails.qt.view.TimestampColumn(header = "Starting on"))
-        self.setMinimumHeight(150)
-        self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
 
     def resetQuery(self):
         self.query().set_parent(self.interval.intervalpart)
 
 
-class PacesPage(grumble.qt.bridge.FormPage):
+class PacesPage(QWidget):
     def __init__(self, parent):
         super(PacesPage, self).__init__(parent)
-        logger.debug("Initializing paces tab")
-        row = 0
-        part = parent.instance().intervalpart
         self.cplist = CriticalPaceList(self, parent.instance())
-        self.form.addWidget(self.cplist, row, 0, 1, 2)
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.cplist)
         
     def selected(self):
         self.cplist.refresh()
@@ -238,7 +232,7 @@ class WaypointAxis(object):
         return iter(self.waypoints)
 
 
-class GraphPage(grumble.qt.bridge.FormPage):
+class GraphPage(QWidget):
     def __init__(self, parent, instance):
         super(GraphPage, self).__init__(parent)
         self.graphs = sweattrails.qt.graphs.GraphWidget(
@@ -252,7 +246,8 @@ class GraphPage(grumble.qt.bridge.FormPage):
             self.graphs.addGraph(ElevationGraph(instance))
         if parent.plugin and hasattr(parent.plugin, "addGraphs"):
             parent.plugin.addGraphs(self.graphs, instance)
-        self.form.addWidget(self.graphs, 0, 0)
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.graphs)
         
 class MapPage(QWidget):
     def __init__(self, parent, instance):
@@ -278,21 +273,17 @@ class IntervalList(grumble.qt.view.TableView):
                 sweattrails.qt.view.DistanceColumn("distance", header = "Distance"),
                 sweattrails.qt.view.PaceSpeedColumn("average_speed", interval = interval),
         )
-        self.setMinimumHeight(150)
-        self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
 
     def resetQuery(self):
         self.query().set_parent(self.interval)
 
 
-class IntervalListPage(grumble.qt.bridge.FormPage):
+class IntervalListPage(QWidget):
     def __init__(self, parent):
         super(IntervalListPage, self).__init__(parent)
-        logger.debug("Initializing interval list tab")
         self.list = IntervalList(self, parent.instance())
-        self.form.addWidget(self.list, 0, 0)
-        self.form.setColumnStretch(0, 1)
-        self.form.setRowStretch(0, 1)
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.list)
         
     def selected(self):
         self.list.refresh()
@@ -418,7 +409,6 @@ class SessionList(grumble.qt.view.TableView):
                 grumble.qt.model.TableColumn("start_time", format = "%A %B %d", header = "Date"),
                 grumble.qt.model.TableColumn("start_time", format = "%H:%M", header = "Time"),
                 DescriptionColumn())
-        #self.setMinimumSize(400, 600)
         QCoreApplication.instance().refresh.connect(self.refresh)
 
     def resetQuery(self):

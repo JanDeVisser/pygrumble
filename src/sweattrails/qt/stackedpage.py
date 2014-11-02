@@ -38,8 +38,15 @@ class StackedPage(QWidget):
         self.buttongroup.addButton(button, self.rightpane.count())
         self.groupbox.layout().addWidget(button)
         self.rightpane.addWidget(widget)
+        
+    def pages(self):
+        return [ self.rightpane.widget(i) for i in range(self.rightpane.count()) ]
 
     def activate(self, ix):
         page = self.rightpane.currentWidget()
         if hasattr(page, "activate") and callable(page.activate):
             page.activate()
+            
+    def showEvent(self, *args, **kwargs):
+        self.activate(0)
+        return QWidget.showEvent(self, *args, **kwargs)

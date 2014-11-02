@@ -80,6 +80,6 @@ class WeightPage(QWidget):
 class FitnessTab(sweattrails.qt.stackedpage.StackedPage):
     def __init__(self, parent = None):
         super(FitnessTab, self).__init__(parent)
-        self.addPage("Run Fitness", RunFitnessPage())
-        self.addPage("Bike Fitness", BikeFitnessPage())
-        self.addPage("Weight", WeightPage())
+        self.addPage("Run Fitness", RunFitnessPage(self))
+        self.addPage("Bike Fitness", BikeFitnessPage(self))
+        self.addPage("Weight", WeightPage(self))

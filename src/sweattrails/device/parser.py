@@ -16,6 +16,8 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
+import traceback
+
 import gripe
 import gripe.conversions
 import grumble.geopt
@@ -99,7 +101,7 @@ class Lap(Record):
     def convert_interval(self, interval):
         self.start_time = self.get_data("start_time")
         interval.interval_id = str(gripe.conversions.local_date_to_utc(self.start_time)) + "Z"
-        ts = self.start_time - self.session.start_time
+        ts = self.start_time - self.activity.start
         interval.timestamp = ts
         interval.distance = self.get_data("total_distance")
         interval.elapsed_time = self.get_data("total_elapsed_time")
@@ -115,7 +117,7 @@ class Trackpoint(Record):
         if d is None or (prev and prev.distance > d):
             return
         wp = sweattrails.session.Waypoint(parent = session)
-        wp.timestamp = self.get_data("timestamp") - self.session.start_time
+        wp.timestamp = self.get_data("timestamp") - self.activity.start
         lat = self.get_data("position_lat")
         lon = self.get_data("position_long")
         if lat and lon:
@@ -143,7 +145,7 @@ class Activity(Lap):
         self.activity = self
 
     def contains(self, obj):
-        return self.start < obj.get_data["timestamp"] <= self.end
+        return self.start < obj.get_data("timestamp") <= self.end
 
     def add_lap(self, lap):
         self.laps.append(lap)
@@ -186,7 +188,7 @@ class Activity(Lap):
                 lap.convert_interval(interval)
             self.progress_end()
 
-        num = len(self.records)
+        num = len(self.trackpoints)
         self.progress_init("Session {}/{}: Converting {} waypoints", self.index, len(self.container.activities), num)
         prev = None
         for ix in range(num):
@@ -206,9 +208,9 @@ class Parser(object):
         self.filename = filename
         self.user = None
         self.logger = None
-        self.sessions = []
+        self.activities = []
         self.laps = []
-        self.records = []
+        self.trackpoints = []
 
     def set_athlete(self, athlete):
         self.user = athlete
@@ -260,17 +262,18 @@ class Parser(object):
             self.status_message("File {} converted", self.filename)
             return None
         except Exception as exception:
+            traceback.print_exc()
             raise sweattrails.device.exceptions.FileImportError(exception)
 
     def _process(self):
         # Collect all laps and records with the sessions they
         # belong with:
         for l in self.laps:
-            s = self.find_session_for_obj(l)
+            s = self.find_activity_for_obj(l)
             if s:
                 s.add_lap(l)
         for r in self.trackpoints:
-            s = self.find_session_for_obj(r)
+            s = self.find_activity_for_obj(r)
             if s:
                 s.add_trackpoint(r)
 

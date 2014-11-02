@@ -218,9 +218,9 @@ class SweatTrails(QApplication, SweatTrailsCore):
         self.processEvents()
         with gripe.db.Tx.begin():
             self.mainwindow = sweattrails.qt.mainwindow.STMainWindow()
-        self.mainwindow.show()
         self.splash.finish(self.mainwindow)
         self.splash = None
+        self.mainwindow.show()
 
     def status_message(self, msg, *args):
         self.mainwindow.status_message(msg, *args)

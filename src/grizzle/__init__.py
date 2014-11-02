@@ -2,7 +2,6 @@ __author__ = "jan"
 __date__ = "$24-Feb-2013 11:13:48 AM$"
 
 import sys
-import webapp2
 
 import gripe
 import gripe.smtp
@@ -35,7 +34,7 @@ class GroupManager():
         g = self.get(gid)
         if g:
             logger.debug("grizzle.UserGroupManager.add(%s) Group exists", gid)
-            raise gripe.auth.GroupExists(userid)
+            raise gripe.auth.GroupExists(gid)
         else:
             attrs["group"] = gid
             if "label" in attrs:
@@ -245,20 +244,23 @@ class UserManager():
     def has_users(self):
         return User.all(keys_only = True).count() > 0
 
-app = webapp2.WSGIApplication([
-        webapp2.Route(
-            r'/users/<key>',
-            handler = "grit.handlers.PageHandler", name = 'manage-user',
-            defaults = {
-                "kind": User
-            }
-        ),
-        webapp2.Route(
-            r'/users',
-            handler = "grit.handlers.PageHandler", name = 'manage-users',
-            defaults = {
-                "kind": User
-            }
-        )  # ,
-        # webapp2.Route(r'/user/<key>/json', handler = JSONUser, name = 'manage-user-json', defaults = { "kind": "user" }),
-    ], debug = True)
+if False:
+    import webapp2
+    
+    app = webapp2.WSGIApplication([
+            webapp2.Route(
+                r'/users/<key>',
+                handler = "grit.handlers.PageHandler", name = 'manage-user',
+                defaults = {
+                    "kind": User
+                }
+            ),
+            webapp2.Route(
+                r'/users',
+                handler = "grit.handlers.PageHandler", name = 'manage-users',
+                defaults = {
+                    "kind": User
+                }
+            )  # ,
+            # webapp2.Route(r'/user/<key>/json', handler = JSONUser, name = 'manage-user-json', defaults = { "kind": "user" }),
+        ], debug = True)

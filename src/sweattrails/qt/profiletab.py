@@ -45,6 +45,9 @@ class SettingsPage(grumble.qt.bridge.FormWidget):
                          "_userprofile.units", 5, 0,
                          style = "radio")
         self.statusMessage.connect(QCoreApplication.instance().status_message)
+        
+    def refresh(self):
+        self.activate()
 
     def activate(self):
         if QCoreApplication.instance().user:
@@ -72,6 +75,12 @@ class HealthPage(QWidget):
 class ProfileTab(sweattrails.qt.stackedpage.StackedPage):
     def __init__(self, parent = None):
         super(ProfileTab, self).__init__(parent)
-        self.addPage("Settings", SettingsPage())
-        self.addPage("Zones and FTP", ZonesPage())
-        self.addPage("Weight and Health", HealthPage())
+        self.addPage("Settings", SettingsPage(self))
+        self.addPage("Zones and FTP", ZonesPage(self))
+        self.addPage("Weight and Health", HealthPage(self))
+        QCoreApplication.instance().refresh.connect(self.refresh)
+        
+    def refresh(self):
+        for p in self.pages():
+            if hasattr(p, "refresh"):
+                p.refresh()

@@ -27,7 +27,7 @@ logger = gripe.get_logger(__name__)
 class FITRecord(object):
     def __init__(self, rec):
         self._fitrec = rec
-        self._data = rec.as_dict(True)
+        self._data = rec.as_dict(False)
     
     def fitrecord(self):
         return self._fitrec
@@ -82,7 +82,7 @@ if __name__ == "__main__":
 
     class Logger(object):
         def status_message(self, msg, *args):
-            print >> sys.stderr, msg.format(args)
+            print >> sys.stderr, msg.format(*args)
             
         def progress_init(self, msg, *args):
             self.curr_progress = 0
