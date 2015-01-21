@@ -46,31 +46,86 @@ class Reducer(object):
         pass
 
 
-class Reducers(list):
-    def reduce(self, iterable):
-        self.total_c = time.clock()
-        def run(reducers, item):
-            for r in reducers:
-                c = time.clock()
-                r.reduce(item)
-                r.clock += time.clock() - c
-            return reducers
-        
-        self.init_c = time.clock()
+class Reducable(list):
+    def __init__(self):
+        super(Reducable, self).__init__()
+        self.clock = 0.0
+    
+    def init_reducable(self):
         for r in self:
             r.init_reducer()
             r.clock = 0.0
-        self.init_c = time.clock() - self.init_c
-        
-        self.reduce_c = time.clock()
-        reduce(run, iterable, self)
-        self.reduce_c = time.clock() - self.reduce_c
-        
-        self.done_c = time.clock()
+    
+    def reduce(self, item):
+        cc = time.clock()
+        for r in self:
+            c = time.clock()
+            r.reduce(item)
+            r.clock += time.clock() - c
+        self.clock += time.clock() - cc
+    
+    def reductions(self):
         for r in self:
             r.reduction()
-        self.done_c = time.clock() - self.done_c
-        self.total_c = time.clock() - self.total_c
+            
+    def report(self):
+        s = """{:40.40s}{:6f}
+{:s}""", self, self.clock, "\n".join(["  {:38.38s}{:6f}".format(r, r.clock) for r in self])
+            
+    def started(self, timepoint):
+        pass
+    
+    def finished(self, timepoint):
+        pass
+
+
+class Reducers(list):
+    def activate(self, item):
+        started = [ r for r in self if r.started(item) ]
+        c = time.clock()
+        for r in started:
+            logger.debug("Starting reducable %s", r)
+            r.init_reducable()
+        self.init_c += time.clock() - c
+        for r in started:
+            self.remove(r)
+        self.started.extend(started)
+        return started
+            
+    def deactivate(self, item):
+        finished = [ r for r in self.started if r.finished(item) ]
+        c = time.clock()
+        for r in finished:
+            logger.debug("Finishing reducable %s", r)
+            r.reductions()
+        self.done_c += time.clock() - c
+        for r in finished:
+            self.started.remove(r)
+        return finished
+            
+    def reduce(self, iterable, callback = None):
+        self.total_c = time.clock()
+        self.init_c = 0
+        self.done_c = 0
+        
+        self.reduce_c = time.clock()
+        self.num = len(iterable)
+        self.ix = 0
+        self.callback = callback
+        self.started = []
+        def run(reducers, item):
+            if reducers.callback and hasattr(reducers.callback, "progress"):
+                reducers.callback.progress(
+                    int((float(reducers.ix) / float(reducers.num)) * 100.0))
+            reducers.ix += 1
+            reducers.deactivate(item)
+            reducers.activate(item)
+            for r in self.started:
+                r.reduce(item)
+            return reducers
+        reduce(run, iterable, self)
+        self.reduce_c = time.clock() - self.reduce_c
+        self.reduce_c -= (self.init_c + self.done_c)
         self.report()
         
     def report(self):
@@ -78,7 +133,7 @@ class Reducers(list):
 =================================================
   R E D U C T I O N  R E P O R T
 -------------------------------------------------
-#Reducers:                              {:d}
+#Reduceables:                           {:d}
 init_reducer() [Total]                  {:.6f}
 {:s}
 reduce() [Total]                        {:.6f}
@@ -87,8 +142,7 @@ reduction() [Total]                     {:.6f}
 Total                                   {:.6f}
 -------------------------------------------------
 """.format(len(self), self.init_c,
-           "\n".join([
-"{:40.40s}{:6f}".format(r, r.clock) for r in self]),
+           "\n".join([ r.report() for r in self]),
            self.reduce_c, self.done_c, self.total_c)
         logger.debug(rep)
 
@@ -150,8 +204,11 @@ class AverageOverTime(SimpleReducer):
         self.lasttime = ts
 
     def finalize(self):
-        diff = (self.lasttime - self.starttime).seconds
-        return int(round(self.cur) / diff) if diff > 0 else 0
+        if self.lasttime and self.starttime:
+            diff = (self.lasttime - self.starttime).seconds
+            return int(round(self.cur) / diff) if diff > 0 else 0
+        else:
+            return 0
 
 
 class Maximize(SimpleReducer):
@@ -752,7 +809,7 @@ class Interval(grumble.Model, Timestamped):
     intervalpart = grumble.reference.ReferenceProperty(IntervalPart)
     geodata = grumble.reference.ReferenceProperty(GeoData)
     elapsed_time = grumble.property.TimeDeltaProperty()  # Duration including pauses
-    duration = grumble.property.TimeDeltaProperty()  # Time excluding pauses
+    duration = grumble.property.TimeDeltaProperty()  # Time excluding pauses    `
     distance = grumble.property.IntegerProperty(default = 0)  # Distance in meters
     average_heartrate = grumble.property.IntegerProperty(default = 0, verbose_name = "Avg. Heartrate")  # bpm
     max_heartrate = grumble.property.IntegerProperty(default = 0, verbose_name = "Max. Heartrate")  # bpm
@@ -760,6 +817,9 @@ class Interval(grumble.Model, Timestamped):
     max_speed = grumble.property.FloatProperty(default = 0, verbose_name = "Max. Speed/Pace")  # m/s
     work = grumble.property.IntegerProperty(default = 0)  # kJ
     calories_burnt = grumble.property.IntegerProperty(default = 0)  # kJ
+    
+    def end_timestamp(self):
+        return self.timestamp + self.elapsed_time
 
     def after_insert(self):
         sessiontype = self.get_sessiontype()
@@ -770,48 +830,6 @@ class Interval(grumble.Model, Timestamped):
                 part.put()
                 self.intervalpart = part
                 self.put()
-
-    def analyze(self, callback = None):
-        reducers = Reducers()
-        part = self.intervalpart
-        logger.debug("Interval.analyze(): Getting subintervals")
-        intervals = Interval.query(parent = self).fetchall()
-        num = len(intervals) + (1 if part else 2)
-        ix = 0
-        if callback and hasattr(callback, "progress"):
-            callback.progress(int((float(ix) / float(num)) * 100.0))
-        logger.debug("Interval.analyze(): Getting reducers")
-        reducers.extend([
-            Maximize("heartrate", self, "max_hr"),
-            AverageOverTime("timestamp", "heartrate", self, "average_hr"),
-            Maximize("speed", self, "max_speed"),
-            GeoReducer(self)
-        ])
-        if part:
-            reducers.extend(part.reducers())
-        logger.debug("Interval.analyze(): Getting waypoints")
-        wps = self.waypoints()
-        logger.debug("Interval.analyze(): Reducing")
-        reducers.reduce(wps)
-        logger.debug("Interval.analyze(): Done reducing")
-        if part:
-            logger.debug("Interval.analyze(): Storing part")
-            part.put()
-            logger.debug("Interval.analyze(): Storing self")
-        self.put()
-
-        if part:
-            ix += 1
-            if callback and hasattr(callback, "progress"):
-                callback.progress(int((float(ix) / float(num)) * 100.0))
-            logger.debug("Interval.analyze(): Analyzing part")
-            part.analyze()
-        for i in intervals:
-            ix += 1
-            logger.debug("Interval.analyze(): Analyzing interval %d/%d", ix - 1, num - 2)
-            if callback and hasattr(callback, "progress"):
-                callback.progress(int((float(ix) / float(num)) * 100.0))
-            i.analyze()
 
     def get_session(self):
         return self.root()
@@ -825,7 +843,7 @@ class Interval(grumble.Model, Timestamped):
     def waypoints(self, allwps = None):
         if not hasattr(self, "_wps"):
             allwps = allwps or self.parent().waypoints()
-            end_ts = (self.timestamp + self.elapsed_time).seconds
+            end_ts = self.end_timestamp().seconds
             first = bisect.bisect_left(allwps, self)
             last = bisect.bisect_right(allwps, end_ts)
             self._wps = allwps[first:last] if first >= 0 and last >= 0 else []
@@ -845,6 +863,34 @@ class Interval(grumble.Model, Timestamped):
         GeoData.query(parent = self).delete()
         IntervalPart.query(parent = self).delete()
         Interval.query(parent = self).delete()
+
+
+class IntervalReducable(Reducable):
+    def __init__(self, interval):
+        super(IntervalReducable, self).__init__()
+        self.interval = interval
+        self.extend([
+            Maximize("heartrate", interval, "max_hr"),
+            AverageOverTime("timestamp", "heartrate", interval, "average_hr"),
+            Maximize("speed", interval, "max_speed"),
+            GeoReducer(interval)
+        ])
+        part = interval.intervalpart
+        if part:
+            self.extend(part.reducers())
+    
+    def __str__(self):
+        return str(self.interval)
+         
+    def started(self, waypoint):
+        ret = waypoint.timestamp >= self.interval.timestamp 
+        if ret:
+            logger.debug("started - %s - %s - %s", self, self.interval.timestamp.seconds, waypoint.timestamp.seconds)
+        return ret
+    
+    def finished(self, waypoint):
+        #logger.debug("finished - %s - %s - %s", self, self.interval.end_timestamp().seconds, waypoint.timestamp.seconds)
+        return waypoint.timestamp >= self.interval.end_timestamp() 
 
 
 class Session(Interval):
@@ -874,6 +920,25 @@ class Session(Interval):
                 q.add_sort("timestamp")
                 self._wps = q.fetchall()
         return self._wps
+
+    def analyze(self, callback = None):
+        reducers = Reducers()
+        logger.debug("Interval.analyze(): Getting subintervals")
+        intervals = Interval.query(ancestor = self).fetchall()
+        
+        intervals.insert(0, self)
+        reducers.extend([ IntervalReducable(i) for i in intervals ])
+        
+        logger.debug("Interval.analyze(): Getting waypoints")
+        wps = self.waypoints()
+        logger.debug("Interval.analyze(): Reducing")
+        reducers.reduce(wps, callback)
+        for i in intervals:
+            part = i.intervalpart
+            if part:
+                part.analyze()
+                part.put()
+            i.put()
 
     def upload_slice(self, request):
         lines = request.get("slice").splitlines()

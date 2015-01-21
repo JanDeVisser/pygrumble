@@ -61,7 +61,10 @@ class SweatTrailsCore(object):
             self.config = gripe.Config.set("qtapp", self.config)
         save = False
         if user and password:
-            self.authenticate(user, password, savecreds)
+            if QCoreApplication.instance().has_users():
+                self.authenticate(user, password, savecreds)
+            else:
+                self.add_user(user, password, user, savecreds)
         else:
             if "user" in self.config.settings:
                 user_settings = self.config.settings.user
@@ -164,7 +167,7 @@ class SweatTrailsCmdLine(QCoreApplication, SweatTrailsCore):
         super(SweatTrailsCmdLine, self).__init__(argv)
         
     def start(self, user, password, savecredentials):
-        super(SweatTrails, self).start(user, password, savecredentials)
+        super(SweatTrailsCmdLine, self).start(user, password, savecredentials)
         if not self.is_authenticated():
             raise NotAuthenticatedException()
         

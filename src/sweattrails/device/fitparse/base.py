@@ -71,7 +71,7 @@ class FitFile(object):
             pass
         except Exception, e:
             self._file.close()
-            raise FitParseError("Unexpected exception while parsing (%s: %s)" % (
+            raise FitParseError(e, "Unexpected exception while parsing (%s: %s)" % (
                 e.__class__.__name__, e,
             ))
 
