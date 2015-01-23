@@ -22,10 +22,12 @@ class FITAnalyzer(object):
                             help="Silently analyze files, only reporting errors")
         parser.add_argument("-d", "--defs_only", action="store_true",
                             help="Only show definition records")
+        parser.add_argument("-f", "--filter", type=int, action="append",
+                            help="Only show records with the given number. Can be specified multiple times.");
         args = parser.parse_args()
         self.quiet = args.quiet
         self.defs_only = args.defs_only
-        print self.defs_only
+        self.filter = args.filter
         self.filenames = [ f for f in args.file if os.path.exists(f) ]
 
     def analyze(self):
@@ -34,12 +36,16 @@ class FITAnalyzer(object):
         return 0
     
     def _print_def_record(self, rec):
+        if self.filter and not rec.num in self.filter:
+            return
         print ("DEF  %d. #%d: %s (%d entries) " % (self.record_number, rec.num, rec.name, len(rec.fields))).ljust(60, '-')
         for field in rec.fields:
             print "%s [%s]" % (field.name, field.type.name)
         print
             
     def _print_data_record(self, rec):
+        if self.filter and not rec.num in self.filter:
+            return
         if not self.defs_only:
             print ("DATA %d. #%d: %s (%d entries) " % (self.record_number, rec.num, rec.type.name, len(rec.fields))).ljust(60, '-')
             for field in rec.fields:
