@@ -81,20 +81,13 @@ class DictConverter(PropertyConverter):
         else:
             return json.loads(str(value))
 
-    def to_sqlvalue(self, value):
-        assert (value is None) or isinstance(value, dict), "DictConverter.to_sqlvalue(): value must be a dict"
-        return json.dumps(value if value else {})
-
-    def from_sqlvalue(self, sqlvalue):
-        return json.loads(sqlvalue) if sqlvalue else {}
-
     def to_jsonvalue(self, value):
         assert value is not None, "DictConverter.to_jsonvalue(): value should not be None"
         assert isinstance(value, dict), "DictConverter.to_jsonvalue(): value must be a dict"
         return dict(value)
 
     def from_jsonvalue(self, value):
-        assert (value is None) or isinstance(value, dict), "DictConverter.to_sqlvalue(): value must be a dict"
+        assert (value is None) or isinstance(value, dict), "DictConverter.from_jsonvalue(): value must be a dict"
         return value or {}
 
 class ListConverter(PropertyConverter):
@@ -104,14 +97,7 @@ class ListConverter(PropertyConverter):
         try:
             return list(value)
         except:
-            return json.loads(str(value)) if value is not None else {}
-
-    def to_sqlvalue(self, value):
-        assert (value is None) or isinstance(value, list), "ListConverter.to_sqlvalue(): value must be a list"
-        return json.dumps(value if value else [])
-
-    def from_sqlvalue(self, sqlvalue):
-        return json.loads(sqlvalue) if sqlvalue else {}
+            return json.loads(str(value)) if value is not None else []
 
     def to_jsonvalue(self, value):
         assert value is not None, "ListConverter.to_jsonvalue(): value should not be None"
@@ -119,7 +105,7 @@ class ListConverter(PropertyConverter):
         return list(value)
 
     def from_jsonvalue(self, value):
-        assert (value is None) or isinstance(value, list), "ListConverter.to_sqlvalue(): value must be a list"
+        assert (value is None) or isinstance(value, list), "ListConverter.from_jsonvalue(): value must be a list"
         return value or []
 
 class BooleanConverter(PropertyConverter):

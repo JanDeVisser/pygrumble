@@ -1,4 +1,4 @@
-#!/usr/local/bin/python2.7
+#!/usr/bin/python
 # encoding: utf-8
 
 import argparse
@@ -12,6 +12,51 @@ import grizzle
 import sweattrails.device.fitparse
 import sweattrails.device.fitparse.records
 
+#
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#
+
+class Length(object):
+    def __init__(self, start_time, time, strokes, stroke):
+        self.start_time = start_time
+        self.time = time
+        self.strokes = strokes
+        self.stroke = stroke
+
+class Interval(object):
+    def __init__(self, distance, start_time, end_time):
+        self.lengths = []
+        self.distance = distance
+        self.start_time = start_time
+        self.end_time = end_time
+
+    def contains(self, length):
+        return self.start_time <= length.start_time < self.end_time
+
+    def add_length(self, length):
+        self.lengths.append(length)
+
+class Swim(object):
+    def __init__(self, pool_size, start_time):
+        self.intervals = []
+        self.start_time = start_time
+        self.pool_size = pool_size
+
+    def add_interval(self, interval):
+        self.intervals.append(interval)
+
+    def add_length(self, length):
+        for i in self.intervals:
+            if i.contains(length):
+                i.add_length(length)
+
+#
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#
 
 class FITAnalyzer(object):
     def __init__(self):
@@ -24,10 +69,13 @@ class FITAnalyzer(object):
                             help="Only show definition records")
         parser.add_argument("-f", "--filter", type=int, action="append",
                             help="Only show records with the given number. Can be specified multiple times.");
+        parser.add_argument("-H", "--headers_only", action="store_true",
+                            help="Only display record headers.");
         args = parser.parse_args()
         self.quiet = args.quiet
         self.defs_only = args.defs_only
         self.filter = args.filter
+        self.headers = args.headers_only
         self.filenames = [ f for f in args.file if os.path.exists(f) ]
 
     def analyze(self):
@@ -38,22 +86,25 @@ class FITAnalyzer(object):
     def _print_def_record(self, rec):
         if self.filter and not rec.num in self.filter:
             return
-        print ("DEF  %d. #%d: %s (%d entries) " % (self.record_number, rec.num, rec.name, len(rec.fields))).ljust(60, '-')
-        for field in rec.fields:
-            print "%s [%s]" % (field.name, field.type.name)
-        print
+        print ("DEF  %3d. #%3d: %s (%d entries) " % (self.record_number, rec.num, rec.name, len(rec.fields))).ljust(60, '-')
+        if not self.headers:
+            for field in rec.fields:
+                print "%s [%s]" % (field.name, field.type.name)
+            print
             
     def _print_data_record(self, rec):
         if self.filter and not rec.num in self.filter:
             return
         if not self.defs_only:
-            print ("DATA %d. #%d: %s (%d entries) " % (self.record_number, rec.num, rec.type.name, len(rec.fields))).ljust(60, '-')
-            for field in rec.fields:
-                to_print = "%s [%s]: %s" % (field.name, field.type.name, field.data)
-                if field.data is not None and field.units:
-                    to_print += " [%s]" % field.units
-                print to_print
-            print
+            print ("DATA %3d. #%3d: %s (%d entries) " % (self.record_number, rec.num, rec.type.name, len(rec.fields))).ljust(60, '-')
+            if not self.headers:
+                for field in rec.fields:
+                    to_print = "%s [%s]: %s %d" % (field.name, field.type.name, field.data, field.raw_data)
+                    if field.data is not None and field.units:
+                        to_print += " [%s]" % field.units
+                    
+                    print to_print
+                print
             
     def _print_record(self, rec):
         self.record_number += 1

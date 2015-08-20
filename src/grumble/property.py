@@ -7,6 +7,7 @@ __date__ = "$17-Sep-2013 1:24:18 PM$"
 
 import datetime
 import hashlib
+import json
 import re
 
 import gripe
@@ -425,14 +426,14 @@ class PasswordProperty(StringProperty):
 
 class JSONProperty(ModelProperty):
     datatype = dict
-    sqltype = "TEXT"
+    sqltype = "JSONB"
 
     def _initial_value(self):
         return {}
 
 class ListProperty(ModelProperty):
     datatype = list
-    sqltype = "TEXT"
+    sqltype = "JSONB"
 
     def _initial_value(self):
         return []
@@ -495,3 +496,40 @@ class TimeProperty(DateTimeProperty):
 class TimeDeltaProperty(ModelProperty):
     datatype = datetime.timedelta
     sqltype = "INTERVAL"
+
+
+if gripe.db.Tx.database_type == "postgresql":
+    import psycopg2.extensions
+    
+    def adapt_json(d):
+        return psycopg2.extensions.AsIs("'%s'" % json.dumps(d))
+    
+    psycopg2.extensions.register_adapter(dict, adapt_json)
+    psycopg2.extensions.register_adapter(list, adapt_json)
+    
+    def cast_jsonb(value, cur):
+        try:
+            return json.loads(value) if value is not None else None
+        except:
+            raise psycopg2.InterfaceError("bad JSON representation: %r" % value)
+    
+    with gripe.db.Tx.begin() as tx:
+        cur = tx.get_cursor()
+        cur.execute("SELECT NULL::jsonb")
+        jsonb_oid = cur.description[0][1]
+    
+    JSONB = psycopg2.extensions.new_type((jsonb_oid,), "JSONB", cast_jsonb)
+    psycopg2.extensions.register_type(JSONB)
+    
+    
+elif gripe.db.Tx.database_type == "sqlite3":
+    import sqlite3
+    
+    def adapt_json(d):
+        return json.dumps(d)
+    
+    def convert_json(value):
+        return json.loads(value) if value is not None else None
+    
+    sqlite3.register_adapter(dict, adapt_json)
+    sqlite3.register_converter("JSONB", convert_json)
