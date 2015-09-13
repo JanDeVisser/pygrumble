@@ -179,6 +179,7 @@ class Activity(Lap):
         self.convert_interval(session)
 
         num = len(self.laps)
+        intervals = []
         if num > 1:
             self.progress_init("Session {}/{}: Converting {} intervals", self.index, len(self.container.activities), num)
             for ix in range(num):
@@ -186,15 +187,24 @@ class Activity(Lap):
                 self.progress(int((float(ix) / float(num)) * 100.0))
                 interval = sweattrails.session.Interval(parent = session)
                 lap.convert_interval(interval)
+                intervals.append[interval]
+            intervals.sort(key = lambda interval: interval.start_time)
             self.progress_end()
 
         num = len(self.trackpoints)
         self.progress_init("Session {}/{}: Converting {} waypoints", self.index, len(self.container.activities), num)
         prev = None
+        interval_ix = 0
+        interval = intervals[interval_ix] if interval_ix < len(intervals) else None
         for ix in range(num):
             trackpoint= self.trackpoints[ix]
             self.progress(int((float(ix) / float(num)) * 100.0))
             prev = trackpoint.convert(session, prev) or prev
+            if interval and prev and prev.timestamp >= interval.timestamp:
+                interval.offset = prev.distance
+                interval.put()
+                interval_ix += 1
+                interval = intervals[interval_ix] if interval_ix < len(intervals) else None
         self.progress_end()
 
         self.progress_init("Analyzing session {}/{}", self.index, len(self.container.activities))

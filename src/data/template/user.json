@@ -2,7 +2,7 @@
     "_author": "Jan de Visser",
     "_version": "1.0",
     "_description": "...",
-    "__data": [
+    "data": [
         {
             "model": "user",
             "data": [

@@ -47,9 +47,11 @@ class Reducer(object):
 
 
 class Reducable(list):
-    def __init__(self):
+    def __init__(self, elements = None):
         super(Reducable, self).__init__()
         self.clock = 0.0
+        if elements:
+            self.extend(elements)
     
     def init_reducable(self):
         for r in self:
@@ -92,8 +94,8 @@ class Reducers(list):
         self.started.extend(started)
         return started
             
-    def deactivate(self, item):
-        finished = [ r for r in self.started if r.finished(item) ]
+    def deactivate(self, item, force = False):
+        finished = [ r for r in self.started if (item and r.finished(item)) or force ]
         c = time.clock()
         for r in finished:
             logger.debug("Finishing reducable %s", r)
@@ -124,6 +126,7 @@ class Reducers(list):
                 r.reduce(item)
             return reducers
         reduce(run, iterable, self)
+        self.deactivate(None, True)
         self.reduce_c = time.clock() - self.reduce_c
         self.reduce_c -= (self.init_c + self.done_c)
         self.report()
@@ -501,7 +504,7 @@ class NormalizedPowerReducer(Reducer):
         else:
             self.bikepart.normalized_power = 0
 
-    
+
 class BikePart(IntervalPart):
     average_power = grumble.IntegerProperty(verbose_name = "Average Power", default = 0, suffix = "W")  # W
     average_watts_per_kg = WattsPerKgProperty(powerproperty = "average_power", suffix = "W/kg")
@@ -572,14 +575,14 @@ class RunPaceWindow(RollingWindow):
     def __init__(self, distance, min_precision = 10):
         super(RunPaceWindow, self).__init__(min_precision)
         self.distance = distance
-    
+
     def max_span(self):
         return self.distance
-    
-    def _result(self):
-        return self[-1].seconds - self[0].seconds 
 
-    
+    def _result(self):
+        return self[-1].seconds - self[0].seconds
+
+
 class RunPaceWindowEntry(object):
     def __init__(self, waypoint):
         self.seconds = waypoint.timestamp.seconds
@@ -621,7 +624,7 @@ class RunPaceReducer(Reducer):
         if self.starttime is not None:
             self.runpace.duration = self.duration
             self.runpace.timestamp = self.starttime - self.runpace.parent().get_interval().timestamp
-            self.runpace.atdistance = self.atdistance # FIXME - Offset w/ start of interval
+            self.runpace.atdistance = self.atdistance - self.runpace.parent().get_interval().offset
             self.runpace.put()
 
 
@@ -806,10 +809,12 @@ class GeoReducer(Reducer):
 class Interval(grumble.Model, Timestamped):
     interval_id = grumble.property.StringProperty(is_key = True)
     timestamp = grumble.property.TimeDeltaProperty(verbose_name = "Start at")
+    offset = grumble.property.IntegerProperty(default = 0)  # Offset in the session in meters
     intervalpart = grumble.reference.ReferenceProperty(IntervalPart)
+    description = grumble.property.StringProperty()
     geodata = grumble.reference.ReferenceProperty(GeoData)
     elapsed_time = grumble.property.TimeDeltaProperty()  # Duration including pauses
-    duration = grumble.property.TimeDeltaProperty()  # Time excluding pauses    `
+    duration = grumble.property.TimeDeltaProperty()  # Time excluding pauses
     distance = grumble.property.IntegerProperty(default = 0)  # Distance in meters
     average_heartrate = grumble.property.IntegerProperty(default = 0, verbose_name = "Avg. Heartrate")  # bpm
     max_heartrate = grumble.property.IntegerProperty(default = 0, verbose_name = "Max. Heartrate")  # bpm
@@ -889,13 +894,14 @@ class IntervalReducable(Reducable):
         return ret
     
     def finished(self, waypoint):
-        #logger.debug("finished - %s - %s - %s", self, self.interval.end_timestamp().seconds, waypoint.timestamp.seconds)
-        return waypoint.timestamp >= self.interval.end_timestamp() 
+        ret = waypoint.timestamp >= self.interval.end_timestamp()
+        if ret:
+            logger.debug("finished - %s - %s - %s", self, self.interval.end_timestamp().seconds, waypoint.timestamp.seconds)
+        return ret
 
 
 class Session(Interval):
     athlete = grumble.reference.ReferenceProperty(grizzle.User)
-    description = grumble.property.StringProperty()
     sessiontype = SessionTypeReference()
     start_time = grumble.property.DateTimeProperty(verbose_name = "Date/Time")
     notes = grumble.property.StringProperty(multiline = True)
@@ -903,6 +909,9 @@ class Session(Interval):
     inprogress = grumble.property.BooleanProperty(default = True)
     device = grumble.property.StringProperty(default = "")
     
+    def get_session(self):
+        return self
+
     def after_insert(self):
         super(Session, self).after_insert()
         athlete = self.athlete
@@ -922,12 +931,11 @@ class Session(Interval):
         return self._wps
 
     def analyze(self, callback = None):
-        reducers = Reducers()
         logger.debug("Interval.analyze(): Getting subintervals")
-        intervals = Interval.query(ancestor = self).fetchall()
-        
-        intervals.insert(0, self)
-        reducers.extend([ IntervalReducable(i) for i in intervals ])
+        intervals = [ self ]
+        intervals.extend(Interval.query(ancestor = self).fetchall())
+
+        reducers = Reducers([ IntervalReducable(i) for i in intervals ])
         
         logger.debug("Interval.analyze(): Getting waypoints")
         wps = self.waypoints()

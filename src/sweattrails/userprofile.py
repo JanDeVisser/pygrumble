@@ -87,7 +87,7 @@ class RunProfile(grizzle.UserPart):
 
 class WeightMgmt(grizzle.UserPart):
     def get_weight(self, on_date = None):
-        weight = 0
+        weight = None
         q = WeightHistory.query(parent = self).add_sort("snapshotdate")
         if on_date:
             q.add_filter("snapshotdate <= ", on_date)

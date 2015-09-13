@@ -15,21 +15,35 @@ import sweattrails.config
 
 logger = gripe.get_logger(__name__)
 
-
-class TimestampColumn(grumble.qt.model.TableColumn):
-    def __init__(self, property = "timestamp", **kwargs):
-        super(TimestampColumn, self).__init__(property, **kwargs)
-
-    def __call__(self, instance):
-        value = getattr(instance, self.name)
-        h = int(math.floor(value.seconds / 3600))
-        r = value.seconds - (h * 3600)
+class TimebasedColumn(object):
+    
+    @classmethod
+    def _seconds_to_string(cls, seconds):
+        h = int(math.floor(seconds / 3600))
+        r = seconds - (h * 3600)
         m = int(math.floor(r / 60))
         s = r % 60
         if h > 0:
             return "%dh %02d'%02d\"" % (h, m, s)
         else:
             return "%d'%02d\"" % (m, s)
+
+
+class TimestampColumn(TimebasedColumn, grumble.qt.model.TableColumn):
+    def __init__(self, property = "timestamp", **kwargs):
+        super(TimestampColumn, self).__init__(property, **kwargs)
+
+    def __call__(self, instance):
+        value = getattr(instance, self.name)
+        return self._seconds_to_string(value.seconds)
+
+
+class SecondsColumn(TimebasedColumn, grumble.qt.model.TableColumn):
+    def __init__(self, property, **kwargs):
+        super(SecondsColumn, self).__init__(property, **kwargs)
+
+    def __call__(self, instance):
+        return self._seconds_to_string(getattr(instance, self.name))
 
 
 class PaceSpeedColumn(grumble.qt.model.TableColumn):

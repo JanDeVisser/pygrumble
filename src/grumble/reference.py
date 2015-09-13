@@ -9,6 +9,8 @@ import gripe
 import grumble.converter
 import grumble.model
 
+logger = gripe.get_logger(__name__)
+
 class ReferenceConverter(grumble.converter.PropertyConverter):
     def __init__(self, property):
         super(ReferenceConverter, self).__init__(None, property)
@@ -25,10 +27,7 @@ class ReferenceConverter(grumble.converter.PropertyConverter):
             return str(k)
 
     def from_sqlvalue(self, sqlvalue):
-        if sqlvalue:
-            return grumble.model.Model.get(grumble.key.Key(sqlvalue))
-        else:
-            return None
+        return grumble.model.Model.get(grumble.key.Key(sqlvalue)) if sqlvalue else None
 
 class QueryProperty(object):
     def __init__(self, name, foreign_kind, foreign_key, private = True, serialize = False, verbose_name = None):

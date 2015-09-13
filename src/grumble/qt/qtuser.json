@@ -5,18 +5,18 @@
     "data": [
         {
             "model": "qtuser",
-            "data": [s
+            "data": [
                 {
                     "email": "jan@de-visser.net",
-                    "display_name": "Jan de Visser",
+                    "display_name": "Jan de Visser"
                 },
                 {
                     "email": "mod@de-visser.net",
-                    "display_name": "A. Moderator",
+                    "display_name": "A. Moderator"
                 },
                 {
                     "email": "user@de-visser.net",
-                    "display_name": "Some User",
+                    "display_name": "Some User"
                 }
             ]
         }

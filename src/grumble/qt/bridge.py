@@ -38,6 +38,7 @@ from PySide.QtGui import QHBoxLayout
 from PySide.QtGui import QIntValidator
 from PySide.QtGui import QLabel
 from PySide.QtGui import QLineEdit
+from PySide.QtGui import QMessageBox
 from PySide.QtGui import QPixmap
 from PySide.QtGui import QPushButton
 from PySide.QtGui import QRadioButton
@@ -49,8 +50,8 @@ from PySide.QtGui import QWidget
 
 import gripe
 import gripe.db
+import grumble.model
 import grumble.property
-from PyQt4.QtGui import QSpacerItem
 
 logger = gripe.get_logger(__name__)
 
@@ -630,24 +631,43 @@ class FormPage(QWidget):
     def status_message(self, msg, *args):
         self.statusMessage.emit(msg.format(*args))
 
+class FormButtons(object):
+    NoButtons = 0
+    SaveButton = 1
+    ResetButton = 2
+    EditButtons = 3
+    DeleteButton = 4
+    AllButtons = 7
 
 class FormWidget(FormPage):
     instanceAssigned = Signal(str)
+    instanceDeleted = Signal(str)
+    instanceSaved = Signal(str)
+    exception = Signal(str)
 
-    def __init__(self, parent = None):
+    def __init__(self, parent = None, buttons = FormButtons.EditButtons):
         super(FormWidget, self).__init__(parent)
-        buttons = QGroupBox()
-        self.buttonbox = QHBoxLayout(buttons)
-        self.buttonbox.addStretch(1)
-        self.resetbutton = QPushButton("Reset", self)
-        self.resetbutton.clicked.connect(self.setInstance)
-        self.buttonbox.addWidget(self.resetbutton)
-        self.savebutton = QPushButton("Save", self)
-        self.savebutton.clicked.connect(self.save)
-        self.buttonbox.addWidget(self.savebutton)
-        self.layout().addWidget(buttons)
+        self.buildButtonBox(buttons)
         self.tabs = None
         self._tabs = {}
+        
+    def buildButtonBox(self, buttons):
+        buttonWidget = QGroupBox()
+        self.buttonbox = QHBoxLayout(buttonWidget)
+        if buttons & FormButtons.DeleteButton:
+            self.deletebutton = QPushButton("Delete", self)
+            self.deletebutton.clicked.connect(self.deleteInstance)
+            self.buttonbox.addWidget(self.deletebutton)
+        self.buttonbox.addStretch(1)
+        if buttons & FormButtons.ResetButton:
+            self.resetbutton = QPushButton("Reset", self)
+            self.resetbutton.clicked.connect(self.setInstance)
+            self.buttonbox.addWidget(self.resetbutton)
+        if buttons & FormButtons.SaveButton:
+            self.savebutton = QPushButton("Save", self)
+            self.savebutton.clicked.connect(self.save)
+            self.buttonbox.addWidget(self.savebutton)
+        self.layout().addWidget(buttonWidget)
 
     def addWidgetToButtonBox(self, widget, *args):
         self.buttonbox.insertWidget(0, widget, *args)
@@ -674,10 +694,10 @@ class FormWidget(FormPage):
     def save(self):
         try:
             self.form.retrieve(self.instance())
+            self.instanceSaved.emit(str(self.instance.key()))
             self.statusMessage.emit("Saved")
         except:
-            self.statusMessage.emit("Save failed...")
-            raise
+            self.exception.emit("Save failed...")
         self.setInstance()
 
     def instance(self):
@@ -688,3 +708,22 @@ class FormWidget(FormPage):
             self._instance = instance
         self.form.apply(self.instance())
         self.instanceAssigned.emit(str(instance.key()))
+        
+    def confirmDelete(self):
+        return QMessageBox.warning(self, "Are you sure?", 
+                                   "Are you sure you want to delete this?",
+                                    QMessageBox.Cancel | QMessageBox.Ok,
+                                    QMessageBox.Cancel) == QMessageBox.Ok
+    
+    def onDelete(self):
+        try:
+            key = str(self.instance().key())
+            if grumble.model.Model.delete(self.instance()):
+                self.instanceDeleted.emit(key)
+        except:
+            self.exception.emit("Delete failed...")
+        
+    def deleteInstance(self):
+        if self.instance() and self.confirmDelete():
+            self.onDelete()
+                        

@@ -1,0 +1,10 @@
+**/*.pyc
+**/.*~
+**/*.log
+**/*.backup
+src/logs/*
+nbproject/private/*
+users/*
+db/*
+src/conf/qtapp.json
+.kdev4/*

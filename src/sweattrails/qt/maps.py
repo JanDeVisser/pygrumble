@@ -105,7 +105,7 @@ class ConsoleLoggerWebPage(QWebPage):
 class IntervalMap(QWebView):
     def __init__(self, parent, interval):
         super(IntervalMap, self).__init__(parent)
-        assert interval.geodata, "IntervalMap only works with an interval with geodata"
+        #assert interval.geodata, "IntervalMap only works with an interval with geodata"
         self.interval = interval
         self.setContentsMargins(0, 0, 0, 0)
         self.setPage(ConsoleLoggerWebPage())

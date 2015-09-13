@@ -7,6 +7,7 @@ Created on Aug 28, 2014
 from PySide.QtCore import QPointF
 from PySide.QtCore import Qt
 
+from PySide.QtGui import QColor
 from PySide.QtGui import QPainter
 from PySide.QtGui import QPen
 from PySide.QtGui import QPolygonF
@@ -22,6 +23,7 @@ class Graph(object):
         self._offset = 0
         self._color = kwargs.get("color", Qt.black)
         self._style = kwargs.get("style", Qt.SolidLine)
+        self._shade = kwargs.get("shade", None)
         self._trendlines = []
         self._polygon = None
         
@@ -45,6 +47,12 @@ class Graph(object):
     
     def setStyle(self, style):
         self._style = style
+        
+    def shade(self):
+        return self._shade
+
+    def setShade(self, shade):
+        self._shade = bool(shade)
     
     def data(self, obj):
         pass
@@ -55,9 +63,13 @@ class Graph(object):
     def polygon(self, axis):
         if not self._polygon:
             o = self.offset(axis)
-            self._polygon = QPolygonF(
-                [ QPointF(axis(obj) if callable(axis) else obj, self(obj) - o)
-                    for obj in axis])
+            points = [ 
+                QPointF(axis(obj) if callable(axis) else obj, self(obj) - o)
+                for obj in axis ]
+            if self.shade() is not None:
+                points.insert(0, QPointF(points[0].x(), 0))
+                points.append(QPointF(points[-1].x(), 0))
+            self._polygon = QPolygonF(points)
         return self._polygon
     
     def addTrendLine(self, formula, style = None):
@@ -107,7 +119,7 @@ class GraphWidget(QWidget):
         self._graphs.append(graph)
         
     def drawGraph(self, graph):
-        # logger.debug("Drawing graph %s", graph)
+        logger.debug("Drawing graph %s", graph)
         self.painter.save()
         # Set scaling factors. 
         # Scale X so that distance scales to width() - 40: 
@@ -118,12 +130,16 @@ class GraphWidget(QWidget):
         sy = - float(self.height() - 40) / float(graph.scale(self._axis)) 
         #logger.debug("Scaling factors %f, %f", sx, sy)
         self.painter.scale(sx, sy)
-        
+      
+        points = graph.polygon(self._axis)
         p = QPen(graph.color())
         p.setStyle(graph.style())
         self.painter.setPen(p)
-        points = graph.polygon(self._axis)
-        self.painter.drawPolyline(points)
+        if graph.shade() is not None:
+            self.painter.setBrush(QColor(graph.shade()))
+            self.painter.drawPolygon(points)
+        else:            
+            self.painter.drawPolyline(points)
         
         step = 1/sx
         for trendline in graph.trendLines():

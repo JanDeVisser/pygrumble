@@ -19,15 +19,11 @@
 
 from PySide.QtCore import QCoreApplication
 from PySide.QtCore import Qt
-from PySide.QtCore import QUrl
 
-from PySide.QtGui import QSizePolicy 
 from PySide.QtGui import QSplitter
 from PySide.QtGui import QTabWidget
 from PySide.QtGui import QVBoxLayout
 from PySide.QtGui import QWidget
-
-from PySide.QtWebKit import QWebView
 
 import gripe
 import grumble.qt.bridge
@@ -151,7 +147,9 @@ class CriticalPaceList(grumble.qt.view.TableView):
         query = sweattrails.session.RunPace.query(keys_only = False)
         self.setQueryAndColumns(query,
                 grumble.qt.model.TableColumn("cpdef.name", header = "Distance"),
+                sweattrails.qt.view.SecondsColumn("duration", header = "Duration"),
                 sweattrails.qt.view.PaceSpeedColumn(interval = interval),
+                sweattrails.qt.view.DistanceColumn("atdistance", header = "At distance"),
                 sweattrails.qt.view.TimestampColumn(header = "Starting on"))
 
     def resetQuery(self):
@@ -179,10 +177,13 @@ class RunPlugin(object):
 
     def addGraphs(self, widget, interval):
         part = interval.intervalpart
-        widget.addGraph(sweattrails.qt.graphs.AttrGraph("speed", 
-                                                        interval.max_speed,
-                                                        color = Qt.magenta))
+        logger.debug("Pace graph")
+        if interval.max_speed:
+            widget.addGraph(sweattrails.qt.graphs.AttrGraph("speed", 
+                                                            interval.max_speed,
+                                                            color = Qt.magenta))
         if part.max_cadence:
+            logger.debug("Cadence graph")
             widget.addGraph(sweattrails.qt.graphs.AttrGraph("cadence", 
                                                             part.max_cadence,
                                                             color = Qt.darkCyan))
@@ -203,8 +204,9 @@ class RunPlugin(object):
 
 class ElevationGraph(sweattrails.qt.graphs.Graph):
     def __init__(self, interval):
-        super(ElevationGraph, self).__init__(color = Qt.green)
+        super(ElevationGraph, self).__init__(color = "peru", shade = "sandybrown")
         self.geodata = interval.geodata
+        logger.debug("max_elev: %s min_elev: %s", self.geodata.max_elev, self.geodata.min_elev)
         self._scale = (self.geodata.max_elev - self.geodata.min_elev)
         self._margin = self._scale / 20.0
         self._scale += 2 * self._margin
@@ -230,7 +232,9 @@ class WaypointAxis(object):
     
     def __iter__(self):
         return iter(self.waypoints)
-
+    
+    def __getitem__(self, key):
+        return self.waypoints[-1]
 
 class GraphPage(QWidget):
     def __init__(self, parent, instance):
@@ -238,11 +242,13 @@ class GraphPage(QWidget):
         self.graphs = sweattrails.qt.graphs.GraphWidget(
             self, WaypointAxis(instance))
         if instance.max_heartrate:
+            logger.debug("HR graph")
             self.graphs.addGraph(
                 sweattrails.qt.graphs.AttrGraph(
                     self, "hr", instance.max_heartrate, 
                     color = Qt.red))
         if instance.geodata:
+            logger.debug("ElevationGraph")
             self.graphs.addGraph(ElevationGraph(instance))
         if parent.plugin and hasattr(parent.plugin, "addGraphs"):
             parent.plugin.addGraphs(self.graphs, instance)
@@ -291,7 +297,10 @@ class IntervalListPage(QWidget):
 
 class IntervalPage(grumble.qt.bridge.FormWidget):
     def __init__(self, interval, parent = None):
-        super(IntervalPage, self).__init__(parent)
+        super(IntervalPage, self).__init__(parent, 
+            grumble.qt.bridge.FormButtons.AllButtons
+                if isinstance(interval, sweattrails.session.Session)
+                else grumble.qt.bridge.FormButtons.EditButtons)
         with gripe.db.Tx.begin():
             interval = interval()
             self.interval = interval
@@ -334,6 +343,9 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
             self.addTab(MapPage(self, interval), "Map")
             self.addTab(MiscDataPage(self, interval), "Other Data")
             self.statusMessage.connect(QCoreApplication.instance().status_message)
+            self.exception.connect(QCoreApplication.instance().status_message)
+            self.instanceSaved.connect(QCoreApplication.instance().status_message)
+            self.instanceDeleted.connect(QCoreApplication.instance().status_message)
             self.setInstance(interval)
 
     def partSpecificContent(self, instance):

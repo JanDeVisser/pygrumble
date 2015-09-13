@@ -106,7 +106,7 @@ class SweatTrailsCore(object):
         ret = False
         with gripe.db.Tx.begin():
             user = um.get(uid)
-            if user.authenticate(password = password):
+            if user and user.authenticate(password = password):
                 if savecreds:
                     self.config.settings["user"] = {
                         "user_id": uid,

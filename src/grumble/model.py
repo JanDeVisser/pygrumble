@@ -173,7 +173,7 @@ class Model():
             self._exists = False
 
     def _load(self):
-        logger.debug("_load -> kind: %s, key: %s", self.kind(), str(self.key()))
+        # logger.debug("_load -> kind: %s, key: %s", self.kind(), str(self.key()))
         if (not(hasattr(self, "_values")) or (self._values is None)) and (self._id or self._key_name):
             self._populate(grumble.query.ModelQuery.get(self.key()))
         else:
@@ -700,13 +700,14 @@ class Model():
                 cls._import_template_data(d)
 
 def delete(model):
+    ret = 0
     if not hasattr(model, "_brandnew") and model.exists():
         if model._on_delete():
             logger.info("Deleting model %s.%s", model.kind(), model.key())
-            grumble.query.ModelQuery.delete_one(model.key())
+            ret = grumble.query.ModelQuery.delete_one(model.key())
         else:
             logger.info("on_delete trigger prevented deletion of model %s.%s", model.kind(), model.key())
-    return None
+    return ret
 
 def abstract(cls):
     cls._abstract = True

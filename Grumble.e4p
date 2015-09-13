@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE Project SYSTEM "Project-5.1.dtd">
+<!-- eric5 project file for project Grumble -->
+<!-- Saved: 2015-09-09, 09:21:38 -->
+<!-- Copyright (C) 2015 ,  -->
+<Project version="5.1">
+  <Language>en_US</Language>
+  <Hash>593c51d48ff383c77a855b142d0a532e9a459a56</Hash>
+  <ProgLanguage mixed="1">Python2</ProgLanguage>
+  <ProjectType>Qt4</ProjectType>
+  <Description></Description>
+  <Version>0.1</Version>
+  <Author></Author>
+  <Email></Email>
+  <Sources>
+    <Source>src/sweattrails/qt/app.py</Source>
+    <Source>src/server.py</Source>
+    <Source>src/autoreload.py</Source>
+    <Source>src/gripe/__init__.py</Source>
+    <Source>src/gripe/role.py</Source>
+    <Source>src/gripe/db.py</Source>
+    <Source>src/gripe/auth.py</Source>
+    <Source>src/gripe/acl.py</Source>
+    <Source>src/gripe/sessionbridge.py</Source>
+    <Source>src/gripe/pgsql.py</Source>
+    <Source>src/gripe/smtp.py</Source>
+    <Source>src/gripe/pyxslt.py</Source>
+    <Source>src/gripe/test/managedobject.py</Source>
+    <Source>src/gripe/test/abstract.py</Source>
+    <Source>src/gripe/managedobject.py</Source>
+    <Source>src/gripe/url.py</Source>
+    <Source>src/gripe/conversions.py</Source>
+    <Source>src/gripe/sqlite.py</Source>
+    <Source>src/gripe/json_util.py</Source>
+    <Source>src/srtm/retriever.py</Source>
+    <Source>src/srtm/__init__.py</Source>
+    <Source>src/srtm/data.py</Source>
+    <Source>src/srtm/utils.py</Source>
+    <Source>src/srtm/main.py</Source>
+    <Source>src/grudge/control.py</Source>
+    <Source>src/grudge/__init__.py</Source>
+    <Source>src/grizzle/__init__.py</Source>
+    <Source>src/grizzle/test/profile.py</Source>
+    <Source>src/grumble/converter.py</Source>
+    <Source>src/grumble/postgresql.py</Source>
+    <Source>src/grumble/__init__.py</Source>
+    <Source>src/grumble/property.py</Source>
+    <Source>src/grumble/errors.py</Source>
+    <Source>src/grumble/dbadapter.py</Source>
+    <Source>src/grumble/reference.py</Source>
+    <Source>src/grumble/sqlite3.py</Source>
+    <Source>src/grumble/key.py</Source>
+    <Source>src/grumble/qt/__init__.py</Source>
+    <Source>src/grumble/qt/test.py</Source>
+    <Source>src/grumble/qt/model.py</Source>
+    <Source>src/grumble/qt/bridge.py</Source>
+    <Source>src/grumble/qt/view.py</Source>
+    <Source>src/grumble/geopt.py</Source>
+    <Source>src/grumble/test/model.py</Source>
+    <Source>src/grumble/image.py</Source>
+    <Source>src/grumble/model.py</Source>
+    <Source>src/grumble/schema.py</Source>
+    <Source>src/grumble/meta.py</Source>
+    <Source>src/grumble/query.py</Source>
+    <Source>src/index.py</Source>
+    <Source>src/main.py</Source>
+    <Source>src/grit/log.py</Source>
+    <Source>src/grit/__init__.py</Source>
+    <Source>src/grit/handlers.py</Source>
+    <Source>src/grit/test/usermgmt.py</Source>
+    <Source>src/grit/pipeline.py</Source>
+    <Source>src/grit/statichandler.py</Source>
+    <Source>src/grit/requesthandler.py</Source>
+    <Source>src/grit/usermgmt.py</Source>
+    <Source>src/sweattrails/__init__.py</Source>
+    <Source>src/sweattrails/medication.py</Source>
+    <Source>src/sweattrails/qt/usertab.py</Source>
+    <Source>src/sweattrails/qt/__init__.py</Source>
+    <Source>src/sweattrails/qt/graphs.py</Source>
+    <Source>src/sweattrails/qt/profiletab.py</Source>
+    <Source>src/sweattrails/qt/stackedpage.py</Source>
+    <Source>src/sweattrails/qt/mainwindow.py</Source>
+    <Source>src/sweattrails/qt/maps.py</Source>
+    <Source>src/sweattrails/qt/sessiontab.py</Source>
+    <Source>src/sweattrails/qt/imports.py</Source>
+    <Source>src/sweattrails/qt/view.py</Source>
+    <Source>src/sweattrails/qt/fitnesstab.py</Source>
+    <Source>src/sweattrails/Parsers.py</Source>
+    <Source>src/sweattrails/userprofile.py</Source>
+    <Source>src/sweattrails/config.py</Source>
+    <Source>src/sweattrails/session.py</Source>
+    <Source>src/sweattrails/device/__init__.py</Source>
+    <Source>src/sweattrails/device/exceptions.py</Source>
+    <Source>src/sweattrails/device/ant/base/commons.py</Source>
+    <Source>src/sweattrails/device/ant/base/__init__.py</Source>
+    <Source>src/sweattrails/device/ant/base/message.py</Source>
+    <Source>src/sweattrails/device/ant/base/ant.py</Source>
+    <Source>src/sweattrails/device/ant/__init__.py</Source>
+    <Source>src/sweattrails/device/ant/fs/command.py</Source>
+    <Source>src/sweattrails/device/ant/fs/__init__.py</Source>
+    <Source>src/sweattrails/device/ant/fs/beacon.py</Source>
+    <Source>src/sweattrails/device/ant/fs/test/__init__.py</Source>
+    <Source>src/sweattrails/device/ant/fs/test/command_test.py</Source>
+    <Source>src/sweattrails/device/ant/fs/test/test.py</Source>
+    <Source>src/sweattrails/device/ant/fs/test/beacon_test.py</Source>
+    <Source>src/sweattrails/device/ant/fs/test/file_test.py</Source>
+    <Source>src/sweattrails/device/ant/fs/manager.py</Source>
+    <Source>src/sweattrails/device/ant/fs/file.py</Source>
+    <Source>src/sweattrails/device/ant/easy/node.py</Source>
+    <Source>src/sweattrails/device/ant/easy/__init__.py</Source>
+    <Source>src/sweattrails/device/ant/easy/filter.py</Source>
+    <Source>src/sweattrails/device/ant/easy/channel.py</Source>
+    <Source>src/sweattrails/device/ant/easy/exception.py</Source>
+    <Source>src/sweattrails/device/ant/easy/test/__init__.py</Source>
+    <Source>src/sweattrails/device/ant/easy/test/test.py</Source>
+    <Source>src/sweattrails/device/antfs.py</Source>
+    <Source>src/sweattrails/device/fitparser.py</Source>
+    <Source>src/sweattrails/device/fitparse/__init__.py</Source>
+    <Source>src/sweattrails/device/fitparse/base.py</Source>
+    <Source>src/sweattrails/device/fitparse/activity.py</Source>
+    <Source>src/sweattrails/device/fitparse/exceptions.py</Source>
+    <Source>src/sweattrails/device/fitparse/records.py</Source>
+    <Source>src/sweattrails/device/fitparse/analyzer.py</Source>
+    <Source>src/sweattrails/device/parser.py</Source>
+    <Source>src/sweattrails/device/tcxparser.py</Source>
+    <Source>test/gripe_test/__init__.py</Source>
+    <Source>garmin/fittotcx.py</Source>
+    <Source>garmin/UploadGarmin.py</Source>
+    <Source>garmin/scripts/40-convert_to_tcx.py</Source>
+    <Source>garmin/scripting.py</Source>
+    <Source>garmin/unitconvert.py</Source>
+    <Source>garmin/garmin.py</Source>
+    <Source>garmin/utilities.py</Source>
+    <Source>garmin/fitparse.py</Source>
+    <Source>garmin/MultipartPostHandler.py</Source>
+    <Source>etc/gpl_license.py</Source>
+    <Source>src/jscr/datasource.js</Source>
+    <Source>src/jscr/grit.js</Source>
+    <Source>src/jscr/lookup.js</Source>
+    <Source>src/jscr/treeview.js</Source>
+    <Source>src/jscr/action.js</Source>
+    <Source>src/jscr/alert.js</Source>
+    <Source>src/jscr/geocode.js</Source>
+    <Source>src/jscr/form.js</Source>
+    <Source>src/jscr/table.js</Source>
+    <Source>src/jscr/graph.js</Source>
+    <Source>src/js/athlete.js</Source>
+    <Source>src/js/admin.js</Source>
+    <Source>src/js/session.js</Source>
+    <Source>src/js/brand.js</Source>
+    <Source>src/js/sweattrails.js</Source>
+    <Source>src/sweattrails/qt/maps.js</Source>
+    <Source>__init__.py</Source>
+  </Sources>
+  <Forms>
+    <Form>src/grit/template/login.html</Form>
+    <Form>src/grit/template/resetpassword.html</Form>
+    <Form>src/template/index.html</Form>
+    <Form>src/template/base.html</Form>
+    <Form>src/template/grizzle/user/view.html</Form>
+    <Form>src/template/grizzle/user/list.html</Form>
+    <Form>src/template/test.html</Form>
+    <Form>src/template/grit/usermgmt/changepwd.html</Form>
+    <Form>src/template/grit/usermgmt/login.html</Form>
+    <Form>src/template/grit/usermgmt/usercreate/confirmed.html</Form>
+    <Form>src/template/grit/usermgmt/passwordreset/confirmed.html</Form>
+    <Form>src/template/grit/usermgmt/passwordreset/startup.html</Form>
+    <Form>src/template/grit/usermgmt/usersignup/confirmed.html</Form>
+    <Form>src/template/grit/usermgmt/usersignup/startup.html</Form>
+    <Form>src/template/sweattrails/weightmgmt/view.html</Form>
+    <Form>src/template/sweattrails/profile/view.html</Form>
+    <Form>src/sweattrails/qt/maps.html</Form>
+    <Form>etc/datetime.html</Form>
+  </Forms>
+  <Translations/>
+  <Resources/>
+  <Interfaces/>
+  <Others/>
+  <MainScript>src/sweattrails/qt/app.py</MainScript>
+  <Vcs>
+    <VcsType>None</VcsType>
+  </Vcs>
+  <FiletypeAssociations>
+    <FiletypeAssociation pattern="*.html" type="FORMS"/>
+    <FiletypeAssociation pattern="*.idl" type="INTERFACES"/>
+    <FiletypeAssociation pattern="*.js" type="SOURCES"/>
+    <FiletypeAssociation pattern="*.py" type="SOURCES"/>
+    <FiletypeAssociation pattern="*.py3" type="SOURCES"/>
+    <FiletypeAssociation pattern="*.pyw" type="SOURCES"/>
+    <FiletypeAssociation pattern="*.pyw3" type="SOURCES"/>
+    <FiletypeAssociation pattern="*.qm" type="TRANSLATIONS"/>
+    <FiletypeAssociation pattern="*.qrc" type="RESOURCES"/>
+    <FiletypeAssociation pattern="*.rb" type="SOURCES"/>
+    <FiletypeAssociation pattern="*.ts" type="TRANSLATIONS"/>
+    <FiletypeAssociation pattern="*.ui" type="FORMS"/>
+    <FiletypeAssociation pattern="*.ui.h" type="FORMS"/>
+  </FiletypeAssociations>
+</Project>
