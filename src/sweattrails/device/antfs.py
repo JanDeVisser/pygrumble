@@ -22,22 +22,31 @@
 
 import base64
 import sys
-
-import sweattrails.device.ant.fs.manager
+import time
+import threading
 
 import gripe
+import sweattrails.device.ant.fs.manager
 
 logger = gripe.get_logger(__name__)
 
 class GarminBridge(object):
-    def __init__(self, bridge = None, **kwargs):
-        logger.debug("__init__")
-        self.bridge = bridge
-        kwargs["callback"] = self
-        self._garmin = kwargs.get("manager", 
-            sweattrails.device.ant.fs.manager.Application(**kwargs))
-        logger.debug("Created/assigned Garmin manager")
-        self.init_config()
+    _lock = threading.RLock()
+    
+    def __init__(self, **kwargs):
+        with GarminBridge._lock:
+            if hasattr(GarminBridge, "_singleton") and GarminBridge._singleton:
+                logger.error("GarminBridge is a singleton")
+                sys.exit(1)
+            self._condition = threading.Condition(GarminBridge._lock)
+            logger.debug("__init__")
+            self.bridge = None
+            kwargs["callback"] = self
+            self._garmin = kwargs.get("manager", 
+                                      sweattrails.device.ant.fs.manager.Application(**kwargs))
+            logger.debug("Created/assigned Garmin manager")
+            self.init_config()
+            GarminBridge._singleton = self
         
     def status_message(self, msg, *args):
         if self.bridge and hasattr(self.bridge, "status_message"):
@@ -69,12 +78,14 @@ class GarminBridge(object):
         self.config = gripe.Config.set("garmin", self.config)
     
     def exists(self, antfile):
-        if self.bridge and hasattr(self.bridge, "exists"):
-            return self.bridge.exists(antfile)
+        return self.bridge.exists(antfile) \
+            if self.bridge and hasattr(self.bridge, "exists") \
+            else False
         
     def select(self, antfiles):
-        if self.bridge and hasattr(self.bridge, "select"):
-            return self.bridge.select(antfiles)
+        return self.bridge.select(antfiles) \
+            if self.bridge and hasattr(self.bridge, "select") \
+            else []
         
     def process(self, antfile, data):
         if self.bridge and hasattr(self.bridge, "process"):
@@ -179,6 +190,40 @@ class GarminBridge(object):
         
     def downloads_pending(self):
         return hasattr(self, "_downloads") and self._downloads
+
+    @classmethod
+    def acquire(cls, appbridge):
+        if not hasattr(cls, "_singleton") or not cls._singleton:
+            cls._singleton = GarminBridge()
+        gb = cls._singleton
+        gb._condition.acquire()
+        while gb.bridge:
+            gb._condition.wait()
+        gb.bridge = appbridge
+        gb._condition.release()
+        return gb
+                
+    def release(self):
+        self._condition.acquire()
+        self.bridge = None
+        self._condition.notify()
+        self._condition.release()
+
+    def __enter__(self):
+        print "2"
+        logger.debug("Connecting Garmin")
+        self.start()
+        self.connect()
+        return self
+        
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        logger.debug("Disconnecting Garmin")
+        try:
+            self.disconnect()
+        finally:
+            self.stop()
+        self.release()
+        return False
 
 #
 # ---------------------------------------------------------------------------

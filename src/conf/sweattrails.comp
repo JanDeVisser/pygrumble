@@ -36,6 +36,9 @@
                 "nodeClass": "sweattrails.config.CriticalPaceNode", 
                 "refClass": "sweattrails.config.CriticalPace"
             }
-        }        
+        },
+	"background": {
+		"plugins": [ "sweattrails.qt.imports.ScanInbox" ]
+	}
     }
 }

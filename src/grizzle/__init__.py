@@ -183,16 +183,20 @@ class User(grumble.Model, gripe.auth.AbstractUser):
                     part.update(p, **flags)
 
     def get_part(self, part):
-        self._load()
-        k = part if (isinstance(part, basestring)) else part.basekind().lower()
+        self.load_parts()
+        k = part.lower() if (isinstance(part, basestring)) else part.basekind().lower()
         return self._parts[k] if k in self._parts else None
 
     def after_load(self):
-        self._parts = { grumble.Model.for_name(pn).basekind().lower(): None for pn in gripe.Config.app.grizzle.userparts }
-        for part in grumble.Query(UserPart, keys_only = False, include_subclasses = True).set_parent(self):
-            k = part.basekind().lower()
-            self._parts[k] = part
-            setattr(self, "_" + k, part)
+        self.load_parts()
+
+    def load_parts(self):
+        if not hasattr(self, "_parts"):
+            self._parts = { grumble.Model.for_name(pn).basekind().lower(): None for pn in gripe.Config.app.grizzle.userparts }
+            for part in grumble.Query(UserPart, keys_only = False, include_subclasses = True).set_parent(self):
+                k = part.basekind().lower()
+                self._parts[k] = part
+                setattr(self, "_" + k, part)
 
     def urls(self, urls = None):
         if urls is not None:

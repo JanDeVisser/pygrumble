@@ -204,6 +204,9 @@ class STMainWindow(QMainWindow):
         self.downloadAct = QAction("&Download", self, shortcut = "Ctrl+D", 
                                    statusTip = "Download activities from device", 
                                    triggered = QCoreApplication.instance().download)
+        self.downloadAct = QAction("&Withings", self,
+                                   statusTip = "Download Withings data", 
+                                   triggered = QCoreApplication.instance().withings)
         self.exitAct = QAction("E&xit", self, shortcut = "Ctrl+Q", statusTip = "Exit SweatTrails", triggered = self.close)
 
         self.aboutAct = QAction("&About", self, triggered = self.about)
@@ -229,10 +232,10 @@ class STMainWindow(QMainWindow):
     def show(self):
         super(QMainWindow, self).show()
         if self.select_user():
-            t = sweattrails.qt.imports.ImportThread.get_thread()
-            t.importing.connect(self.file_import_started)
-            t.imported.connect(self.file_imported)
-            t.importerror.connect(self.file_import_error)
+            t = sweattrails.qt.imports.BackgroundThread.get_thread()
+            t.jobStarted.connect(self.status_message)
+            t.jobFinished.connect(self.status_message)
+            t.jobError.connect(self.status_message)
         else:
             self.close()
 
@@ -315,7 +318,7 @@ class STMainWindow(QMainWindow):
         self.progressbar.setValue(percentage)
         
     def progress_done(self):
-        self.progressbar.reset() 
+        self.progressbar.reset()
 
     def about(self):
         QMessageBox.about(self, "About SweatTrails",

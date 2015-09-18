@@ -18,6 +18,7 @@
 
 import argparse
 import sys
+import traceback
 
 from PySide.QtCore import QCoreApplication
 from PySide.QtCore import Signal
@@ -33,6 +34,7 @@ import grizzle
 import grumble.property
 import sweattrails.qt.imports
 import sweattrails.qt.mainwindow
+import sweattrails.withings
 
 logger = gripe.get_logger(__name__)
 
@@ -79,14 +81,14 @@ class SweatTrailsCore(object):
                 
     def start(self, user = None, password = None, savecreds = False):
         self.init_config(user, password, savecreds)
-        t = sweattrails.qt.imports.ImportThread.get_thread()
+        t = sweattrails.qt.imports.BackgroundThread.get_thread()
         t.statusMessage.connect(self.status_message)
         t.progressInit.connect(self.progress_init)
         t.progressUpdate.connect(self.progress)
         t.progressEnd.connect(self.progress_done)
-        t.importing.connect(self.file_import_started)
-        t.imported.connect(self.file_imported)
-        t.importerror.connect(self.file_import_error)
+        t.jobStarted.connect(self.status_message)
+        t.jobFinished.connect(self.status_message)
+        t.jobError.connect(self.status_message)
         t.start()
 
     def user_manager(self):
@@ -133,33 +135,18 @@ class SweatTrailsCore(object):
         return self.user is not None
 
     def import_files(self, *filenames):
-        t = sweattrails.qt.imports.ImportThread.get_thread()
-        t.addfiles(filenames)
+        t = sweattrails.qt.imports.BackgroundThread.get_thread()
+        for f in filenames:
+            t.addjob(sweattrails.qt.imports.ImportFile(f))
 
-    def file_import_started(self, filename):
-        self.status_message("Importing file {}", filename)
-                
-    def file_imported(self, filename):
-        self.status_message("File {} successfully imported", filename)
-
-    def file_import_error(self, filename, msg):
-        self.status_message("ERROR importing file {}: {}", filename, msg)
-        
-    def _download_done(self):
-        sweattrails.qt.imports.DownloadThread.disconnect()
-        if hasattr(self, "after_download"):
-            self.after_download()
-        
     def download(self):
-        t = sweattrails.qt.imports.DownloadThread(self.getDownloadManager())
-        t.statusMessage.connect(self.status_message)
-        t.progressInit.connect(self.progress_init)
-        t.progressUpdate.connect(self.progress)
-        t.progressEnd.connect(self.progress_done)
-        if hasattr(self, "before_download"):
-            self.before_download(t)
-        t.finished.connect(self._download_done)
-        t.start()
+        job = sweattrails.qt.imports.DownloadJob(self.getDownloadManager()) 
+        #sweattrails.qt.imports.BackgroundThread.add_backgroundjob(job)
+        job.sync(threading.currentThread())
+
+    def withings(self):
+        sweattrails.qt.imports.BackgroundThread.add_backgroundjob(
+            sweattrails.withings.WithingsJob())
 
 
 class SweatTrailsCmdLine(QCoreApplication, SweatTrailsCore):
@@ -171,13 +158,11 @@ class SweatTrailsCmdLine(QCoreApplication, SweatTrailsCore):
         if not self.is_authenticated():
             raise NotAuthenticatedException()
         
-    def file_import(self, filenames):            
-        t = sweattrails.qt.imports.ImportThread.get_thread()
-        t.importing.connect(self.setup_quit)
-        t.addfiles(filenames)
+    def file_import(self, filenames):
+        self.import_files(*filenames)
         
     def setup_quit(self, filename):
-        t = sweattrails.qt.imports.ImportThread.get_thread()
+        t = sweattrails.qt.imports.BackgroundThread.get_thread()
         t.queueEmpty.connect(self.quit)
         
     def after_download(self):
@@ -263,6 +248,8 @@ parser.add_argument("-d", "--download", action="store_true",
                     help="download new activities from your Garmin device over ANT+")
 parser.add_argument("-i", "--import", dest="imp", type=str, nargs="+",
                     help="import the given file")
+parser.add_argument("-W", "--withings", action="store_true",
+                    help="download Withings data")
 parser.add_argument("-u", "--user", type=str, 
     help="""Username to log in as. Note that this overrides a possibly stored username""")
 parser.add_argument("-P", "--password", type=str, 
@@ -283,7 +270,9 @@ if args.savecredentials:
 # Build Application objects based on command line:
 #===============================================================================
 
-appcls = SweatTrailsCmdLine if args.imp or args.download else SweatTrails
+appcls = SweatTrailsCmdLine \
+    if args.imp or args.download or args.withings \
+    else SweatTrails
 app = appcls(sys.argv)
 app.start(args.user, args.password, args.savecredentials)
 
@@ -293,7 +282,12 @@ try:
     
     if args.download:
         app.download()
+        
+    if args.withings:
+        app.withings()
+        
 except Exception as e:
     print(e)
+    traceback.print_exc()
 
 app.exec_()

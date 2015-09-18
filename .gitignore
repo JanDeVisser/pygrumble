@@ -5,6 +5,8 @@
 src/logs/*
 nbproject/private/*
 users/*
+users
 db/*
 src/conf/qtapp.json
 .kdev4/*
+**/#*#

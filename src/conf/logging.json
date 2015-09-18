@@ -9,6 +9,7 @@
   
     "sweattrails.device.ant": { "flat": true, "destination": "file", "level": "debug" },
     "__sweattrails.device.fitparse": { "flat": true, "destination": "file" },
+    "sweattrails.qt.imports": { "destination": "stderr", "flat": true, "level": "debug" },
     "sweattrails": { "destination": "stderr", "flat": true },
     "srtm": { "destination": "stderr", "flat": true },
   
