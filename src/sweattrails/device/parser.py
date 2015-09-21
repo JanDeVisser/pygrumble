@@ -145,7 +145,9 @@ class Activity(Lap):
         self.activity = self
 
     def contains(self, obj):
-        return self.start < obj.get_data("timestamp") <= self.end
+        return self.start < obj.get_data("timestamp") <= self.end \
+            if obj.get_data("timestamp") \
+            else False
 
     def add_lap(self, lap):
         self.laps.append(lap)
@@ -187,8 +189,8 @@ class Activity(Lap):
                 self.progress(int((float(ix) / float(num)) * 100.0))
                 interval = sweattrails.session.Interval(parent = session)
                 lap.convert_interval(interval)
-                intervals.append[interval]
-            intervals.sort(key = lambda interval: interval.start_time)
+                intervals.append(interval)
+            intervals.sort(key = lambda interval: interval.timestamp)
             self.progress_end()
 
         num = len(self.trackpoints)
@@ -271,6 +273,8 @@ class Parser(object):
             self._process()
             self.status_message("File {} converted", self.filename)
             return None
+        except sweattrails.device.exceptions.SessionExistsError:
+            raise
         except Exception as exception:
             traceback.print_exc()
             raise sweattrails.device.exceptions.FileImportError(exception)

@@ -232,7 +232,7 @@ class Model():
         del self._storing
 
     def _on_delete(self):
-        return self.on_delete(self) if hasattr(self, "on_delete") and callable(cls, "on_delete") else True
+        return self.on_delete() if hasattr(self, "on_delete") and callable(self.on_delete) else True
 
     def _validate(self):
         for prop in self._properties.values():
@@ -293,7 +293,7 @@ class Model():
             return None
         else:
             return (
-                grumble.key.Key(self.kind(), self.parent(), self._key_name) 
+                grumble.key.Key(self.kind(), self.parent(), self._key_name)
                 if self._key_scoped
                 else grumble.key.Key(self.kind(), self._key_name))
 
@@ -785,16 +785,16 @@ class Query(grumble.query.ModelQuery):
                    grumble.key.Key(self._cur_kind, ret[self._results.key_index()]),
                    None if self.keys_only else zip(self._results.columns(), ret)
                )
-        
+
     def __len__(self):
         return self.count()
-    
+
     def count(self):
         ret = 0
         for k in self.kind:
             ret += self._count(k)
         return ret
-    
+
     def has(self):
         return self.count() > 0
 
@@ -803,7 +803,7 @@ class Query(grumble.query.ModelQuery):
         for k in self.kind:
             cls = grumble.meta.Registry.get(k)
             if hasattr(cls, "on_delete") and callable(cls.on_delete):
-                for m in self.execute(k, self.keys_only):
+                for m in self:
                     if m.on_delete():
                         res += self.delete_one(m)
             else:

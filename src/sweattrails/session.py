@@ -19,7 +19,6 @@
 
 import bisect
 import datetime
-import json
 import time
 
 import gripe
@@ -36,6 +35,8 @@ logger = gripe.get_logger(__name__)
 
 
 class Reducer(object):
+    clock = 0
+
     def init_reducer(self):
         pass
 
@@ -52,12 +53,12 @@ class Reducable(list):
         self.clock = 0.0
         if elements:
             self.extend(elements)
-    
+
     def init_reducable(self):
         for r in self:
             r.init_reducer()
             r.clock = 0.0
-    
+
     def reduce(self, item):
         cc = time.clock()
         for r in self:
@@ -65,18 +66,19 @@ class Reducable(list):
             r.reduce(item)
             r.clock += time.clock() - c
         self.clock += time.clock() - cc
-    
+
     def reductions(self):
         for r in self:
             r.reduction()
-            
+
     def report(self):
         s = """{:40.40s}{:6f}
 {:s}""", self, self.clock, "\n".join(["  {:38.38s}{:6f}".format(r, r.clock) for r in self])
-            
+        return s
+
     def started(self, timepoint):
         pass
-    
+
     def finished(self, timepoint):
         pass
 
@@ -93,7 +95,7 @@ class Reducers(list):
             self.remove(r)
         self.started.extend(started)
         return started
-            
+
     def deactivate(self, item, force = False):
         finished = [ r for r in self.started if (item and r.finished(item)) or force ]
         c = time.clock()
@@ -104,12 +106,12 @@ class Reducers(list):
         for r in finished:
             self.started.remove(r)
         return finished
-            
+
     def reduce(self, iterable, callback = None):
         self.total_c = time.clock()
         self.init_c = 0
         self.done_c = 0
-        
+
         self.reduce_c = time.clock()
         self.num = len(iterable)
         self.ix = 0
@@ -130,7 +132,7 @@ class Reducers(list):
         self.reduce_c = time.clock() - self.reduce_c
         self.reduce_c -= (self.init_c + self.done_c)
         self.report()
-        
+
     def report(self):
         rep = """
 =================================================
@@ -157,7 +159,7 @@ class SimpleReducer(Reducer):
         self.target = target
         self.cur = None
         self.count = 0
-        
+
     def __str__(self):
         return "{}({})".format(self.__class__.__name__, self.item_prop)
 
@@ -176,7 +178,7 @@ class SimpleReducer(Reducer):
 
 class Accumulate(SimpleReducer):
     def reducevalue(self, value):
-        return ((self.cur if self.cur is not None else 0) + 
+        return ((self.cur if self.cur is not None else 0) +
                 (value if value else 0))
 
 
@@ -280,7 +282,7 @@ class RollingWindow(list):
     def __init__(self, min_precision):
         self._running_sum = 0.0
         self.min_precision = min_precision
-        
+
     def append(self, e):
         self._running_sum += e.term()
         super(RollingWindow, self).append(e)
@@ -291,51 +293,51 @@ class RollingWindow(list):
             if self.precision(last) < self.precision(self[0]):
                 self.insert(0, last)
                 self._running_sum += last.term()
-        
+
     def pop(self, ix):
         e = super(RollingWindow, self).pop(ix)
         self._running_sum -= e.term()
         return e
-    
+
     def precision(self, e = None):
         if e is None:
             e = self[0]
         return abs(self[-1].offset() - e.offset() - self.max_span())
-    
+
     def span(self):
         return self[-1].offset() - self[0].offset()
-    
+
     def valid(self):
         if len(self) < 2:
             return False
         return self.precision() <= self.min_precision
 
     def _result(self):
-        return self._running_sum / self.span() 
-    
+        return self._running_sum / self.span()
+
     def result(self):
         return self._result() if self.valid() else None
 
-    
+
 class TimeWindow(RollingWindow):
     def __init__(self, duration, min_precision = 1):
         super(TimeWindow, self).__init__(min_precision)
         self.duration = duration
-    
+
     def max_span(self):
         return self.duration
-    
-    
+
+
 class TimeWindowEntry(object):
     def __init__(self, waypoint, term):
         self.seconds = waypoint.timestamp.seconds
         self._term = term or 0
         self.timestamp = waypoint.timestamp
         self.distance = waypoint.distance
-        
+
     def offset(self):
         return self.seconds
-        
+
     def term(self):
         return self._term
 
@@ -344,7 +346,7 @@ class CriticalPowerReducer(Reducer):
     def __init__(self, cp):
         self.cp = cp
         self.duration = cp.cpdef.duration.seconds
-        
+
     def __str__(self):
         return "{}({})".format(self.__class__.__name__, self.cp.cpdef.duration)
 
@@ -450,7 +452,7 @@ class VIProperty(grumble.property.FloatProperty):
 class IFProperty(grumble.property.FloatProperty):
     def __init__(self, **kwargs):
         super(IFProperty, self).__init__(**kwargs)
- 
+
     def getvalue(self, instance):
         ftp = instance.get_ftp()
         np = float(instance.normalized_power or 0.0)
@@ -464,7 +466,7 @@ class IFProperty(grumble.property.FloatProperty):
 class TSSProperty(grumble.property.FloatProperty):
     def __init__(self, **kwargs):
         super(TSSProperty, self).__init__(**kwargs)
- 
+
     def getvalue(self, instance):
         return (instance.parent().duration.seconds * (instance.intensity_factor ** 2)) / 36
 
@@ -476,13 +478,13 @@ class NormalizedPowerReducer(Reducer):
     class NPWindow(TimeWindow):
         def __init__(self):
             super(NormalizedPowerReducer.NPWindow, self).__init__(30)
-            
+
         def _result(self):
-            return (self._running_sum / self.span())**4 
-        
+            return (self._running_sum / self.span())**4
+
     def __init__(self, bikepart):
         self.bikepart = bikepart
-        
+
     def __str__(self):
         return "{}()".format(self.__class__.__name__)
 
@@ -588,10 +590,10 @@ class RunPaceWindowEntry(object):
         self.seconds = waypoint.timestamp.seconds
         self.distance = waypoint.distance
         self.timestamp = waypoint.timestamp
-        
+
     def offset(self):
         return self.distance
-        
+
     def term(self):
         return 1
 
@@ -600,7 +602,7 @@ class RunPaceReducer(Reducer):
     def __init__(self, runpace):
         self.runpace = runpace
         self.distance = runpace.cpdef.distance
-    
+
     def __str__(self):
         return "{}({})".format(self.__class__.__name__, self.distance)
 
@@ -640,8 +642,8 @@ class RunPace(grumble.Model, Timestamped):
         logger.debug("RunPace.after_store: %s in %s", self.cpdef.name, self.duration)
         if (self.duration > 0) and Session.samekind(self.parent().get_interval()):
 
-            # See if this is a record at this time, i.e. if there is no 
-            # faster entry dated before this session: 
+            # See if this is a record at this time, i.e. if there is no
+            # faster entry dated before this session:
             q = BestRunPace.query(parent = self.cpdef).add_sort("snapshotdate")
             q.add_filter("snapshotdate <= ", self.parent().get_session().start_time)
             q.add_filter("duration < ", self.duration)
@@ -747,7 +749,7 @@ class GeoData(grumble.Model):
     elev_gain = grumble.IntegerProperty(default = 0, verbose_name = "Elevation Gain")  # In meters
     elev_loss = grumble.IntegerProperty(default = 0, verbose_name = "Elevation Loss")  # In meters
     bounding_box = grumble.geopt.GeoBoxProperty()
-    
+
     def get_session(self):
         return self.parent().get_session()
 
@@ -822,7 +824,7 @@ class Interval(grumble.Model, Timestamped):
     max_speed = grumble.property.FloatProperty(default = 0, verbose_name = "Max. Speed/Pace")  # m/s
     work = grumble.property.IntegerProperty(default = 0)  # kJ
     calories_burnt = grumble.property.IntegerProperty(default = 0)  # kJ
-    
+
     def end_timestamp(self):
         return self.timestamp + self.elapsed_time
 
@@ -868,6 +870,7 @@ class Interval(grumble.Model, Timestamped):
         GeoData.query(parent = self).delete()
         IntervalPart.query(parent = self).delete()
         Interval.query(parent = self).delete()
+        return True
 
 
 class IntervalReducable(Reducable):
@@ -883,16 +886,16 @@ class IntervalReducable(Reducable):
         part = interval.intervalpart
         if part:
             self.extend(part.reducers())
-    
+
     def __str__(self):
         return str(self.interval)
-         
+
     def started(self, waypoint):
-        ret = waypoint.timestamp >= self.interval.timestamp 
+        ret = waypoint.timestamp >= self.interval.timestamp
         if ret:
             logger.debug("started - %s - %s - %s", self, self.interval.timestamp.seconds, waypoint.timestamp.seconds)
         return ret
-    
+
     def finished(self, waypoint):
         ret = waypoint.timestamp >= self.interval.end_timestamp()
         if ret:
@@ -908,7 +911,7 @@ class Session(Interval):
     posted = grumble.property.DateTimeProperty(auto_now_add = True, verbose_name = "Posted on")
     inprogress = grumble.property.BooleanProperty(default = True)
     device = grumble.property.StringProperty(default = "")
-    
+
     def get_session(self):
         return self
 
@@ -934,9 +937,8 @@ class Session(Interval):
         logger.debug("Interval.analyze(): Getting subintervals")
         intervals = [ self ]
         intervals.extend(Interval.query(ancestor = self).fetchall())
-
         reducers = Reducers([ IntervalReducable(i) for i in intervals ])
-        
+
         logger.debug("Interval.analyze(): Getting waypoints")
         wps = self.waypoints()
         logger.debug("Interval.analyze(): Reducing")
@@ -969,8 +971,11 @@ class Session(Interval):
         self.put()
 
     def on_delete(self):
-        super(Session, self).on_delete()
-        Waypoint.query(ancestor = self).delete()
+        ret = super(Session, self).on_delete()
+        if ret:
+            Waypoint.query(ancestor = self).delete()
+            ret = True
+        return ret
 
 
 class Waypoint(grumble.Model, Timestamped):

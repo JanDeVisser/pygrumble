@@ -11,7 +11,7 @@ logger = gripe.get_logger(__name__)
 
 class LoggedCursor(object):
     placeholder = '?'
-    
+
     def _interpolate(self, sql, args):
         return "%s <- %s" % (sql, args)
 
@@ -97,7 +97,7 @@ class Tx(object):
     _tl = threading.local()
     _adapters = { "sqlite3": "gripe.sqlite.DbAdapter", "postgresql": "gripe.pgsql.DbAdapter" }
     config = gripe.Config.database
-    
+
     if "adapters" in config:
         for a in config.adapters:
             _adapters[a] = config.adapters[a]
@@ -153,14 +153,13 @@ class Tx(object):
     def __exit__(self, exception_type, exception_value, trace):
         self.count -= 1
         if exception_type:
-            logger.error("Exception in Tx block, Exception: %s %s %s",
-                exception_type, exception_value, trace)
+            logger.error("Exception in Tx block",
+                exc_info = (exception_type, exception_value, trace))
         if not self.count:
             try:
-                self._end_tx()
-            except Exception, exc:
-                logger.error("Exception committing Tx, Exception: %s %s",
-                    exc.__class__.__name__, exc)
+                self._end_tx(exception_type)
+            except Exception as exc:
+                logger.error("Exception committing Tx", exc_info = True)
         return False
 
     def get_cursor(self):
@@ -172,13 +171,16 @@ class Tx(object):
         self.cursors.remove(cur)
         cur._close()
 
-    def _end_tx(self):
+    def _end_tx(self,  rollback = False):
         try:
             try:
                 for c in self.cursors:
                     c.close()
             finally:
-                self.conn.commit()
+                if rollback:
+                    self.conn.rollback()
+                else:
+                    self.conn.commit()
                 self.conn.close()
         finally:
             self.active = False

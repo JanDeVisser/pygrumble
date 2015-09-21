@@ -56,19 +56,19 @@ class MiscDataPage(grumble.qt.bridge.FormPage):
                              displayconverter = sweattrails.qt.view.MeterFeet())
             self.row += 2
         if instance.max_heartrate:
-            self.addProperty(sweattrails.session.Interval, "max_heartrate", self.row, 0, 
+            self.addProperty(sweattrails.session.Interval, "max_heartrate", self.row, 0,
                              readonly = True)
-            self.addProperty(sweattrails.session.Interval, "average_heartrate", self.row + 1, 0, 
+            self.addProperty(sweattrails.session.Interval, "average_heartrate", self.row + 1, 0,
                              readonly = True)
             self.row += 2
         if parent.plugin and hasattr(parent.plugin, "addMiscData"):
             parent.plugin.addMiscData(self, instance)
         if instance.work:
-            self.addProperty(sweattrails.session.Interval, "work", self.row, 0, 
+            self.addProperty(sweattrails.session.Interval, "work", self.row, 0,
                              readonly = True)
             self.row += 1
         if instance.calories_burnt:
-            self.addProperty(sweattrails.session.Interval, "calories_burnt", self.row, 0, 
+            self.addProperty(sweattrails.session.Interval, "calories_burnt", self.row, 0,
                              readonly = True)
             self.row += 1
 
@@ -92,26 +92,26 @@ class PowerPage(grumble.qt.bridge.FormPage):
     def __init__(self, parent):
         super(PowerPage, self).__init__(parent)
         logger.debug("Initializing power tab")
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.max_power", 0, 0, 
+        self.addProperty(sweattrails.session.BikePart, "intervalpart.max_power", 0, 0,
                          readonly = True)
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.average_power", 1, 0, 
+        self.addProperty(sweattrails.session.BikePart, "intervalpart.average_power", 1, 0,
                          readonly = True)
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.normalized_power", 2, 0, 
+        self.addProperty(sweattrails.session.BikePart, "intervalpart.normalized_power", 2, 0,
                          readonly = True)
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.vi", 3, 0, 
+        self.addProperty(sweattrails.session.BikePart, "intervalpart.vi", 3, 0,
                          readonly = True)
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.tss", 3, 2, 
+        self.addProperty(sweattrails.session.BikePart, "intervalpart.tss", 3, 2,
                          readonly = True)
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.intensity_factor", 4, 0, 
+        self.addProperty(sweattrails.session.BikePart, "intervalpart.intensity_factor", 4, 0,
                          readonly = True)
-        
+
         self.addProperty(sweattrails.session.BikePart, "intervalpart.max_cadence", 0, 2,
                          readonly = True)
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.average_cadence", 1, 2, 
+        self.addProperty(sweattrails.session.BikePart, "intervalpart.average_cadence", 1, 2,
                          readonly = True)
         self.cplist = CriticalPowerList(parent, parent.instance())
         self.addWidget(self.cplist, 6, 0, 1, 4)
-        
+
     def selected(self):
         self.cplist.refresh()
 
@@ -119,13 +119,13 @@ class PowerPage(grumble.qt.bridge.FormPage):
 class BikePlugin(object):
     def __init__(self, page, instance):
         self.page = page
-        
+
     def handle(self, instance):
         logger.debug("Running Bike Plugin")
         part = instance.intervalpart
         if part.max_power:
             self.page.addTab(PowerPage(self.page), "Power")
-            
+
     def addGraphs(self, widget, interval):
         part = interval.intervalpart
         widget.addGraph(sweattrails.qt.graphs.AttrGraph("speed", interval.max_speed, color = Qt.magenta))
@@ -162,7 +162,7 @@ class PacesPage(QWidget):
         self.cplist = CriticalPaceList(self, parent.instance())
         layout = QVBoxLayout(self)
         layout.addWidget(self.cplist)
-        
+
     def selected(self):
         self.cplist.refresh()
 
@@ -170,34 +170,34 @@ class PacesPage(QWidget):
 class RunPlugin(object):
     def __init__(self, page, instance):
         self.page = page
-        
+
     def handle(self, instance):
         logger.debug("Running Run Plugin")
-        self.page.addTab(PacesPage(self.page), "Paces")    
+        self.page.addTab(PacesPage(self.page), "Paces")
 
     def addGraphs(self, widget, interval):
         part = interval.intervalpart
         logger.debug("Pace graph")
         if interval.max_speed:
-            widget.addGraph(sweattrails.qt.graphs.AttrGraph("speed", 
+            widget.addGraph(sweattrails.qt.graphs.AttrGraph("speed",
                                                             interval.max_speed,
                                                             color = Qt.magenta))
         if part.max_cadence:
             logger.debug("Cadence graph")
-            widget.addGraph(sweattrails.qt.graphs.AttrGraph("cadence", 
+            widget.addGraph(sweattrails.qt.graphs.AttrGraph("cadence",
                                                             part.max_cadence,
                                                             color = Qt.darkCyan))
 
     def addMiscData(self, page, interval):
         part = interval.intervalpart
         if part.max_cadence:
-            page.addProperty(sweattrails.session.RunPart, 
-                             "intervalpart.max_cadence", 
-                             page.row, 0, 
+            page.addProperty(sweattrails.session.RunPart,
+                             "intervalpart.max_cadence",
+                             page.row, 0,
                              readonly = True)
             page.addProperty(sweattrails.session.RunPart,
                              "intervalpart.average_cadence",
-                             page.row + 1, 0, 
+                             page.row + 1, 0,
                              readonly = True)
             page.row += 2
 
@@ -211,7 +211,7 @@ class ElevationGraph(sweattrails.qt.graphs.Graph):
         self._margin = self._scale / 20.0
         self._scale += 2 * self._margin
         self._offset = self.geodata.min_elev - self._margin
-        
+
     def data(self, wp):
         return wp.corrected_elevation \
             if wp.corrected_elevation is not None \
@@ -223,16 +223,16 @@ class WaypointAxis(object):
         self.interval = interval
         with gripe.db.Tx.begin():
             self.waypoints = self.interval.waypoints()
-        
+
     def scale(self):
         return self(self.waypoints[-1]) - self(self.waypoints[0])
-    
+
     def __call__(self, wp):
         return wp.distance
-    
+
     def __iter__(self):
         return iter(self.waypoints)
-    
+
     def __getitem__(self, key):
         return self.waypoints[-1]
 
@@ -245,7 +245,7 @@ class GraphPage(QWidget):
             logger.debug("HR graph")
             self.graphs.addGraph(
                 sweattrails.qt.graphs.AttrGraph(
-                    self, "hr", instance.max_heartrate, 
+                    self, "hr", instance.max_heartrate,
                     color = Qt.red))
         if instance.geodata:
             logger.debug("ElevationGraph")
@@ -254,14 +254,14 @@ class GraphPage(QWidget):
             parent.plugin.addGraphs(self.graphs, instance)
         layout = QVBoxLayout(self)
         layout.addWidget(self.graphs)
-        
+
 class MapPage(QWidget):
     def __init__(self, parent, instance):
         super(MapPage, self).__init__(parent)
         layout = QVBoxLayout(self)
         self.map = sweattrails.qt.maps.IntervalMap(self, instance)
         layout.addWidget(self.map)
-        
+
     def selected(self):
         self.map.drawMap()
 
@@ -290,22 +290,23 @@ class IntervalListPage(QWidget):
         self.list = IntervalList(self, parent.instance())
         layout = QVBoxLayout(self)
         layout.addWidget(self.list)
-        
+
     def selected(self):
         self.list.refresh()
 
 
 class IntervalPage(grumble.qt.bridge.FormWidget):
     def __init__(self, interval, parent = None):
-        super(IntervalPage, self).__init__(parent, 
+        logger.debug("---> IntervalPage %s",  interval.basekind())
+        super(IntervalPage, self).__init__(parent,
             grumble.qt.bridge.FormButtons.AllButtons
-                if isinstance(interval, sweattrails.session.Session)
+                if interval.basekind() == "session"
                 else grumble.qt.bridge.FormButtons.EditButtons)
         with gripe.db.Tx.begin():
             interval = interval()
             self.interval = interval
             if isinstance(interval, sweattrails.session.Session):
-                self.addProperty(sweattrails.session.Session, "sessiontype", 0, 0, 
+                self.addProperty(sweattrails.session.Session, "sessiontype", 0, 0,
                                  readonly = True, has_label = False, rowspan = 3,
                                  bridge = grumble.qt.bridge.Image, height = 64,
                                  displayconverter = sweattrails.qt.view.SessionTypeIcon())
@@ -318,7 +319,7 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
                                  readonly = True)
                 col = 0
                 row = 1
-            self.addProperty(sweattrails.session.Interval, "elapsed_time", row, col, 
+            self.addProperty(sweattrails.session.Interval, "elapsed_time", row, col,
                              readonly = True)
             self.addProperty(sweattrails.session.Interval, "duration", row, col + 2,
                              readonly = True)
@@ -329,7 +330,7 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
             self.addProperty(sweattrails.session.Interval, "average_speed", row, col,
                              readonly = True, displayconverter = sweattrails.qt.view.PaceSpeed("Average"))
             self.addProperty(sweattrails.session.Interval, "max_speed", row, col + 2,
-                             readonly = True, 
+                             readonly = True,
                              displayconverter = sweattrails.qt.view.PaceSpeed({"Pace": "Best", "Speed": "Maximum"}))
             row += 1
             self.setInstance(interval)
@@ -359,7 +360,7 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
             self.plugin = pluginClass(self, instance)
             self.plugin.handle(instance)
 
-    _plugins = { 
+    _plugins = {
         sweattrails.session.BikePart: BikePlugin,
         sweattrails.session.RunPart: RunPlugin
     }
@@ -427,7 +428,7 @@ class SessionList(grumble.qt.view.TableView):
         user = QCoreApplication.instance().user
         self.query().clear_filters()
         self.query().add_filter("athlete", "=", user)
-        
+
 
 class SessionTab(QSplitter):
     def __init__(self, parent = None):

@@ -20,6 +20,7 @@
 import collections
 import datetime
 import math
+import traceback
 
 from PySide.QtCore import Qt
 from PySide.QtCore import QMargins
@@ -64,7 +65,7 @@ class DisplayConverter(object):
         self._suffix = config.get("suffix")
         self._label = config.get("label",
                         config.get("verbose_name"))
-        
+
     def setProperty(self, property):
         self._property = property
         if not self._label:
@@ -224,7 +225,7 @@ class Label(WidgetBridge):
     def isModified(self):
         return False
 
-    
+
 class Image(Label):
     def customize(self, widget):
         self.height = int(self.config.get("height", 0))
@@ -233,8 +234,8 @@ class Image(Label):
             self.width = self.height
         if self.width and not self.height:
             self.height = self.width
-        
-    
+
+
     def apply(self, value):
         if isinstance(value, basestring):
             value = QPixmap(value)
@@ -246,7 +247,7 @@ class Image(Label):
 
 class TimeDeltaLabel(Label, DisplayConverter):
     _grumbletypes = [ grumble.property.TimeDeltaProperty ]
-    
+
     def getDisplayConverter(self):
         return self
 
@@ -260,7 +261,7 @@ class TimeDeltaLabel(Label, DisplayConverter):
         else:
             return "%d'%02d\"" % (m, s)
 
-    
+
 class LineEdit(WidgetBridge):
     _grumbletypes = [
         grumble.property.TextProperty,
@@ -443,11 +444,11 @@ class Choices():
                         self._choices[c] = self.choices[c]
                     except:
                         self._choices[c] = c
-                
+
     def choicesdict(self):
         self._initialize_choices()
         return self._choices
-    
+
     def index(self, value):
         self._initialize_choices();
         count = 0;
@@ -479,7 +480,7 @@ class ComboBox(WidgetBridge, Choices):
         self.required = "required" in self.config
         for (key, text) in self.choicesdict().items():
             widget.addItem(text, key)
-                
+
     def apply(self, value):
         self.assigned = value
         self.widget.setCurrentIndex(self.index(value))
@@ -539,38 +540,38 @@ class PropertyFormLayout(QGridLayout):
         rowspan = int(kwargs.get("rowspan", 1))
         if bridge.label:
             labelspan = int(kwargs.get("labelspan", 1))
-            self.addWidget(bridge.label, row, col, 
+            self.addWidget(bridge.label, row, col,
                            rowspan, labelspan)
             col += labelspan
         colspan = int(kwargs.get("colspan", 1))
-        #logger.debug("Adding bridge widget: %s(%s/%s), %d, %d", bridge.name, bridge.__class__.__name__, 
+        #logger.debug("Adding bridge widget: %s(%s/%s), %d, %d", bridge.name, bridge.__class__.__name__,
         #             bridge.widget.__class__.__name__, row, col)
         self.addWidget(bridge.container, row, col, rowspan, colspan)
 
     def addSubLayout(self, layout):
         self.addSubLayouts(layout)
-        
+
     def addSubLayouts(self, *layouts):
         for layout in layouts:
             self.sublayouts.append(layout)
-        
+
     def addLayout(self, layout, *args):
         if isinstance(layout, PropertyFormLayout):
             self.sublayouts.append(layout)
         super(PropertyFormLayout, self).addLayout(layout, *args)
-        
+
     def _setValues(self, instance):
         for (p, bridge) in self._properties.items():
             path = p.split(".")
             i = reduce(lambda i, n : getattr(i, n),
                        path[:-1],
                        instance)
-            #logger.debug("Set bridge widget value: %s(%s/%s), %s", bridge.name, bridge.__class__.__name__, 
+            #logger.debug("Set bridge widget value: %s(%s/%s), %s", bridge.name, bridge.__class__.__name__,
             #         bridge.widget.__class__.__name__, i)
             bridge.setValue(i)
         for s in self.sublayouts:
             s._setValues(instance)
-        
+
     def apply(self, instance):
         with gripe.db.Tx.begin():
             self._setValues(instance)
@@ -611,12 +612,12 @@ class FormPage(QWidget):
         self.vbox.addStretch(1)
         self._has_stretch = True
         layout.addWidget(formframe)
-        
+
     def _removeStretch(self):
         if self._has_stretch:
             self.vbox.removeItem(self.vbox.itemAt(self.vbox.count() - 1))
             self._has_stretch = False;
-        
+
     def addProperty(self, kind, path, row, col, *args, **kwargs):
         self.form.addProperty(self, kind, path, row, col, *args, **kwargs)
 
@@ -650,7 +651,7 @@ class FormWidget(FormPage):
         self.buildButtonBox(buttons)
         self.tabs = None
         self._tabs = {}
-        
+
     def buildButtonBox(self, buttons):
         buttonWidget = QGroupBox()
         self.buttonbox = QHBoxLayout(buttonWidget)
@@ -671,12 +672,12 @@ class FormWidget(FormPage):
 
     def addWidgetToButtonBox(self, widget, *args):
         self.buttonbox.insertWidget(0, widget, *args)
-        
+
     def addTab(self, widget, title):
         if self.tabs is None:
             self.tabs = QTabWidget(self)
             self.tabs.currentChanged[int].connect(self.tabChanged)
-            
+
             # Remove stretch at the bottom:
             self._removeStretch()
             self.vbox.addWidget(self.tabs, 1)
@@ -685,7 +686,7 @@ class FormWidget(FormPage):
         self.tabs.addTab(widget, title)
         self._tabs[title] = widget
         return widget
-    
+
     def tabChanged(self, ix):
         w = self.tabs.currentWidget()
         if hasattr(w, "selected"):
@@ -708,22 +709,24 @@ class FormWidget(FormPage):
             self._instance = instance
         self.form.apply(self.instance())
         self.instanceAssigned.emit(str(instance.key()))
-        
+
     def confirmDelete(self):
-        return QMessageBox.warning(self, "Are you sure?", 
+        return QMessageBox.warning(self, "Are you sure?",
                                    "Are you sure you want to delete this?",
                                     QMessageBox.Cancel | QMessageBox.Ok,
                                     QMessageBox.Cancel) == QMessageBox.Ok
-    
+
     def onDelete(self):
         try:
-            key = str(self.instance().key())
-            if grumble.model.Model.delete(self.instance()):
-                self.instanceDeleted.emit(key)
+            with gripe.db.Tx.begin():
+                key = str(self.instance().key())
+                if grumble.model.delete(self.instance()):
+                    self.instanceDeleted.emit(key)
         except:
+            traceback.print_exc()
             self.exception.emit("Delete failed...")
-        
+
     def deleteInstance(self):
         if self.instance() and self.confirmDelete():
             self.onDelete()
-                        
+

@@ -235,5 +235,5 @@ class ModelQuery(object):
         elif hasattr(key, "key") and callable(key.key):
             key = key.key()
         assert isinstance(key, grumble.key.Key), "ModelQuery.delete_one requires a valid key object"
-        return ModelQuery().set_keyname(key)._delete(key.kind)
+        return ModelQuery().set_key(key)._delete(key.kind())
 
