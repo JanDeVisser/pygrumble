@@ -80,9 +80,9 @@ class CriticalPowerList(grumble.qt.view.TableView):
 
         query = sweattrails.session.CriticalPower.query(keys_only = False)
         self.setQueryAndColumns(query,
-                grumble.qt.model.TableColumn("cpdef.name", header = "Duration"),
-                grumble.qt.model.TableColumn("power", format = "d", header = "Power"),
-                sweattrails.qt.view.TimestampColumn(header = "Starting on"))
+                                grumble.qt.model.TableColumn("cpdef.name", header = "Duration"),
+                                grumble.qt.model.TableColumn("power", format = "d", header = "Power"),
+                                sweattrails.qt.view.TimestampColumn(header = "Starting on"))
 
     def resetQuery(self):
         self.query().set_parent(self.interval.intervalpart)
@@ -295,13 +295,45 @@ class IntervalListPage(QWidget):
         self.list.refresh()
 
 
+class RawDataList(grumble.qt.view.TableView):
+    def __init__(self, parent = None, interval = None):
+        super(RawDataList, self).__init__(parent = parent)
+
+        query = sweattrails.session.Waypoint.query(parent = interval,
+                                                   keys_only = False)
+        query.add_sort("timestamp")
+        self.setQueryAndColumns(query,
+                grumble.qt.model.TableColumn("timestamp", header = "Timestamp"),
+                grumble.qt.model.TableColumn("location"),
+                grumble.qt.model.TableColumn("elevation"),
+                grumble.qt.model.TableColumn("corrected_elevation", header = "Corrected"),
+                grumble.qt.model.TableColumn("speed"),
+                grumble.qt.model.TableColumn("distance"),
+                grumble.qt.model.TableColumn("cadence"),
+                grumble.qt.model.TableColumn("heartrate"),
+                grumble.qt.model.TableColumn("power"),
+                grumble.qt.model.TableColumn("torque"),
+                grumble.qt.model.TableColumn("temperature"))
+        QCoreApplication.instance().refresh.connect(self.refresh)
+
+
+class RawDataPage(QWidget):
+    def __init__(self, parent):
+        super(RawDataPage, self).__init__(parent)
+        self.list = RawDataList(self, parent.instance())
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.list)
+
+    def selected(self):
+        self.list.refresh()
+
+
 class IntervalPage(grumble.qt.bridge.FormWidget):
     def __init__(self, interval, parent = None):
-        logger.debug("---> IntervalPage %s",  interval.basekind())
         super(IntervalPage, self).__init__(parent,
-            grumble.qt.bridge.FormButtons.AllButtons
-                if interval.basekind() == "session"
-                else grumble.qt.bridge.FormButtons.EditButtons)
+                                           grumble.qt.bridge.FormButtons.AllButtons
+                                               if interval.basekind() == "session"
+                                               else grumble.qt.bridge.FormButtons.EditButtons)
         with gripe.db.Tx.begin():
             interval = interval()
             self.interval = interval
@@ -343,6 +375,9 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
             self.addTab(GraphPage(self, interval), "Graphs")
             self.addTab(MapPage(self, interval), "Map")
             self.addTab(MiscDataPage(self, interval), "Other Data")
+            if interval.basekind() == "session":
+                self.addTab(RawDataPage(self), "Raw Data")
+                
             self.statusMessage.connect(QCoreApplication.instance().status_message)
             self.exception.connect(QCoreApplication.instance().status_message)
             self.instanceSaved.connect(QCoreApplication.instance().status_message)
@@ -364,6 +399,7 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
         sweattrails.session.BikePart: BikePlugin,
         sweattrails.session.RunPart: RunPlugin
     }
+    
     @classmethod
     def getPartPluginClass(cls, part):
         if part.__class__ in cls._plugins:
