@@ -25,7 +25,6 @@ import os
 import os.path
 import sys
 import threading
-import traceback
 
 import gripe.json_util
 

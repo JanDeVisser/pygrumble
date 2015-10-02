@@ -18,6 +18,7 @@
 
 import argparse
 import sys
+import threading
 import traceback
 
 from PySide.QtCore import QCoreApplication

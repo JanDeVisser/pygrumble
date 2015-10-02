@@ -1,5 +1,20 @@
-__author__ = "jan"
-__date__ = "$12-Sep-2015 2:10:37 PM$"
+#
+# Copyright (c) 2015 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
 import datetime
 import httplib
@@ -17,35 +32,12 @@ logger = gripe.get_logger(__name__)
 withings_user_id = "2497930"
 withings_public_key = "82435cd4a1ca8d8b"
 withings_host = "wbsapi.withings.net"
-withings_url = "/measure?action=getmeas&userid=%s&publickey=%s&category=1" % (withings_user_id, withings_public_key)
+withings_url = "/measure?action=getmeas&userid=%s&publickey=%s&category=1"
 
 class WithingsMeasurement(grumble.model.Model):
     timestamp = grumble.property.DateTimeProperty()
     type = grumble.property.IntegerProperty()
     value = grumble.property.FloatProperty()
-    
-    def convert(self):
-        part = self.parent()
-        if self.type in [1, 6]:
-            h = sweattrails.userprofile.WeightHistory.query("snapshotdate = ", self.timestamp, parent = part)
-            if not h:
-                h = sweattrails.userprofile.WeightHistory(snapshotdate = self.timestamp, parent = part)
-            if self.type == 1:
-                h.weight = self.value
-            else:
-                h.bfPercentage = self.value
-            h.put()
-        elif self.type in [9, 10, 11]:
-            h = sweattrails.userprofile.CardioVascularHistory.query("snapshotdate = ", self.timestamp, parent = part)
-            if not h:
-                h = sweattrails.userprofile.CardioVascularHistory(snapshotdate = self.timestamp, parent = part)
-            if self.type == 9:
-                h.bpLow = self.value
-            elif self.type == 10:
-                h.bpHigh = self.value
-            else:
-                h.resting_hr = self.value
-            h.put()
 
 class WithingsJob(sweattrails.qt.imports.Job):
     def __init__(self):
@@ -53,46 +45,69 @@ class WithingsJob(sweattrails.qt.imports.Job):
 
     def handle(self):
         self.started("Downloading Withings data")
+        part = self.user.get_part("WeightMgmt")
+        if not part:
+            self.error("downloading Withings data", "No WeightMgmt part found.")
+            return
+        auth = sweattrails.userprofile.WithingsAuth.query(parent = part).get()
+        if not auth:
+            self.error("downloading Withings data", "No WithingsAuth data found.")
+            return
         conn = httplib.HTTPConnection(withings_host)
-        conn.request("GET", withings_url)
+        conn.request("GET", withings_url % (auth.userid,  auth.public_key))
         response = conn.getresponse()
         if response.status == 200:
-            if self._parse_results(user, response):
+            if self._parse_results(part, response):
                 self.finished("Withings data downloaded")
         else:
             logger.error("Error downloading Withings data: %s", response.status)
             self.error("downloading Withing data", response.status)
         
-    def _parse_results(self, user, response):
+    def _parse_results(self, part, response):
+        logger.debug("Parsing downloaded Withings data")
         results = json.load(response)
+        logger.debug("parsed json data")
         if results["status"] != 0:
-            self.error("downloading Withing data. Withings reports error",
+            logger.error("Error downloading Withing data. Withings reports error: %s",
+                         results["status"])
+            self.error("downloading Withing data. Withings reports error: %s",
                        results["status"])
             return False
-        part = user.get_part("WeightMgmt")
-        if not part:
-            self.error("downloading Withings data", "No WeightMgmt part found.")
-            return False
         
-        with gripe.db.Tx.begin():
-            for measuregrp in results["body"]["measuregrps"]:
-                ts = datetime.datetime.fromtimestamp(measuregrp["date"])
-                wms = WithingsMeasurement.query("timestamp = ", ts, parent = part)
-                if not wms:
-                    for measure in measuregrp["measures"]:
-                        self._convert_measure(part, ts, measure)
+        logger.debug("Download result OK. %s measurements",  len(results["body"]["measuregrps"]))
+        for measuregrp in results["body"]["measuregrps"]:
+            ts = datetime.datetime.fromtimestamp(measuregrp["date"])
+            wms = { wm for wm in WithingsMeasurement.query("timestamp = ", ts, parent = part) }
+            for measure in measuregrp["measures"]:
+                if not filter(lambda wm : wm.timestamp == ts and wm.type == measure["type"], wms):
+                    wm = WithingsMeasurement(parent = part, timestamp = ts)
+                    wm.type = measure["type"]
+                    wm.value = measure["value"] * pow(10, measure["unit"])
+                    wm.put()
+                    wms.add(wm)
+            self.convert(wms)
         return True
-    
-    def _convert_measure(self, part, ts, measure):
-        wm = WithingsMeasurement(parent = part, timestamp = ts)
-        wm.type = measure["type"]
-        wm.value = measure["value"] * pow(10, measure["unit"])
-        wm.put()
-        wm.convert()
-                        
-    @classmethod
-    def get_thread(cls):
-        if not cls._singleton:
-            cls._singleton = WithingsThread()
-        return cls._singleton
-    
+
+    def convert(self,  wms):
+        for wm in wms:
+            part = wm.parent()
+            if wm.type in [1, 6]:
+                h = sweattrails.userprofile.WeightHistory.query("snapshotdate = ", wm.timestamp, parent = part)
+                if not h:
+                    h = sweattrails.userprofile.WeightHistory(snapshotdate = wm.timestamp, parent = part)
+                if wm.type == 1:
+                    h.weight = wm.value
+                else:
+                    h.bfPercentage = wm.value
+                h.put()
+            elif wm.type in [9, 10, 11]:
+                h = sweattrails.userprofile.CardioVascularHistory.query("snapshotdate = ", wm.timestamp, parent = part)
+                if not h:
+                    h = sweattrails.userprofile.CardioVascularHistory(snapshotdate = wm.timestamp, parent = part)
+                if wm.type == 9:
+                    h.bpLow = wm.value
+                elif wm.type == 10:
+                    h.bpHigh = wm.value
+                else:
+                    h.resting_hr = wm.value
+                h.put()

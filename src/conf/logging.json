@@ -14,7 +14,7 @@
     "srtm": { "destination": "stderr", "flat": true },
   
     "gripe": { "flat": true },
-    "gripe.db": { "flat": true },
+    "gripe.db": { "flat": true, "level": "info" },
     
     "grudge": { "flat": true },
     "grit": { "flat": true },

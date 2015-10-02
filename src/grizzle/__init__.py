@@ -1,22 +1,24 @@
 __author__ = "jan"
 __date__ = "$24-Feb-2013 11:13:48 AM$"
 
-import sys
-
 import gripe
+import gripe.db
 import gripe.smtp
 import gripe.pgsql
-import grumble
+import grumble.model
+import grumble.property
+import grumble.reference
 import gripe.auth
 import gripe.role
 
 logger = gripe.get_logger("grizzle")
 
-class UserGroup(grumble.Model, gripe.auth.AbstractUserGroup):
+@grumble.model.flat
+class UserGroup(grumble.model.Model, gripe.auth.AbstractUserGroup):
     _flat = True
-    group = grumble.TextProperty(is_key = True)
-    description = grumble.TextProperty(is_label = True)
-    has_roles = grumble.ListProperty()
+    group = grumble.property.TextProperty(is_key = True)
+    description = grumble.property.TextProperty(is_label = True)
+    has_roles = grumble.property.ListProperty()
 
     def gid(self):
         return self.group
@@ -71,8 +73,8 @@ class UserPartKennel(UserPart):
 UserStatus = gripe.Enum(['Unconfirmed', 'Active', 'Admin', 'Banned', 'Inactive', 'Deleted'])
 GodList = ('jan@de-visser.net',)
 
-class UserPartToggle(grumble.BooleanProperty):
-    transient = True
+@grumble.property.transient
+class UserPartToggle(grumble.property.BooleanProperty):
     def __init__(self, partname, *args, **kwargs):
         super(UserPartToggle, self).__init__(*args, **kwargs)
         self.partname = partname
@@ -115,16 +117,17 @@ def customize_user_class(cls):
             propdef = UserPartToggle(name, verbose_name = partdef.label,
                 default = partdef.default)
             cls.add_property(name, propdef)
-            
 
+
+@grumble.model.flat
 class User(grumble.Model, gripe.auth.AbstractUser):
     _flat = True
     _customizer = staticmethod(customize_user_class)
-    email = grumble.TextProperty(is_key = True)
-    password = grumble.PasswordProperty()
-    status = grumble.TextProperty(choices = UserStatus, default = 'Unconfirmed', required = True)
-    display_name = grumble.TextProperty(is_label = True)
-    has_roles = grumble.ListProperty(verbose_name = "Roles", 
+    email = grumble.property.TextProperty(is_key = True)
+    password = grumble.property.PasswordProperty()
+    status = grumble.property.TextProperty(choices = UserStatus, default = 'Unconfirmed', required = True)
+    display_name = grumble.property.TextProperty(is_label = True)
+    has_roles = grumble.property.ListProperty(verbose_name = "Roles", 
         choices = { r: role["label"] for r, role in gripe.Config.app["roles"].items() })
 
     def uid(self):
@@ -141,9 +144,9 @@ class User(grumble.Model, gripe.auth.AbstractUser):
 
     def authenticate(self, **kwargs):
         password = kwargs.get("password")
-        return self.exists() and \
-            self.is_active() and \
-            grumble.PasswordProperty.hash(password) == self.password
+        return (self.exists() and
+                self.is_active() and
+                grumble.PasswordProperty.hash(password) == self.password)
 
     def confirm(self, status = 'Active'):
         logger.debug("User(%s).confirm(%s)", self, status)
@@ -183,9 +186,10 @@ class User(grumble.Model, gripe.auth.AbstractUser):
                     part.update(p, **flags)
 
     def get_part(self, part):
-        self.load_parts()
-        k = part.lower() if (isinstance(part, basestring)) else part.basekind().lower()
-        return self._parts[k] if k in self._parts else None
+        with gripe.db.Tx.begin():
+            self.load_parts()
+            k = part.lower() if (isinstance(part, basestring)) else part.basekind().lower()
+            return self._parts[k] if k in self._parts else None
 
     def after_load(self):
         self.load_parts()
@@ -222,10 +226,13 @@ class User(grumble.Model, gripe.auth.AbstractUser):
     def is_god(self):
         return self.uid() in GodList
 
+
+@grumble.model.flat
 class GroupsForUser(grumble.Model):
     _flat = True
-    user = grumble.ReferenceProperty(reference_class = User)
-    group = grumble.ReferenceProperty(reference_class = UserGroup)
+    user = grumble.reference.ReferenceProperty(reference_class = User)
+    group = grumble.reference.ReferenceProperty(reference_class = UserGroup)
+
 
 class UserManager():
     def get(self, userid):
@@ -247,6 +254,7 @@ class UserManager():
         
     def has_users(self):
         return User.all(keys_only = True).count() > 0
+
 
 if False:
     import webapp2

@@ -245,7 +245,7 @@ class GraphPage(QWidget):
             logger.debug("HR graph")
             self.graphs.addGraph(
                 sweattrails.qt.graphs.AttrGraph(
-                    self, "hr", instance.max_heartrate,
+                    "hr", instance.max_heartrate,
                     color = Qt.red))
         if instance.geodata:
             logger.debug("ElevationGraph")

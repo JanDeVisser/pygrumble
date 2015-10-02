@@ -34,6 +34,7 @@ from PySide.QtGui import QTableWidgetItem
 from PySide.QtGui import QVBoxLayout
 
 import gripe
+import gripe.db
 import grumble.model
 import grumble.property
 import sweattrails.device.antfs
@@ -96,7 +97,8 @@ class Job(QObject):
         self.thread = thread
         logger.debug("Handling job %s", self)
         try:
-            self.handle()
+            with gripe.db.Tx.begin():
+                self.handle()
             self.jobFinished.emit(self)
         except Exception as e:
             self.jobError.emit(e)
@@ -191,14 +193,13 @@ class ImportFile(Job):
                 return
             parser.set_athlete(self.user)
             parser.set_logger(self.thread)
-            with gripe.db.Tx.begin():
-                q = ImportedFITFile.query('"filename" =', f, parent = self.user)
-                fitfile = q.get()
-                if not fitfile:
-                    fitfile = ImportedFITFile(parent = self.user)
-                    fitfile.filename = f
-                    fitfile.status = False
-                    fitfile.put()
+            q = ImportedFITFile.query('"filename" =', f, parent = self.user)
+            fitfile = q.get()
+            if not fitfile:
+                fitfile = ImportedFITFile(parent = self.user)
+                fitfile.filename = f
+                fitfile.status = False
+                fitfile.put()
             try:
                 parser.parse()
             except sweattrails.device.exceptions.SessionExistsError:

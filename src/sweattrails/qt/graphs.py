@@ -1,8 +1,22 @@
-'''
-Created on Aug 28, 2014
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
-@author: jan
-'''
+import datetime
 
 from PySide.QtCore import QPointF
 from PySide.QtCore import Qt
@@ -17,6 +31,71 @@ import gripe
 
 logger = gripe.get_logger(__name__)
 
+class Axis(object):
+    def __init__(self, query,  prop):
+        self._records = None
+        self.query = query
+        self.prop = prop
+        
+    def scale(self):
+        return self.max() - self.min()
+
+    def offset(self):
+        return self.min()
+        
+    def min(self):
+        if not hasattr(self,  "_min"):
+            self._min = None
+            for r in self:
+                val = self.value(r)
+                self._min = min(val, self._min) if self._min is not None else val
+            self._min = self._min or 0
+        return self._min
+        
+    def max(self):
+        if not hasattr(self,  "_max"):
+            self._max = None
+            for r in self:
+                self._max = max(self.value(r), self._max)
+            self._max = self._max or 0
+        return self._max
+    
+    def value(self,  record):
+        return getattr(record, self.prop)
+
+    def __call__(self, record):
+        return self.value(record)
+        
+    def __iter__(self):
+        return iter(self.records())
+
+    def __getitem__(self, key):
+        return self.records()[key]
+        
+    def records(self):
+        if not self._records:
+            if hasattr(self.query, "fetchall") and callable(self.query.fetchall):
+                self._records = self.query.fetchall()
+            else:
+                self._records = [ r for r in self.query ]
+        return self._records
+
+
+class DateAxis(Axis):
+    def min(self):
+        return self.todate(super(DateAxis, self).min())
+    
+    def max(self):
+        return self.todate(super(DateAxis, self).max())
+    
+    def __call__(self, record):
+        return (self.todate(self.value(record)) - self.min()).days
+        
+    @staticmethod
+    def todate(val):
+        return val if isinstance(val, datetime.date) else val.date()
+
+
 class Graph(object):
     def __init__(self, **kwargs):
         self._scale = 1.0
@@ -30,11 +109,28 @@ class Graph(object):
     def __str__(self):
         return "{:s}(scale = {:f}, offset = {:f})".format(self.__class__.__name__, self._scale, self._offset)
 
-    def scale(self, objects):
-        return self._scale
+    def scale(self):
+        return self.max() - self.min()
 
-    def offset(self, objects):
-        return self._offset
+    def offset(self):
+        return self.min()
+        
+    def min(self):
+        if not hasattr(self,  "_min"):
+            self._min = None
+            for r in self._axis:
+                val = self.y(r)
+                self._min = min(val, self._min) if self._min is not None else val
+            self._min = self._min or 0
+        return self._min
+        
+    def max(self):
+        if not hasattr(self,  "_max"):
+            self._max = None
+            for r in self._axis:
+                self._max = max(self.y(r), self._max)
+            self._max = self._max or 0
+        return self._max
     
     def setColor(self, color):
         self._color = color
@@ -54,18 +150,26 @@ class Graph(object):
     def setShade(self, shade):
         self._shade = bool(shade)
     
-    def data(self, obj):
+    def value(self, obj):
         pass
     
     def __call__(self, obj):
-        return self.data(obj)
-    
-    def polygon(self, axis):
+        return self.value(obj)
+        
+    def x(self, obj):
+        return self._axis(obj) if callable(self._axis) else float(obj)
+        
+    def y(self, obj):
+        self(obj) - self.offset()
+        
+    def polygon(self):
         if not self._polygon:
-            o = self.offset(axis)
+            xo = self._axis.offset() \
+                if hasattr(self._axis) and callable(self._axis.offset) \
+                else 0
+            yo = self.offset()
             points = [ 
-                QPointF(axis(obj) if callable(axis) else obj, self(obj) - o)
-                for obj in axis ]
+                QPointF(self.x(obj) - xo, self.y(obj) - yo) for obj in self._axis ]
             if self.shade() is not None:
                 points.insert(0, QPointF(points[0].x(), 0))
                 points.append(QPointF(points[-1].x(), 0))
@@ -76,6 +180,7 @@ class Graph(object):
         trendline = (formula
                      if isinstance(formula, Graph)
                      else FormulaGraph(formula, style = style or Qt.SolidLine))
+        trendline._axis = self._axis
         self._trendlines.append(trendline)
         
     def trendLines(self):
@@ -87,7 +192,7 @@ class FormulaGraph(Graph):
         super(FormulaGraph, self).__init__(**kwargs)
         self._formula = formula
         
-    def data(self, object):
+    def value(self, object):
         return self._formula(object)
 
 
@@ -117,6 +222,7 @@ class GraphWidget(QWidget):
         
     def addGraph(self, graph):
         self._graphs.append(graph)
+        graph._axis = self._axis
         
     def drawGraph(self, graph):
         logger.debug("Drawing graph %s", graph)
@@ -131,7 +237,7 @@ class GraphWidget(QWidget):
         #logger.debug("Scaling factors %f, %f", sx, sy)
         self.painter.scale(sx, sy)
       
-        points = graph.polygon(self._axis)
+        points = graph.polygon()
         p = QPen(graph.color())
         p.setStyle(graph.style())
         self.painter.setPen(p)
@@ -141,14 +247,11 @@ class GraphWidget(QWidget):
         else:            
             self.painter.drawPolyline(points)
         
-        step = 1/sx
         for trendline in graph.trendLines():
             p = QPen(graph.color())
             p.setStyle(trendline.style())
             self.painter.setPen(p)
-            points = trendline.polygon(
-                (x*step for x in range(self.width() - 39))
-            )
+            points = trendline.polygon()
             self.painter.drawPolyline(points)
         self.painter.restore()
 

@@ -617,6 +617,11 @@ class FormPage(QWidget):
         if self._has_stretch:
             self.vbox.removeItem(self.vbox.itemAt(self.vbox.count() - 1))
             self._has_stretch = False;
+            
+    def addStretch(self):
+        if not self._has_stretch:
+            self.vbox.addStretch(1)
+            self._has_stretch = True
 
     def addProperty(self, kind, path, row, col, *args, **kwargs):
         self.form.addProperty(self, kind, path, row, col, *args, **kwargs)
@@ -695,6 +700,8 @@ class FormWidget(FormPage):
     def save(self):
         try:
             self.form.retrieve(self.instance())
+            if hasattr(self,  "retrieve") and callable(self.retrieve):
+                self.retrieve(self.instance())
             self.instanceSaved.emit(str(self.instance.key()))
             self.statusMessage.emit("Saved")
         except:
@@ -708,7 +715,9 @@ class FormWidget(FormPage):
         if instance:
             self._instance = instance
         self.form.apply(self.instance())
-        self.instanceAssigned.emit(str(instance.key()))
+        if hasattr(self,  "assign") and callable(self.assign):
+            self.assign(self.instance())
+        self.instanceAssigned.emit(str(self.instance().key()))
 
     def confirmDelete(self):
         return QMessageBox.warning(self, "Are you sure?",

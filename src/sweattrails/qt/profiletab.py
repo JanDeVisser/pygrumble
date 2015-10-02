@@ -17,9 +17,15 @@
 #
 
 from PySide.QtCore import QCoreApplication
+from PySide.QtGui import QCheckBox
+from PySide.QtGui import QGridLayout
+from PySide.QtGui import QGroupBox
+from PySide.QtGui import QLabel
+from PySide.QtGui import QLineEdit
 from PySide.QtGui import QWidget
 
 import gripe
+import gripe.db
 import grizzle
 import grumble.qt.bridge
 import sweattrails.qt.stackedpage
@@ -44,8 +50,65 @@ class SettingsPage(grumble.qt.bridge.FormWidget):
         self.addProperty(sweattrails.userprofile.UserProfile,
                          "_userprofile.units", 5, 0,
                          style = "radio")
+        
+        withingsB = QGroupBox("Withings Support",  self)
+        withingsL = QGridLayout(withingsB)
+        self.enableWithings = QCheckBox("Enable Withings",  withingsB)
+        self.enableWithings.toggled.connect(self.toggleWithings)
+        withingsL.addWidget(self.enableWithings, 0, 0)
+        withingsL.addWidget(QLabel("Withings User ID"), 1, 0)
+        self.withingsUserID = QLineEdit(withingsB)
+        withingsL.addWidget(self.withingsUserID, 1, 1)
+        withingsL.addWidget(QLabel("Withings Key"), 2, 0)
+        self.withingsKey = QLineEdit(withingsB)
+        withingsL.addWidget(self.withingsKey, 2, 1)
+        self.addWidget(withingsB, self.form.rowCount(), 0, 1, 2)
+        self.addStretch()
         self.statusMessage.connect(QCoreApplication.instance().status_message)
         
+    def toggleWithings(self, checked):
+        with gripe.db.Tx.begin():
+            part = self.instance().get_part("WeightMgmt")
+            if not part:
+                return
+            if checked:
+                auth = sweattrails.userprofile.WithingsAuth.query(parent = part).get()
+                self.withingsUserID.setEnabled(True)
+                self.withingsKey.setEnabled(True)
+                if auth:
+                    self.withingsUserID.setText(auth.userid)
+                    self.withingsKey.setText(auth.public_key)
+            else:
+                self.withingsUserID.setText("")
+                self.withingsUserID.setEnabled(False)
+                self.withingsKey.setText("")
+                self.withingsKey.setEnabled(False)
+            
+    def assign(self, user):
+        with gripe.db.Tx.begin():
+            part = user.get_part("WeightMgmt")
+            if not part:
+                return
+            auth = sweattrails.userprofile.WithingsAuth.query(parent = part).get()
+            if auth:
+                self.enableWithings.setChecked(bool(auth))
+
+    def retrieve(self, user):
+        with gripe.db.Tx.begin():
+            part = user.get_part("WeightMgmt")
+            if not part:
+                return
+            auth = sweattrails.userprofile.WithingsAuth.query(parent = part).get()
+            if self.enableWithings.isChecked():
+                if not auth:
+                    auth = sweattrails.userprofile.WithingsAuth(parent = part)
+                auth.userid = self.withingsUserID.text()
+                auth.public_key = self.withingsKey.text()
+                auth.put()
+            else:
+                if auth:
+                    grumble.model.delete(auth)
+    
     def refresh(self):
         self.activate()
 

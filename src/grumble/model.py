@@ -821,14 +821,15 @@ class Query(grumble.query.ModelQuery):
             return None
 
     def fetchall(self):
-        results = [ r for r in self ]
-        #=======================================================================
-        # ret = results[0] \
-        #     if len(results) == 1 \
-        #     else (results \
-        #             if len(results) \
-        #             else None)
-        #=======================================================================
-        logger.debug("Query(%s, %s, %s).fetchall(): len = %s", self.kind, self.filters, self._ancestor if hasattr(self, "_ancestor") else None, len(results))
-        return results
+        with gripe.db.Tx.begin():
+            results = [ r for r in self ]
+            #=======================================================================
+            # ret = results[0] \
+            #     if len(results) == 1 \
+            #     else (results \
+            #             if len(results) \
+            #             else None)
+            #=======================================================================
+            logger.debug("Query(%s, %s, %s).fetchall(): len = %s", self.kind, self.filters, self._ancestor if hasattr(self, "_ancestor") else None, len(results))
+            return results
 

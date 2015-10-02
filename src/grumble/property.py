@@ -228,16 +228,23 @@ class ModelProperty(object):
     def _values_tosql(self, instance, values):
         if not self.transient:
             values[self.column_name] = self._to_sqlvalue(self.__get__(instance))
+            
+    def _get_storedvalue(self, instance):
+        instance._load()
+        return instance._values[self.name] if self.name in instance._values else None
 
     def __get__(self, instance, owner = None):
         try:
             if not instance:
                 return self
             if self.transient and hasattr(self, "getvalue"):
-                return self.getvalue(instance)
+                ret = self.getvalue(instance)
+                if ret:
+                    instance._load()
+                    instance._values[self.name] = ret
+                return ret
             else:
-                instance._load()
-                return instance._values[self.name] if self.name in instance._values else None
+                return self._get_storedvalue(instance)
         except:
             logger.exception("Exception getting property '%s'", self.name)
             raise
@@ -246,7 +253,7 @@ class ModelProperty(object):
         try:
             if self.is_key and not hasattr(instance, "_brandnew"):
                 return
-            if self.transient and hasattr(self, "setvalue"):
+            if self.transient and hasattr(self, "setvalue") and callable(self.setvalue):
                 return self.setvalue(instance, value)
             else:
                 instance._load()
