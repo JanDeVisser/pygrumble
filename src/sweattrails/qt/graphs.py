@@ -32,11 +32,10 @@ import gripe
 logger = gripe.get_logger(__name__)
 
 class Axis(object):
-    def __init__(self, query,  prop):
-        self._records = None
-        self.query = query
-        self.prop = prop
-        
+    def __init__(self, **kwargs):
+        self._records = kwargs.get("records")
+        self.prop = kwargs.get("property")
+
     def scale(self):
         return self.max() - self.min()
 
@@ -60,8 +59,8 @@ class Axis(object):
             self._max = self._max or 0
         return self._max
     
-    def value(self,  record):
-        return getattr(record, self.prop)
+    def value(self, record):
+        return getattr(record, self.prop) if self.prop else record
 
     def __call__(self, record):
         return self.value(record)
@@ -72,13 +71,22 @@ class Axis(object):
     def __getitem__(self, key):
         return self.records()[key]
         
+    def fetch(self):
+        return []
+
     def records(self):
         if not self._records:
-            if hasattr(self.query, "fetchall") and callable(self.query.fetchall):
-                self._records = self.query.fetchall()
-            else:
-                self._records = [ r for r in self.query ]
+            self._records = self.fetch()
         return self._records
+
+
+class QueryAxis(Axis):
+    def __init__(self, query, prop):
+        super(QueryAxis, self).__init__(property = prop)
+        self.query = query
+
+    def fetch(self):
+        return self.query.fetchall()
 
 
 class DateAxis(Axis):
@@ -197,19 +205,16 @@ class FormulaGraph(Graph):
 
 
 class AttrGraph(Graph):
-    def __init__(self, attr, max_value = 0, **kwargs):
+    def __init__(self, attr, **kwargs):
         super(AttrGraph, self).__init__(**kwargs)
         self._attr = attr
-        self._scale = float(max_value)
-        self._margin = self._scale / 20.0
-        self._scale += self._margin
 
     def __str__(self):
         return "{:s}(color = {:s}, style = {:s}, attr = {:s}, scale = {:f}, offset = {:f})".format(
             self.__class__.__name__, self.color(), self.style(), self._attr, self._scale, self._offset)
 
-    def data(self, obj):
-        return getattr(obj, self._attr) or 0
+    def value(self, obj):
+        return (hasattr(obj, self._attr) and getattr(obj, self._attr)) or 0
 
 
 class GraphWidget(QWidget):
@@ -233,7 +238,7 @@ class GraphWidget(QWidget):
         
         # Scale Y so that elevation diff maps to height() - 40. Y factor
         # is negative so y will actually grow "up":
-        sy = - float(self.height() - 40) / float(graph.scale(self._axis)) 
+        sy = - float(self.height() - 40) / float(graph.scale()) 
         #logger.debug("Scaling factors %f, %f", sx, sy)
         self.painter.scale(sx, sy)
       

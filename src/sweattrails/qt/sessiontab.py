@@ -206,35 +206,36 @@ class ElevationGraph(sweattrails.qt.graphs.Graph):
     def __init__(self, interval):
         super(ElevationGraph, self).__init__(color = "peru", shade = "sandybrown")
         self.geodata = interval.geodata
-        logger.debug("max_elev: %s min_elev: %s", self.geodata.max_elev, self.geodata.min_elev)
-        self._scale = (self.geodata.max_elev - self.geodata.min_elev)
-        self._margin = self._scale / 20.0
-        self._scale += 2 * self._margin
-        self._offset = self.geodata.min_elev - self._margin
+        
+    def min(self):
+        return self.geodata.min_elev
+        
+    def max(self):
+        return self.geodata.max_elev
 
-    def data(self, wp):
+    def value(self, wp):
         return wp.corrected_elevation \
             if wp.corrected_elevation is not None \
             else wp.elevation if wp.elevation else 0
 
 
-class WaypointAxis(object):
+class HRGraph(sweattrails.qt.graphs.AttrGraph):
     def __init__(self, interval):
+        super(HRGraph, self).__init__("hr", color = Qt.red)
         self.interval = interval
+        
+    def max(self):
+        return self.instance.max_heartrate
+
+
+class WaypointAxis(sweattrails.qt.graphs.Axis):
+    def __init__(self, interval):
+        super(WaypointAxis, self).__init__(property = "distance")
+        self.interval = interval
+
+    def fetch(self):
         with gripe.db.Tx.begin():
-            self.waypoints = self.interval.waypoints()
-
-    def scale(self):
-        return self(self.waypoints[-1]) - self(self.waypoints[0])
-
-    def __call__(self, wp):
-        return wp.distance
-
-    def __iter__(self):
-        return iter(self.waypoints)
-
-    def __getitem__(self, key):
-        return self.waypoints[-1]
+            return self.interval.waypoints()
 
 class GraphPage(QWidget):
     def __init__(self, parent, instance):
@@ -243,10 +244,7 @@ class GraphPage(QWidget):
             self, WaypointAxis(instance))
         if instance.max_heartrate:
             logger.debug("HR graph")
-            self.graphs.addGraph(
-                sweattrails.qt.graphs.AttrGraph(
-                    "hr", instance.max_heartrate,
-                    color = Qt.red))
+            self.graphs.addGraph(HRGraph(instance))
         if instance.geodata:
             logger.debug("ElevationGraph")
             self.graphs.addGraph(ElevationGraph(instance))
