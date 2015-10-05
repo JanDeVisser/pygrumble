@@ -128,15 +128,22 @@ class BikePlugin(object):
 
     def addGraphs(self, widget, interval):
         part = interval.intervalpart
-        widget.addGraph(sweattrails.qt.graphs.AttrGraph("speed", interval.max_speed, color = Qt.magenta))
+        widget.addGraph(
+            sweattrails.qt.graphs.Graph(property = "speed",
+                                        max = interval.max_speed,
+                                        color = Qt.magenta))
         if part.max_power:
-            graph = sweattrails.qt.graphs.AttrGraph("power", part.max_power, color = Qt.blue)
+            graph = sweattrails.qt.graphs.Graph(property = "power",
+                                                max = part.max_power,
+                                                color = Qt.blue)
             graph.addTrendLine(lambda x : float(part.average_power))
             graph.addTrendLine(lambda x : float(part.normalized_power),
                                Qt.DashDotLine)
             widget.addGraph(graph)
         if part.max_cadence:
-            widget.addGraph(sweattrails.qt.graphs.AttrGraph("cadence", part.max_cadence, color = Qt.darkCyan))
+            widget.addGraph(sweattrails.qt.graphs.Graph(property = "cadence",
+                                                        max = part.max_cadence,
+                                                        color = Qt.darkCyan))
 
 
 class CriticalPaceList(grumble.qt.view.TableView):
@@ -179,14 +186,14 @@ class RunPlugin(object):
         part = interval.intervalpart
         logger.debug("Pace graph")
         if interval.max_speed:
-            widget.addGraph(sweattrails.qt.graphs.AttrGraph("speed",
-                                                            interval.max_speed,
-                                                            color = Qt.magenta))
+            widget.addGraph(sweattrails.qt.graphs.Graph(property = "speed",
+                                                        max = interval.max_speed,
+                                                        color = Qt.magenta))
         if part.max_cadence:
             logger.debug("Cadence graph")
-            widget.addGraph(sweattrails.qt.graphs.AttrGraph("cadence",
-                                                            part.max_cadence,
-                                                            color = Qt.darkCyan))
+            widget.addGraph(sweattrails.qt.graphs.Graph(property = "cadence",
+                                                        max = part.max_cadence,
+                                                        color = Qt.darkCyan))
 
     def addMiscData(self, page, interval):
         part = interval.intervalpart
@@ -202,33 +209,7 @@ class RunPlugin(object):
             page.row += 2
 
 
-class ElevationGraph(sweattrails.qt.graphs.Graph):
-    def __init__(self, interval):
-        super(ElevationGraph, self).__init__(color = "peru", shade = "sandybrown")
-        self.geodata = interval.geodata
-        
-    def min(self):
-        return self.geodata.min_elev
-        
-    def max(self):
-        return self.geodata.max_elev
-
-    def value(self, wp):
-        return wp.corrected_elevation \
-            if wp.corrected_elevation is not None \
-            else wp.elevation if wp.elevation else 0
-
-
-class HRGraph(sweattrails.qt.graphs.AttrGraph):
-    def __init__(self, interval):
-        super(HRGraph, self).__init__("hr", color = Qt.red)
-        self.interval = interval
-        
-    def max(self):
-        return self.instance.max_heartrate
-
-
-class WaypointAxis(sweattrails.qt.graphs.Axis):
+class WaypointAxis(sweattrails.qt.graphs.XAxis):
     def __init__(self, interval):
         super(WaypointAxis, self).__init__(property = "distance")
         self.interval = interval
@@ -244,10 +225,21 @@ class GraphPage(QWidget):
             self, WaypointAxis(instance))
         if instance.max_heartrate:
             logger.debug("HR graph")
-            self.graphs.addGraph(HRGraph(instance))
+            self.graphs.addGraph(
+                sweattrails.qt.graphs.Graph(
+                    max = self.interval.max_heartrate,
+                    property = "hr",
+                    color = Qt.red))
         if instance.geodata:
             logger.debug("ElevationGraph")
-            self.graphs.addGraph(ElevationGraph(instance))
+            self.graphs.addGraph(sweattrails.qt.graphs.Graph(
+                min = instance.geodata.min_elev,
+                max = instance.geodata.max_elev,
+                value = (lambda wp :
+                         wp.corrected_elevation
+                         if wp.corrected_elevation is not None
+                         else wp.elevation if wp.elevation else 0)
+                color = "peru", shade = "sandybrown"))
         if parent.plugin and hasattr(parent.plugin, "addGraphs"):
             parent.plugin.addGraphs(self.graphs, instance)
         layout = QVBoxLayout(self)
