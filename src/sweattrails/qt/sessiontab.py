@@ -209,9 +209,9 @@ class RunPlugin(object):
             page.row += 2
 
 
-class WaypointAxis(sweattrails.qt.graphs.XAxis):
+class Waypoints(sweattrails.qt.graphs.DataSource, sweattrails.qt.graphs.Axis):
     def __init__(self, interval):
-        super(WaypointAxis, self).__init__(property = "distance")
+        super(Waypoints, self).__init__(property = "distance")
         self.interval = interval
 
     def fetch(self):
@@ -221,25 +221,26 @@ class WaypointAxis(sweattrails.qt.graphs.XAxis):
 class GraphPage(QWidget):
     def __init__(self, parent, instance):
         super(GraphPage, self).__init__(parent)
-        self.graphs = sweattrails.qt.graphs.GraphWidget(
-            self, WaypointAxis(instance))
+        self.graphs = sweattrails.qt.graphs.Graph(
+            self, Waypoints(instance))
         if instance.max_heartrate:
             logger.debug("HR graph")
-            self.graphs.addGraph(
+            self.graphs.addSeries(
                 sweattrails.qt.graphs.Graph(
                     max = self.interval.max_heartrate,
                     property = "hr",
                     color = Qt.red))
         if instance.geodata:
             logger.debug("ElevationGraph")
-            self.graphs.addGraph(sweattrails.qt.graphs.Graph(
+            self.graphs.addSeries(sweattrails.qt.graphs.Graph(
                 min = instance.geodata.min_elev,
                 max = instance.geodata.max_elev,
                 value = (lambda wp :
                          wp.corrected_elevation
                          if wp.corrected_elevation is not None
-                         else wp.elevation if wp.elevation else 0)
-                color = "peru", shade = "sandybrown"))
+                         else wp.elevation if wp.elevation else 0), 
+                color = "peru", 
+                shade = "sandybrown"))
         if parent.plugin and hasattr(parent.plugin, "addGraphs"):
             parent.plugin.addGraphs(self.graphs, instance)
         layout = QVBoxLayout(self)

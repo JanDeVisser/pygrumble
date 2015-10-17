@@ -16,8 +16,6 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-import datetime
-
 from PySide.QtCore import QCoreApplication
 from PySide.QtCore import Qt
 
@@ -113,10 +111,10 @@ class WeightPage(QWidget):
         query = sweattrails.userprofile.WeightHistory.query(keys_only = False,
                     parent = self.part).add_sort("snapshotdate")
     
-        self.graphs = sweattrails.qt.graphs.GraphWidget(
-#            self, DateAxis(query, "snapshotdate"))
-        self.graphs.addGraph(
-            sweattrails.qt.graphs.AttrGraph("weight", None, color = Qt.red))
+        self.graphs = sweattrails.qt.graphs.Graph(
+            self, sweattrails.qt.graphs.DateAxis(query, "snapshotdate"))
+        self.graphs.addSeries(
+            sweattrails.qt.graphs.Series("weight", None, color = Qt.red))
         layout.addWidget(self.graphs)
 
         self.list = WeightList(self)

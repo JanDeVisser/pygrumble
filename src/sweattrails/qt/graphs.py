@@ -31,58 +31,9 @@ import gripe
 
 logger = gripe.get_logger(__name__)
 
-class Axis(object):
+class DataSource(object):
     def __init__(self, **kwargs):
-        if "min" in kwargs:
-            self._min = kwargs["min"]
-        if "max" in kwargs:
-            self._min = kwargs["min"]
-        if "value" in kwargs:
-            self._value = value
-        self.prop = kwargs.get("property")
-
-    def scale(self):
-        if not hasattr(self, "_scale"):
-            self._scale = self.max() - self.min()
-            self._scale *= 1.2 if self.min() != 0 else 1.1
-        return self.scale()
-
-    def offset(self):
-        return 0 if self.min() == 0 else self.min() - (self.scale() * 0.1)
-        
-    def min(self):
-        if not hasattr(self,  "_min"):
-            self._min = None
-            for r in self:
-                val = self.value(r)
-                self._min = min(val, self._min) if self._min is not None else val
-            self._min = self._min or 0
-        return self._min
-        
-    def max(self):
-        if not hasattr(self,  "_max"):
-            self._max = None
-            for r in self:
-                self._max = max(self.value(r), self._max)
-            self._max = self._max or 0
-        return self._max
-    
-    def value(self, record):
-        if hasattr(self, _value):
-            expr = self._value
-        else:
-            expr = (getattr(record, self.prop)
-                    if self.prop and hasattr(record, self.prop)
-                    else record)
-        return expr if not callable(expr) else expr(record)
-
-    def __call__(self, record):
-        return self.value(record)
-
-
-class XAxis(Axis):
-    def __init__(self, **kwargs):
-        super(XAxis, self).__init__(**kwargs)
+        super(DataSource, self).__init__(**kwargs)
         self._records = kwargs.get("records")
         
     def __iter__(self):
@@ -100,13 +51,79 @@ class XAxis(Axis):
         return self._records
 
 
-class QueryAxis(XAxis):
+class QueryDataSource(DataSource):
     def __init__(self, query, **kwargs):
-        super(QueryAxis, self).__init__(property = prop, **kwargs)
+        super(QueryDataSource, self).__init__(**kwargs)
         self.query = query
 
     def fetch(self):
         return self.query.fetchall()
+
+
+class Axis(object):
+    def __init__(self, **kwargs):
+        super(Axis, self).__init__(**kwargs)
+        if "min" in kwargs:
+            self._min = kwargs["min"]
+        if "max" in kwargs:
+            self._min = kwargs["min"]
+        if "value" in kwargs:
+            self._value = kwargs["value"]
+        if "padding" in kwargs:
+            self._padding = kwargs["padding"]
+        if "offset" in kwargs:
+            self._offset = kwargs["offset"]
+        self.prop = kwargs.get("property")
+        
+    def padding(self):
+        if not hasattr(self, "_padding"):
+            self._padding = 0.1
+        return self._padding if not callable(self._padding) else self._padding()
+
+    def scale(self):
+        if not hasattr(self, "_scale"):
+            self._scale = self.max() - self.min()
+            self._scale *= 2 * self.padding() if self.min() != 0 else self.padding()
+        return self.scale()
+
+    def offset(self):
+        if not hasattr(self, "_offset"):
+            self._offset = (0 
+                            if self.min() == 0 
+                            else self.min() - (self.scale() * self.padding()))
+        return self._offset() if callable(self._offset) else self._offset
+
+    def min(self):
+        if not hasattr(self,  "_min"):
+            self._min = None
+            for r in self:
+                val = self.value(r)
+                self._min = min(val, self._min) if self._min is not None else val
+            self._min = self._min or 0
+        return self._min if not callable(self._min) else self._min()
+        
+    def max(self):
+        if not hasattr(self,  "_max"):
+            self._max = None
+            for r in self:
+                self._max = max(self.value(r), self._max)
+            self._max = self._max or 0
+        return self._max if not callable(self._max) else self._max()
+    
+    def value(self, record):
+        if hasattr(self, "_value"):
+            expr = self._value
+        else:
+            expr = (getattr(record, self.prop)
+                    if self.prop and hasattr(record, self.prop)
+                    else record)
+        return expr if not callable(expr) else expr(record)
+
+    def __call__(self, record):
+        return self.value(record)
+
+    def __iter__(self):
+        return iter(self._ds) if self._ds else iter([])
 
 
 class DateAxis(Axis):
@@ -124,19 +141,28 @@ class DateAxis(Axis):
         return val if isinstance(val, datetime.date) else val.date()
 
 
-class Graph(Axis):
-    def __init__(self, **kwargs):
-        super(Graph, self).__init__(**kwargs)
-        self._axis = kwargs.get("axis")
+class Series(Axis):
+    def __init__(self, graph, **kwargs):
+        super(Series, self).__init__(**kwargs)
         self._color = kwargs.get("color", Qt.black)
         self._style = kwargs.get("style", Qt.SolidLine)
         self._shade = kwargs.get("shade", None)
+        self._graph = graph
         self._trendlines = []
         self._polygon = None
         
-    def __iter__(self):
-        return iter(self._axis)
-
+    def graph(self):
+        return self._graph
+        
+    def setGraph(self, graph):
+        self._graph = graph
+        
+    def xaxis(self):
+        return self._graph.xaxis() if self._graph else None
+        
+    def datasource(self):
+        return self._graph.ds() if self._graph else None
+        
     def setColor(self, color):
         self._color = color
         
@@ -156,15 +182,30 @@ class Graph(Axis):
         self._shade = bool(shade)
     
     def x(self, obj):
-        return self._axis(obj) if callable(self._axis) else float(obj)
+        return self.xaxis()(obj) \
+            if self.xaxis() and callable(self.xaxis()) \
+            else float(obj)
         
     def y(self, obj):
-        self(obj) - self.offset()
+        return self(obj) - self.offset()
         
-    def polygon(self):
+    def scaleXY(self):
+        """
+            Calculate painter scaling factors. 
+
+            Scale X so that distance scales to width() - 40: 
+        
+            Scale Y so that elevation diff maps to height() - 40. Y factor
+            is negative so y will actually grow "up".
+        """
+        
+        return ( float(self._graph.width() - 40) / float(self.xaxis().scale()), 
+                 - float(self._graph.height() - 40) / float(self.scale()) )
+
+    def polygon(self, xaxis):
         if not self._polygon:
-            xo = self._axis.offset() \
-                if hasattr(self._axis) and callable(self._axis.offset) \
+            xo = self.xaxis().offset() \
+                if self.xaxis() and hasattr(self.xaxis(), "offset") and callable(self.xaxis().offset) \
                 else 0
             yo = self.offset()
             points = [ 
@@ -177,73 +218,72 @@ class Graph(Axis):
     
     def addTrendLine(self, formula, style = None):
         trendline = (formula
-                     if isinstance(formula, Graph)
-                     else Graph(value = formula, style = style or Qt.SolidLine))
-        trendline._axis = self._axis
+                     if isinstance(formula, Series)
+                     else Series(value = formula, style = style or Qt.SolidLine))
+        trendline.setGraph(self.graph())
         self._trendlines.append(trendline)
         
     def trendLines(self):
         return self._trendlines
 
-
-class FormulaGraph(Graph):
-    def __init__(self, formula, **kwargs):
-        super(FormulaGraph, self).__init__(**kwargs)
-        self._formula = formula
+    def draw(self):
+        self._graph.painter.scale(*self.scaleXY())
+      
+        points = self.polygon()
+        p = QPen(self.color())
+        p.setStyle(self.style())
+        self._graph.painter.setPen(p)
+        if self.shade() is not None:
+            self._graph.painter.setBrush(QColor(self._graph.shade()))
+            self._graph.painter.drawPolygon(points)
+        else:            
+            self._graph.painter.drawPolyline(points)
         
-    def value(self, object):
-        return self._formula(object)
+        for trendline in self.trendLines():
+            p = QPen(self.color())
+            p.setStyle(trendline.style())
+            self._graph.painter.setPen(p)
+            points = trendline.polygon()
+            self._graph.painter.drawPolyline(points)
 
 
-class GraphWidget(QWidget):
-    def __init__(self, parent, axis):
-        super(GraphWidget, self).__init__(parent)
-        self._axis = axis
-        self._graphs = []
+class Graph(QWidget):
+    def __init__(self, parent, ds, **kwargs):
+        super(Graph, self).__init__(parent)
+        self._ds = ds
+        self._xaxis = ds if ds and hasattr(ds, "value") else None
+        self._series = []
         self.setMinimumSize(350, 300)
         self.update()
         
-    def addGraph(self, graph):
-        self._graphs.append(graph)
-        graph._axis = self._axis
-        
-    def drawGraph(self, graph):
-        logger.debug("Drawing graph %s", graph)
-        self.painter.save()
-        # Set scaling factors. 
-        # Scale X so that distance scales to width() - 40: 
-        sx = float(self.width() - 40) / float(self._axis.scale()) 
-        
-        # Scale Y so that elevation diff maps to height() - 40. Y factor
-        # is negative so y will actually grow "up":
-        sy = - float(self.height() - 40) / float(graph.scale()) 
-        #logger.debug("Scaling factors %f, %f", sx, sy)
-        self.painter.scale(sx, sy)
-      
-        points = graph.polygon()
-        p = QPen(graph.color())
-        p.setStyle(graph.style())
-        self.painter.setPen(p)
-        if graph.shade() is not None:
-            self.painter.setBrush(QColor(graph.shade()))
-            self.painter.drawPolygon(points)
-        else:            
-            self.painter.drawPolyline(points)
-        
-        for trendline in graph.trendLines():
-            p = QPen(graph.color())
-            p.setStyle(trendline.style())
-            self.painter.setPen(p)
-            points = trendline.polygon()
-            self.painter.drawPolyline(points)
-        self.painter.restore()
-
     def paintEvent(self, pevent):
+        self.draw()
+
+    def setXAxis(self, xaxis):
+        self._xaxis = xaxis
+
+    def xaxis(self):
+        return self._xaxis
+        
+    def datasource(self):
+        return self._ds
+        
+    def addSeries(self, series):
+        self._series.append(series)
+        series.setGraph(self)
+        
+    def series(self):
+        return self._series
+        
+    def xscale(self):
+        return float(self._axis.scale())
+        
+    def draw(self):
         self.painter = QPainter(self)
         self.painter.setRenderHint(QPainter.Antialiasing)
         
         # Set origin to lower left hand corner:
-        self.painter.translate(20, self.height() - 20)
+        self.painter.translate(20, self._height - 20)
         
         p = QPen(Qt.darkGray)
         p.setStyle(Qt.SolidLine)
@@ -251,6 +291,8 @@ class GraphWidget(QWidget):
         self.painter.drawLine(0, 0, 0, - self.height() - 20)
         self.painter.drawLine(0, 0, self.width() - 20, 0)
         
-        for graph in self._graphs:
-            self.drawGraph(graph)
+        for s in self._series:
+            self.painter.save()
+            s.draw()
+            self.painter.restore()
         self.painter = None
