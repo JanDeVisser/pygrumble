@@ -100,21 +100,28 @@ class WeightList(grumble.qt.view.TableView):
         self.setMinimumHeight(150)
         QCoreApplication.instance().refresh.connect(self.refresh)
 
+class WithingsPoints(sweattrails.qt.graphs.QueryDataSource, sweattrails.qt.graphs.Axis):
+    def __init__(self):
+        user = QCoreApplication.instance().user
+        part = user.get_part("WeightMgmt")
+        query = sweattrails.userprofile.WeightHistory.query(
+            keys_only = False,
+            parent = part).add_sort("snapshotdate")
+        super(WithingsPoints, self).__init__(query = query,
+                                            property = "snapshotdate")
+
+
 class WeightPage(QWidget):
     def __init__(self, parent = None):
         super(WeightPage, self).__init__(parent)
         self.setMinimumSize(800, 600)
         layout = QVBoxLayout(self)
         
-        user = QCoreApplication.instance().user
-        self.part = user.get_part("WeightMgmt")
-        query = sweattrails.userprofile.WeightHistory.query(keys_only = False,
-                    parent = self.part).add_sort("snapshotdate")
-    
         self.graphs = sweattrails.qt.graphs.Graph(
-            self, sweattrails.qt.graphs.DateAxis(query, "snapshotdate"))
+            self, WithingsPoints())
         self.graphs.addSeries(
-            sweattrails.qt.graphs.Series("weight", None, color = Qt.red))
+            sweattrails.qt.graphs.Series(property = "weight",
+                                         color = Qt.red))
         layout.addWidget(self.graphs)
 
         self.list = WeightList(self)

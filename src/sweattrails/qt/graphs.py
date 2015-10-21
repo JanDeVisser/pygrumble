@@ -33,8 +33,9 @@ logger = gripe.get_logger(__name__)
 
 class DataSource(object):
     def __init__(self, **kwargs):
+        logger.debug("DataSource.__init__ %s", type(self));
+        self._records = kwargs.pop("records", None)
         super(DataSource, self).__init__(**kwargs)
-        self._records = kwargs.get("records")
         
     def __iter__(self):
         return iter(self.records())
@@ -52,9 +53,10 @@ class DataSource(object):
 
 
 class QueryDataSource(DataSource):
-    def __init__(self, query, **kwargs):
+    def __init__(self, **kwargs):
+        logger.debug("QueryDataSource.__init__ %s", type(self));
+        self.query = kwargs.pop("query")
         super(QueryDataSource, self).__init__(**kwargs)
-        self.query = query
 
     def fetch(self):
         return self.query.fetchall()
@@ -62,18 +64,29 @@ class QueryDataSource(DataSource):
 
 class Axis(object):
     def __init__(self, **kwargs):
-        super(Axis, self).__init__(**kwargs)
+        logger.debug("Axis.__init__ %s {%s}", type(self), kwargs);
         if "min" in kwargs:
-            self._min = kwargs["min"]
+            self._min = kwargs.pop("min")
         if "max" in kwargs:
-            self._min = kwargs["min"]
+            self._max = kwargs.pop("max")
         if "value" in kwargs:
-            self._value = kwargs["value"]
+            self._value = kwargs.pop("value")
         if "padding" in kwargs:
-            self._padding = kwargs["padding"]
+            self._padding = kwargs.pop("padding")
         if "offset" in kwargs:
-            self._offset = kwargs["offset"]
-        self.prop = kwargs.get("property")
+            self._offset = kwargs.pop("offset")
+        self.prop = kwargs.pop("property", None)
+        self._name = kwargs.pop("name", "anon")
+        super(Axis, self).__init__(**kwargs)
+        
+    def __str__(self):
+        return self._name
+        
+    def graph(self):
+        return self._graph
+        
+    def setGraph(self, graph):
+        self._graph = graph
         
     def padding(self):
         if not hasattr(self, "_padding"):
@@ -84,7 +97,7 @@ class Axis(object):
         if not hasattr(self, "_scale"):
             self._scale = self.max() - self.min()
             self._scale *= 2 * self.padding() if self.min() != 0 else self.padding()
-        return self.scale()
+        return self._scale() if callable(self._scale) else self._scale
 
     def offset(self):
         if not hasattr(self, "_offset"):
@@ -96,18 +109,24 @@ class Axis(object):
     def min(self):
         if not hasattr(self,  "_min"):
             self._min = None
+            ix = 0
             for r in self:
                 val = self.value(r)
                 self._min = min(val, self._min) if self._min is not None else val
+                ix += 1
             self._min = self._min or 0
+            logger.debug("%s.min(): %s #=%s", self, self._min, ix)
         return self._min if not callable(self._min) else self._min()
         
     def max(self):
         if not hasattr(self,  "_max"):
             self._max = None
+            ix = 0
             for r in self:
                 self._max = max(self.value(r), self._max)
+                ix += 1
             self._max = self._max or 0
+            logger.debug("%s.max(): %s #=%s", self, self._max, ix)
         return self._max if not callable(self._max) else self._max()
     
     def value(self, record):
@@ -117,13 +136,17 @@ class Axis(object):
             expr = (getattr(record, self.prop)
                     if self.prop and hasattr(record, self.prop)
                     else record)
-        return expr if not callable(expr) else expr(record)
+        ret = expr if not callable(expr) else expr(record)
+        ret = ret if ret is not None else 0
+        return ret
 
     def __call__(self, record):
         return self.value(record)
 
     def __iter__(self):
-        return iter(self._ds) if self._ds else iter([])
+        return (iter(self.graph().datasource())
+                if self.graph().datasource()
+                else iter([]))
 
 
 class DateAxis(Axis):
@@ -142,21 +165,18 @@ class DateAxis(Axis):
 
 
 class Series(Axis):
-    def __init__(self, graph, **kwargs):
-        super(Series, self).__init__(**kwargs)
-        self._color = kwargs.get("color", Qt.black)
-        self._style = kwargs.get("style", Qt.SolidLine)
-        self._shade = kwargs.get("shade", None)
-        self._graph = graph
+    def __init__(self, **kwargs):
+        logger.debug("Series.__init__ %s", type(self));
+        self._color = kwargs.pop("color", Qt.black)
+        self._style = kwargs.pop("style", Qt.SolidLine)
+        self._shade = kwargs.pop("shade", None)
+        self._graph = kwargs.pop("graph", None)
+        if self._graph:
+            self._graph._series.append(self)
         self._trendlines = []
         self._polygon = None
-        
-    def graph(self):
-        return self._graph
-        
-    def setGraph(self, graph):
-        self._graph = graph
-        
+        super(Series, self).__init__(**kwargs)
+
     def xaxis(self):
         return self._graph.xaxis() if self._graph else None
         
@@ -202,39 +222,23 @@ class Series(Axis):
         return ( float(self._graph.width() - 40) / float(self.xaxis().scale()), 
                  - float(self._graph.height() - 40) / float(self.scale()) )
 
-    def polygon(self, xaxis):
-        if not self._polygon:
-            xo = self.xaxis().offset() \
-                if self.xaxis() and hasattr(self.xaxis(), "offset") and callable(self.xaxis().offset) \
-                else 0
-            yo = self.offset()
-            points = [ 
-                QPointF(self.x(obj) - xo, self.y(obj) - yo) for obj in self ]
-            if self.shade() is not None:
-                points.insert(0, QPointF(points[0].x(), 0))
-                points.append(QPointF(points[-1].x(), 0))
-            self._polygon = QPolygonF(points)
-        return self._polygon
-    
-    def addTrendLine(self, formula, style = None):
-        trendline = (formula
-                     if isinstance(formula, Series)
-                     else Series(value = formula, style = style or Qt.SolidLine))
-        trendline.setGraph(self.graph())
-        self._trendlines.append(trendline)
-        
-    def trendLines(self):
-        return self._trendlines
-
+    def offsetXY(self):
+        return (self.xaxis().offset()
+                if self.xaxis() and
+                   hasattr(self.xaxis(), "offset") and
+                   callable(self.xaxis().offset)
+                else 0,
     def draw(self):
+        logger.debug("Drawing %s", self)
         self._graph.painter.scale(*self.scaleXY())
+        self._graph.painter.translate(*self.offsetXY())
       
         points = self.polygon()
         p = QPen(self.color())
         p.setStyle(self.style())
         self._graph.painter.setPen(p)
         if self.shade() is not None:
-            self._graph.painter.setBrush(QColor(self._graph.shade()))
+            self._graph.painter.setBrush(QColor(self.shade()))
             self._graph.painter.drawPolygon(points)
         else:            
             self._graph.painter.drawPolyline(points)
@@ -251,7 +255,7 @@ class Graph(QWidget):
     def __init__(self, parent, ds, **kwargs):
         super(Graph, self).__init__(parent)
         self._ds = ds
-        self._xaxis = ds if ds and hasattr(ds, "value") else None
+        self.setXAxis(ds if ds and hasattr(ds, "value") else None)
         self._series = []
         self.setMinimumSize(350, 300)
         self.update()
@@ -261,6 +265,8 @@ class Graph(QWidget):
 
     def setXAxis(self, xaxis):
         self._xaxis = xaxis
+        if self._xaxis:
+            self._xaxis.setGraph(self)
 
     def xaxis(self):
         return self._xaxis
@@ -283,7 +289,7 @@ class Graph(QWidget):
         self.painter.setRenderHint(QPainter.Antialiasing)
         
         # Set origin to lower left hand corner:
-        self.painter.translate(20, self._height - 20)
+        self.painter.translate(20, self.height() - 20)
         
         p = QPen(Qt.darkGray)
         p.setStyle(Qt.SolidLine)

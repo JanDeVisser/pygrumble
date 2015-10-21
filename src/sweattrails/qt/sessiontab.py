@@ -126,24 +126,27 @@ class BikePlugin(object):
         if part.max_power:
             self.page.addTab(PowerPage(self.page), "Power")
 
-    def addGraphs(self, widget, interval):
+    def addGraphs(self, graph, interval):
         part = interval.intervalpart
-        widget.addGraph(
-            sweattrails.qt.graphs.Graph(property = "speed",
-                                        max = interval.max_speed,
-                                        color = Qt.magenta))
+        graph.addSeries(
+            sweattrails.qt.graphs.Series(property = "speed",
+                                         name = "Speed",
+                                         max = interval.max_speed,
+                                         color = Qt.magenta))
         if part.max_power:
-            graph = sweattrails.qt.graphs.Graph(property = "power",
-                                                max = part.max_power,
-                                                color = Qt.blue)
-            graph.addTrendLine(lambda x : float(part.average_power))
-            graph.addTrendLine(lambda x : float(part.normalized_power),
+            series = sweattrails.qt.graphs.Series(property = "power",
+                                                  name = "Power",
+                                                  max = part.max_power,
+                                                  color = Qt.blue)
+            series.addTrendLine(lambda x : float(part.average_power))
+            series.addTrendLine(lambda x : float(part.normalized_power),
                                Qt.DashDotLine)
-            widget.addGraph(graph)
+            graph.addSeries(series)
         if part.max_cadence:
-            widget.addGraph(sweattrails.qt.graphs.Graph(property = "cadence",
-                                                        max = part.max_cadence,
-                                                        color = Qt.darkCyan))
+            graph.addSeries(sweattrails.qt.graphs.Series(property = "cadence",
+                                                         name = "Cadence",
+                                                         max = part.max_cadence,
+                                                         color = Qt.darkCyan))
 
 
 class CriticalPaceList(grumble.qt.view.TableView):
@@ -182,18 +185,20 @@ class RunPlugin(object):
         logger.debug("Running Run Plugin")
         self.page.addTab(PacesPage(self.page), "Paces")
 
-    def addGraphs(self, widget, interval):
+    def addGraphs(self, graph, interval):
         part = interval.intervalpart
         logger.debug("Pace graph")
         if interval.max_speed:
-            widget.addGraph(sweattrails.qt.graphs.Graph(property = "speed",
-                                                        max = interval.max_speed,
-                                                        color = Qt.magenta))
+            graph.addSeries(sweattrails.qt.graphs.Series(property = "speed",
+                                                         name = "Speed",
+                                                         max = interval.max_speed,
+                                                         color = Qt.magenta))
         if part.max_cadence:
             logger.debug("Cadence graph")
-            widget.addGraph(sweattrails.qt.graphs.Graph(property = "cadence",
-                                                        max = part.max_cadence,
-                                                        color = Qt.darkCyan))
+            graph.addSeries(sweattrails.qt.graphs.Series(property = "cadence",
+                                                         name = "Cadence",
+                                                         max = part.max_cadence,
+                                                         color = Qt.darkCyan))
 
     def addMiscData(self, page, interval):
         part = interval.intervalpart
@@ -211,7 +216,8 @@ class RunPlugin(object):
 
 class Waypoints(sweattrails.qt.graphs.DataSource, sweattrails.qt.graphs.Axis):
     def __init__(self, interval):
-        super(Waypoints, self).__init__(property = "distance")
+        logger.debug("Waypoints.__init__ %s", type(self));
+        super(Waypoints, self).__init__(property = "distance", name = "Waypoints")
         self.interval = interval
 
     def fetch(self):
@@ -226,19 +232,21 @@ class GraphPage(QWidget):
         if instance.max_heartrate:
             logger.debug("HR graph")
             self.graphs.addSeries(
-                sweattrails.qt.graphs.Graph(
+                sweattrails.qt.graphs.Series(
                     max = self.interval.max_heartrate,
+                    name = "Heartrate",
                     property = "hr",
                     color = Qt.red))
         if instance.geodata:
             logger.debug("ElevationGraph")
-            self.graphs.addSeries(sweattrails.qt.graphs.Graph(
+            self.graphs.addSeries(sweattrails.qt.graphs.Series(
                 min = instance.geodata.min_elev,
                 max = instance.geodata.max_elev,
                 value = (lambda wp :
                          wp.corrected_elevation
                          if wp.corrected_elevation is not None
-                         else wp.elevation if wp.elevation else 0), 
+                         else wp.elevation if wp.elevation else 0),
+                name = "elevation",
                 color = "peru", 
                 shade = "sandybrown"))
         if parent.plugin and hasattr(parent.plugin, "addGraphs"):
