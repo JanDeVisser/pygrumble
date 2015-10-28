@@ -71,6 +71,9 @@ class MiscDataPage(grumble.qt.bridge.FormPage):
             self.addProperty(sweattrails.session.Interval, "calories_burnt", self.row, 0,
                              readonly = True)
             self.row += 1
+        self.addProperty(sweattrails.session.Interval, "interval_id", self.row,
+                         0, readonly = True)
+        self.row += 1
 
 
 class CriticalPowerList(grumble.qt.view.TableView):
@@ -247,7 +250,7 @@ class GraphPage(QWidget):
                          if wp.corrected_elevation is not None
                          else wp.elevation if wp.elevation else 0),
                 name = "elevation",
-                color = "peru", 
+                color = "peru",
                 shade = "sandybrown"))
         if parent.plugin and hasattr(parent.plugin, "addGraphs"):
             parent.plugin.addGraphs(self.graphs, instance)
@@ -376,7 +379,7 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
             self.addTab(MiscDataPage(self, interval), "Other Data")
             if interval.basekind() == "session":
                 self.addTab(RawDataPage(self), "Raw Data")
-                
+
             self.statusMessage.connect(QCoreApplication.instance().status_message)
             self.exception.connect(QCoreApplication.instance().status_message)
             self.instanceSaved.connect(QCoreApplication.instance().status_message)
@@ -398,7 +401,7 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
         sweattrails.session.BikePart: BikePlugin,
         sweattrails.session.RunPart: RunPlugin
     }
-    
+
     @classmethod
     def getPartPluginClass(cls, part):
         if part.__class__ in cls._plugins:
@@ -426,6 +429,10 @@ class SessionDetails(QWidget):
     def setSession(self, session):
         self.tabs.clear()
         self.tabs.addTab(IntervalPage(session, self), str(session.start_time))
+
+    def setTab(self, tab):
+        t = self.tabs.currentWidget()
+        t.setTab(tab)
 
     def addInterval(self, interval):
         self.tabs.addTab(IntervalPage(interval, self), str(interval.timestamp))
@@ -474,3 +481,10 @@ class SessionTab(QSplitter):
         self.addWidget(self.details)
         self.sessions.objectSelected.connect(self.details.setSession)
 
+    def setSession(self, session_id):
+        session = sweattrails.session.Session.get_by_key(session_id)
+        if session:
+            self.details.setSession(session)
+
+    def setTab(self, tab):
+        self.details.setTab(tab)

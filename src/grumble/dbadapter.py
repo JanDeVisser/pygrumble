@@ -28,7 +28,7 @@ QueryType = gripe.Enum(['Columns', 'KeyName', 'Update', 'Insert', 'Delete', 'Cou
 class DbAdapter(object):
     def __init__(self, modelmanager):
         self._mm = modelmanager
-        
+
     def __getattr__(self, name):
         return getattr(self._mm, name)
 
@@ -95,6 +95,9 @@ class ModelQueryRenderer(object):
     def sortorder(self):
         return self._query.sortorder()
 
+    def limit(self):
+        return self._query.limit()
+
     def _update_audit_info(self, new_values, insert):
         # Set update audit info:
         new_values["_updated"] = datetime.datetime.now()
@@ -117,7 +120,7 @@ class ModelQueryRenderer(object):
             if c in new_values:
                 del new_values[c]
 
-    def execute(self, type, new_values = None):
+    def execute(self, query_type, new_values = None):
         logger.debug("Executing query for model '%s'", self._manager.name)
         self._manager.seal()
         assert self._query is not None, "Must set a Query prior to executing a ModelQueryRenderer"
@@ -125,36 +128,36 @@ class ModelQueryRenderer(object):
             key_ix = -1
             cols = ()
             vals = []
-            if type == QueryType.Delete:
+            if query_type == QueryType.Delete:
                 sql = "DELETE FROM %s" % self.tablename()
-            elif type == QueryType.Count:
+            elif query_type == QueryType.Count:
                 sql = "SELECT COUNT(*) AS COUNT FROM %s" % self.tablename()
                 cols = ('COUNT',)
-            elif type in (QueryType.Update, QueryType.Insert):
-                assert new_values, "ModelQuery.execute: QueryType %s requires new values" % QueryType[type]
+            elif query_type in (QueryType.Update, QueryType.Insert):
+                assert new_values, "ModelQuery.execute: QueryType %s requires new values" % QueryType[query_type]
                 if self.audit():
-                    self._update_audit_info(new_values, type == QueryType.Insert)
+                    self._update_audit_info(new_values, query_type == QueryType.Insert)
                 else:
                     self._scrub_audit_info(new_values)
-                if type == QueryType.Update:
+                if query_type == QueryType.Update:
                     sql = 'UPDATE %s SET %s ' % (self.tablename(), ", ".join(['"%s" = %%s' % c for c in new_values]))
                 else:  # Insert
                     sql = 'INSERT INTO %s ( "%s" ) VALUES ( %s )' % \
                             (self.tablename(), '", "'.join(new_values), ', '.join(['%s'] * len(new_values)))
                 vals.extend(new_values.values())
-            elif type in (QueryType.Columns, QueryType.KeyName):
-                if type == QueryType.Columns:
+            elif query_type in (QueryType.Columns, QueryType.KeyName):
+                if query_type == QueryType.Columns:
                     cols = [c.name for c in self.columns()]
                     collist = '"' + '", "'.join(cols) + '"'
                     key_ix = cols.index(self.key_column().name)
-                elif type == QueryType.KeyName:
+                elif query_type == QueryType.KeyName:
                     cols = (self.key_column().name,)
                     collist = '"%s"' % cols[0]
                     key_ix = 0
                 sql = 'SELECT %s FROM %s' % (collist, self.tablename())
             else:
-                assert 0, "Huh? Unrecognized query type %s in query for table '%s'" % (type, self.name())
-            if type != QueryType.Insert:
+                assert 0, "Huh? Unrecognized query query_type %s in query for table '%s'" % (query_type, self.name())
+            if query_type != QueryType.Insert:
                 glue = ' WHERE '
                 if self.has_key():
                     glue = ' AND '
@@ -196,13 +199,15 @@ class ModelQueryRenderer(object):
                             n = ""
                         sql += glue + '(%s %s)' % (e, n)
                     glue = ' AND '
-            if type == QueryType.Columns and self.sortorder():
+            if query_type == QueryType.Columns and self.sortorder():
                 sql += ' ORDER BY ' + ', '.join([('"' + c.colname + '" ' + c.order()) for c in self.sortorder()])
+            if self.limit():
+                sql += ' LIMIT ' + self.limit()
             logger.debug("Rendered query: %s [%s]", sql, vals)
             cur = tx.get_cursor()
             cur.execute(sql, vals, columns = cols, key_index = key_ix)
             return cur
 
 
-    
-    
+
+

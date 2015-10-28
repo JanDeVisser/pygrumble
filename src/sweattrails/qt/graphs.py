@@ -36,13 +36,13 @@ class DataSource(object):
         logger.debug("DataSource.__init__ %s", type(self));
         self._records = kwargs.pop("records", None)
         super(DataSource, self).__init__(**kwargs)
-        
+
     def __iter__(self):
         return iter(self.records())
 
     def __getitem__(self, key):
         return self.records()[key]
-        
+
     def fetch(self):
         return []
 
@@ -78,36 +78,38 @@ class Axis(object):
         self.prop = kwargs.pop("property", None)
         self._name = kwargs.pop("name", "anon")
         super(Axis, self).__init__(**kwargs)
-        
+
     def __str__(self):
         return self._name
-        
+
     def graph(self):
         return self._graph
-        
+
     def setGraph(self, graph):
         self._graph = graph
-        
+
     def padding(self):
         if not hasattr(self, "_padding"):
             self._padding = 0.1
+            logger.debug("%s.scale(): %s", self, self._padding)
         return self._padding if not callable(self._padding) else self._padding()
 
     def scale(self):
         if not hasattr(self, "_scale"):
             self._scale = self.max() - self.min()
             self._scale *= 2 * self.padding() if self.min() != 0 else self.padding()
+            logger.debug("%s.scale(): %s", self, self._scale)
         return self._scale() if callable(self._scale) else self._scale
 
     def offset(self):
         if not hasattr(self, "_offset"):
-            self._offset = (0 
-                            if self.min() == 0 
+            self._offset = (0
+                            if self.min() == 0
                             else self.min() - (self.scale() * self.padding()))
         return self._offset() if callable(self._offset) else self._offset
 
     def min(self):
-        if not hasattr(self,  "_min"):
+        if not hasattr(self, "_min"):
             self._min = None
             ix = 0
             for r in self:
@@ -117,9 +119,9 @@ class Axis(object):
             self._min = self._min or 0
             logger.debug("%s.min(): %s #=%s", self, self._min, ix)
         return self._min if not callable(self._min) else self._min()
-        
+
     def max(self):
-        if not hasattr(self,  "_max"):
+        if not hasattr(self, "_max"):
             self._max = None
             ix = 0
             for r in self:
@@ -128,7 +130,7 @@ class Axis(object):
             self._max = self._max or 0
             logger.debug("%s.max(): %s #=%s", self, self._max, ix)
         return self._max if not callable(self._max) else self._max()
-    
+
     def value(self, record):
         if hasattr(self, "_value"):
             expr = self._value
@@ -152,13 +154,13 @@ class Axis(object):
 class DateAxis(Axis):
     def min(self):
         return self.todate(super(DateAxis, self).min())
-    
+
     def max(self):
         return self.todate(super(DateAxis, self).max())
-    
+
     def __call__(self, record):
         return (self.todate(self.value(record)) - self.min()).days
-        
+
     @staticmethod
     def todate(val):
         return val if isinstance(val, datetime.date) else val.date()
@@ -179,36 +181,36 @@ class Series(Axis):
 
     def xaxis(self):
         return self._graph.xaxis() if self._graph else None
-        
+
     def datasource(self):
         return self._graph.ds() if self._graph else None
-        
+
     def setColor(self, color):
         self._color = color
-        
+
     def color(self):
         return self._color
-    
+
     def style(self):
         return self._style
-    
+
     def setStyle(self, style):
         self._style = style
-        
+
     def shade(self):
         return self._shade
 
     def setShade(self, shade):
         self._shade = bool(shade)
-    
+
     def x(self, obj):
         return self.xaxis()(obj) \
             if self.xaxis() and callable(self.xaxis()) \
             else float(obj)
-        
+
     def y(self, obj):
-        return self(obj) - self.offset()
-        
+        return self(obj)
+
     def scaleXY(self):
         """
             Calculate painter scaling factors. 
@@ -218,37 +220,57 @@ class Series(Axis):
             Scale Y so that elevation diff maps to height() - 40. Y factor
             is negative so y will actually grow "up".
         """
-        
-        return ( float(self._graph.width() - 40) / float(self.xaxis().scale()), 
-                 - float(self._graph.height() - 40) / float(self.scale()) )
+
+        return (float(self._graph.width() - 40) / float(self.xaxis().scale()),
+                 - float(self._graph.height() - 40) / float(self.scale()))
 
     def offsetXY(self):
-        return (self.xaxis().offset()
-                if self.xaxis() and
-                   hasattr(self.xaxis(), "offset") and
-                   callable(self.xaxis().offset)
-                else 0,
+        xoffset = (self.xaxis().offset()
+                   if self.xaxis() and
+                      hasattr(self.xaxis(), "offset") and
+                      callable(self.xaxis().offset)
+                   else 0)
+        logger.debug("xoffset : %s offset %s", xoffset, self.offset())
+        return (20 - xoffset, 20 - self.offset())
+
+    def polygon(self):
+        if not self._polygon:
+            points = [ QPointF(self.x(obj), self.y(obj)) for obj in self ]
+            if self.shade() is not None:
+                points.insert(0, QPointF(points[0].x(), 0))
+                points.append(QPointF(points[-1].x(), 0))
+            self._polygon = QPolygonF(points)
+        return self._polygon
+
     def draw(self):
         logger.debug("Drawing %s", self)
         self._graph.painter.scale(*self.scaleXY())
         self._graph.painter.translate(*self.offsetXY())
-      
-        points = self.polygon()
+
         p = QPen(self.color())
         p.setStyle(self.style())
         self._graph.painter.setPen(p)
         if self.shade() is not None:
             self._graph.painter.setBrush(QColor(self.shade()))
-            self._graph.painter.drawPolygon(points)
-        else:            
-            self._graph.painter.drawPolyline(points)
-        
+            self._graph.painter.drawPolygon(self.polygon())
+        else:
+            self._graph.painter.drawPolyline(self.polygon())
+
         for trendline in self.trendLines():
             p = QPen(self.color())
             p.setStyle(trendline.style())
             self._graph.painter.setPen(p)
-            points = trendline.polygon()
-            self._graph.painter.drawPolyline(points)
+            self._graph.painter.drawPolyline(trendline.polygon())
+
+    def addTrendLine(self, formula, style = None):
+        trendline = (formula
+                     if isinstance(formula, Series)
+                     else Series(value = formula, style = style or Qt.SolidLine))
+        trendline.setGraph(self.graph())
+        self._trendlines.append(trendline)
+
+    def trendLines(self):
+        return self._trendlines
 
 
 class Graph(QWidget):
@@ -259,7 +281,7 @@ class Graph(QWidget):
         self._series = []
         self.setMinimumSize(350, 300)
         self.update()
-        
+
     def paintEvent(self, pevent):
         self.draw()
 
@@ -270,33 +292,35 @@ class Graph(QWidget):
 
     def xaxis(self):
         return self._xaxis
-        
+
     def datasource(self):
         return self._ds
-        
+
     def addSeries(self, series):
         self._series.append(series)
         series.setGraph(self)
-        
+
     def series(self):
         return self._series
-        
+
     def xscale(self):
         return float(self._axis.scale())
-        
+
     def draw(self):
         self.painter = QPainter(self)
         self.painter.setRenderHint(QPainter.Antialiasing)
-        
+
         # Set origin to lower left hand corner:
         self.painter.translate(20, self.height() - 20)
-        
+
         p = QPen(Qt.darkGray)
         p.setStyle(Qt.SolidLine)
         self.painter.setPen(p)
-        self.painter.drawLine(0, 0, 0, - self.height() - 20)
+        self.painter.drawLine(0, 0, 0, -self.height() - 20)
         self.painter.drawLine(0, 0, self.width() - 20, 0)
-        
+
+        self.painter.resetTransform()
+
         for s in self._series:
             self.painter.save()
             s.draw()

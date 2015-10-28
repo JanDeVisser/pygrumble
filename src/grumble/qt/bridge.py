@@ -544,8 +544,6 @@ class PropertyFormLayout(QGridLayout):
                            rowspan, labelspan)
             col += labelspan
         colspan = int(kwargs.get("colspan", 1))
-        #logger.debug("Adding bridge widget: %s(%s/%s), %d, %d", bridge.name, bridge.__class__.__name__,
-        #             bridge.widget.__class__.__name__, row, col)
         self.addWidget(bridge.container, row, col, rowspan, colspan)
 
     def addSubLayout(self, layout):
@@ -566,7 +564,7 @@ class PropertyFormLayout(QGridLayout):
             i = reduce(lambda i, n : getattr(i, n),
                        path[:-1],
                        instance)
-            #logger.debug("Set bridge widget value: %s(%s/%s), %s", bridge.name, bridge.__class__.__name__,
+            # logger.debug("Set bridge widget value: %s(%s/%s), %s", bridge.name, bridge.__class__.__name__,
             #         bridge.widget.__class__.__name__, i)
             bridge.setValue(i)
         for s in self.sublayouts:
@@ -617,7 +615,7 @@ class FormPage(QWidget):
         if self._has_stretch:
             self.vbox.removeItem(self.vbox.itemAt(self.vbox.count() - 1))
             self._has_stretch = False;
-            
+
     def addStretch(self):
         if not self._has_stretch:
             self.vbox.addStretch(1)
@@ -692,6 +690,13 @@ class FormWidget(FormPage):
         self._tabs[title] = widget
         return widget
 
+    def count(self):
+        return self.tabs and self.tabs.count()
+
+    def setTab(self, tab):
+        if self.tabs and tab <= self.tabs.count():
+            self.tabs.setCurrentIndex(tab)
+
     def tabChanged(self, ix):
         w = self.tabs.currentWidget()
         if hasattr(w, "selected"):
@@ -700,7 +705,7 @@ class FormWidget(FormPage):
     def save(self):
         try:
             self.form.retrieve(self.instance())
-            if hasattr(self,  "retrieve") and callable(self.retrieve):
+            if hasattr(self, "retrieve") and callable(self.retrieve):
                 self.retrieve(self.instance())
             self.instanceSaved.emit(str(self.instance.key()))
             self.statusMessage.emit("Saved")
@@ -715,7 +720,7 @@ class FormWidget(FormPage):
         if instance:
             self._instance = instance
         self.form.apply(self.instance())
-        if hasattr(self,  "assign") and callable(self.assign):
+        if hasattr(self, "assign") and callable(self.assign):
             self.assign(self.instance())
         self.instanceAssigned.emit(str(self.instance().key()))
 

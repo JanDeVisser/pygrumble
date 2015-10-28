@@ -36,6 +36,7 @@ class Sort(object):
 class ModelQuery(object):
     def __init__(self):
         self._owner = None
+        self._limit = None
         self._filters = []
         self._sortorder = []
 
@@ -175,8 +176,19 @@ class ModelQuery(object):
     def sortorder(self):
         return self._sortorder
 
+    def set_limit(self, limit):
+        self._limit = limit
+        return self
+
+    def clear_limit(self):
+        self._limit = None
+        return self
+
+    def limit(self):
+        return self._limit
+
     def execute(self, kind, t):
-        if isinstance(type, bool):
+        if isinstance(t, bool):
             t = grumble.dbadapter.QueryType.KeyName if t else grumble.dbadapter.QueryType.Columns
         with gripe.db.Tx.begin():
             mm = grumble.schema.ModelManager.for_name(kind)

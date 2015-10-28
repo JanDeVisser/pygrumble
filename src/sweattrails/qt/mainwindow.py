@@ -65,7 +65,7 @@ class SelectUser(QDialog):
         self.savecreds = QCheckBox("&Save Credentials (unsafe)")
         layout.addRow(self.savecreds)
         self.buttonbox = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, 
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
             Qt.Horizontal, self)
         self.buttonbox.accepted.connect(self.authenticate)
         self.buttonbox.rejected.connect(self.reject)
@@ -91,7 +91,7 @@ class RepeatPasswordValidator(QValidator):
     def __init__(self, pwdControl):
         super(RepeatPasswordValidator, self).__init__()
         self.pwdControl = pwdControl
-        
+
     def validate(self, input, pos):
         pwd = self.pwdControl.text()
         if len(input) > len(pwd):
@@ -108,18 +108,18 @@ class CreateUser(QDialog):
     def __init__(self, window = None):
         super(CreateUser, self).__init__(window)
         layout = QFormLayout(self)
-        
+
         self.email = QLineEdit(self)
         fm = self.email.fontMetrics()
         self.email.setMaximumWidth(30 * fm.maxWidth() + 11)
         layout.addRow("&User ID:", self.email)
-        
+
         self.pwd = QLineEdit(self)
         self.pwd.setEchoMode(QLineEdit.Password)
         fm = self.pwd.fontMetrics()
         self.pwd.setMaximumWidth(30 * fm.width('*') + 11)
         layout.addRow("&Password:", self.pwd)
-        
+
         self.pwd_again = QLineEdit(self)
         self.pwd_again.setEchoMode(QLineEdit.Password)
         fm = self.pwd_again.fontMetrics()
@@ -127,15 +127,15 @@ class CreateUser(QDialog):
         validator = RepeatPasswordValidator(self.pwd)
         self.pwd_again.setValidator(validator)
         layout.addRow("Password (&again):", self.pwd_again)
-        
+
         self.display_name = QLineEdit(self)
         fm = self.display_name.fontMetrics()
         self.display_name.setMaximumWidth(50 * fm.maxWidth() + 11)
         layout.addRow("&Name", self.display_name)
-        
+
         self.savecreds = QCheckBox("&Save Credentials (unsafe)")
         layout.addRow(self.savecreds)
-        
+
         self.buttonbox = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self)
         self.buttonbox.accepted.connect(self.create)
@@ -150,10 +150,10 @@ class CreateUser(QDialog):
                 "The passwords entered are different")
             self.reject()
         try:
-            QCoreApplication.instance().add_user(self.email.text(), 
+            QCoreApplication.instance().add_user(self.email.text(),
                                                  password,
-                                                 self.display_name.text(), 
-                                                 self.savecreds.isChecked()) 
+                                                 self.display_name.text(),
+                                                 self.savecreds.isChecked())
             self.accept()
         except Exception as e:
             logger.exception("Exception creating user")
@@ -196,16 +196,16 @@ class STMainWindow(QMainWindow):
         icon = QPixmap("image/sweatdrops.png")
         self.setWindowIcon(QIcon(icon))
         QCoreApplication.instance().refresh.connect(self.userSet)
-        
-        
+
+
     def createActions(self):
         self.switchUserAct = QAction("&Switch User", self, shortcut = "Ctrl+U", statusTip = "Switch User", triggered = self.switch_user)
         self.importFileAct = QAction("&Import", self, shortcut = "Ctrl+I", statusTip = "Import Session", triggered = self.file_import)
-        self.downloadAct = QAction("&Download", self, shortcut = "Ctrl+D", 
-                                   statusTip = "Download activities from device", 
+        self.downloadAct = QAction("&Download", self, shortcut = "Ctrl+D",
+                                   statusTip = "Download activities from device",
                                    triggered = QCoreApplication.instance().download)
         self.downloadAct = QAction("&Withings", self,
-                                   statusTip = "Download Withings data", 
+                                   statusTip = "Download Withings data",
                                    triggered = QCoreApplication.instance().withings)
         self.exitAct = QAction("E&xit", self, shortcut = "Ctrl+Q", statusTip = "Exit SweatTrails", triggered = self.close)
 
@@ -271,10 +271,10 @@ class STMainWindow(QMainWindow):
                                "Activity Files (*.tcx *.fit *.csv)")
         if fileNames:
             QCoreApplication.instance().import_files(*fileNames)
-            
+
     def file_import_started(self, filename):
         self.switchUserAct.setEnabled(False)
-                
+
     def file_imported(self, filename):
         self.switchUserAct.setEnabled(True)
         self.refresh()
@@ -286,7 +286,7 @@ class STMainWindow(QMainWindow):
     #
     # END FILE IMPORT
     #
-    
+
     # =====================================================================
     # S I G N A L  H A N D L E R S
     # =====================================================================
@@ -301,7 +301,16 @@ class STMainWindow(QMainWindow):
             w.activate(0)
         if hasattr(w, "setValues"):
             w.setValues()
-            
+
+    def setSession(self, session):
+        self.tabs.setCurrentIndex(0)
+        self.sessiontab.setSession(session)
+
+    def setTab(self, tab):
+        t = self.tabs.currentWidget()
+        if t and hasattr(t, "setTab"):
+            t.setTab(tab)
+
     def userSet(self):
         user = QCoreApplication.instance().user
         if user.is_admin():
@@ -316,7 +325,7 @@ class STMainWindow(QMainWindow):
 
     def progress(self, percentage):
         self.progressbar.setValue(percentage)
-        
+
     def progress_done(self):
         self.progressbar.reset()
 
