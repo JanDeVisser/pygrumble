@@ -22,7 +22,6 @@
 #    sys.path.insert(0, "C:\\Users\\jan\\Documents\Projects\\Grumble\\src")
 # print sys.path
 
-import collections
 import datetime
 import json
 

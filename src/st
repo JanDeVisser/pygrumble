@@ -1,2 +1,3 @@
 #!/bin/bash
-PYTHONPATH=. python sweattrails/qt/app.py "$@"
+#PYTHONPATH=. python sweattrails/qt/app.py "$@"
+python sweattrails/qt/app.py "$@"

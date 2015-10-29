@@ -66,6 +66,7 @@ def root_dir():
         modfile = sys.modules["gripe"].__file__
         _root_dir = os.path.dirname(modfile)
         _root_dir = os.path.dirname(_root_dir) if _root_dir != modfile else '..'
+        # print >> sys.stderr, "_root_dir = %s" % _root_dir
     return _root_dir
 
 _users_init = set([])
@@ -353,8 +354,7 @@ class Config(object):
         for f in os.listdir(os.path.join(root_dir(), "conf")):
             (section, ext) = os.path.splitext(f)
             if ext == ".json":
-                #print >> sys.stderr, "Reading conf file %s.json" % section
-                #print "Reading conf file %s.json" % section
+                # print >> sys.stderr, "Reading conf file %s.json" % section
                 config = gripe.json_util.JSON.file_read(os.path.join("conf", "%s.json" % section))
                 if config and ("components" in config) and isinstance(config.components, list):
                     for component in config.components:

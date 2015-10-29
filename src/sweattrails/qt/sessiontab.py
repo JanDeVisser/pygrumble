@@ -220,12 +220,14 @@ class RunPlugin(object):
 class Waypoints(sweattrails.qt.graphs.DataSource, sweattrails.qt.graphs.Axis):
     def __init__(self, interval):
         logger.debug("Waypoints.__init__ %s", type(self));
-        super(Waypoints, self).__init__(property = "distance", name = "Waypoints")
+        super(Waypoints, self).__init__(property = "distance",
+                                        name = "Waypoints", offset = 0)
         self.interval = interval
 
     def fetch(self):
         with gripe.db.Tx.begin():
             return self.interval.waypoints()
+
 
 class GraphPage(QWidget):
     def __init__(self, parent, instance):

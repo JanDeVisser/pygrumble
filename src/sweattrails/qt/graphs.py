@@ -91,21 +91,19 @@ class Axis(object):
     def padding(self):
         if not hasattr(self, "_padding"):
             self._padding = 0.1
-            logger.debug("%s.scale(): %s", self, self._padding)
+            logger.debug("%s.padding(): %s", self, self._padding)
         return self._padding if not callable(self._padding) else self._padding()
 
     def scale(self):
         if not hasattr(self, "_scale"):
-            self._scale = self.max() - self.min()
-            self._scale *= 2 * self.padding() if self.min() != 0 else self.padding()
+            self._scale = self.max() - self.offset()
             logger.debug("%s.scale(): %s", self, self._scale)
         return self._scale() if callable(self._scale) else self._scale
 
     def offset(self):
         if not hasattr(self, "_offset"):
-            self._offset = (0
-                            if self.min() == 0
-                            else self.min() - (self.scale() * self.padding()))
+            self._offset = self.min()
+            logger.debug("%s.offset(): %s", self, self._offset)
         return self._offset() if callable(self._offset) else self._offset
 
     def min(self):
@@ -204,38 +202,26 @@ class Series(Axis):
         self._shade = bool(shade)
 
     def x(self, obj):
-        return self.xaxis()(obj) \
+        return float(self.xaxis()(obj)) \
             if self.xaxis() and callable(self.xaxis()) \
             else float(obj)
 
     def y(self, obj):
-        return self(obj)
-
-    def scaleXY(self):
-        """
-            Calculate painter scaling factors. 
-
-            Scale X so that distance scales to width() - 40: 
-        
-            Scale Y so that elevation diff maps to height() - 40. Y factor
-            is negative so y will actually grow "up".
-        """
-
-        return (float(self._graph.width() - 40) / float(self.xaxis().scale()),
-                 - float(self._graph.height() - 40) / float(self.scale()))
-
-    def offsetXY(self):
-        xoffset = (self.xaxis().offset()
-                   if self.xaxis() and
-                      hasattr(self.xaxis(), "offset") and
-                      callable(self.xaxis().offset)
-                   else 0)
-        logger.debug("xoffset : %s offset %s", xoffset, self.offset())
-        return (20 - xoffset, 20 - self.offset())
+        return float(self(obj))
 
     def polygon(self):
         if not self._polygon:
-            points = [ QPointF(self.x(obj), self.y(obj)) for obj in self ]
+            xoffset = float(self.xaxis().offset()
+                            if self.xaxis() and
+                               hasattr(self.xaxis(), "offset") and
+                               callable(self.xaxis().offset)
+                            else 0)
+            yoffset = float(self.offset())
+            if yoffset != 0:
+                yoffset -= self.scale() * float(self.padding())
+            logger.debug("%s.polygon() xoffset %s yoffset %s", self, xoffset, yoffset)
+            points = [ QPointF(self.x(obj) - xoffset, self.y(obj) - yoffset)
+                       for obj in self ]
             if self.shade() is not None:
                 points.insert(0, QPointF(points[0].x(), 0))
                 points.append(QPointF(points[-1].x(), 0))
@@ -244,8 +230,24 @@ class Series(Axis):
 
     def draw(self):
         logger.debug("Drawing %s", self)
-        self._graph.painter.scale(*self.scaleXY())
-        self._graph.painter.translate(*self.offsetXY())
+
+        # Calculate painter scaling factors.
+        # Scale X so that distance scales to width() - 40:
+        # Scale Y so that elevation diff maps to height() - 40. Y factor
+        # is negative so y will actually grow "up".
+        xscale = float(self.xaxis().scale()
+                       if self.xaxis() and
+                          hasattr(self.xaxis(), "scale") and
+                          callable(self.xaxis().scale)
+                       else self._graph.width() - 40)
+        yscale = (float(self.scale()) + 
+                  (2 * self.padding() 
+                    if self.offset() != 0
+                    else self.padding()) * float(self.scale()))
+        logger.debug("%s.draw() xscale %s yscale %s", self, xscale, yscale)
+        self._graph.painter.scale(
+          (self._graph.width() - 40) / xscale,
+          - (self._graph.height() - 40) / yscale)
 
         p = QPen(self.color())
         p.setStyle(self.style())
@@ -316,13 +318,74 @@ class Graph(QWidget):
         p = QPen(Qt.darkGray)
         p.setStyle(Qt.SolidLine)
         self.painter.setPen(p)
-        self.painter.drawLine(0, 0, 0, -self.height() - 20)
-        self.painter.drawLine(0, 0, self.width() - 20, 0)
-
-        self.painter.resetTransform()
+        self.painter.drawLine(0, 0, 0, -self.height() - 40)
+        self.painter.drawLine(0, 0, self.width() - 40, 0)
 
         for s in self._series:
             self.painter.save()
             s.draw()
             self.painter.restore()
         self.painter = None
+
+
+if __name__ == "__main__":
+    import random
+    import sys
+    from PySide.QtGui import QApplication
+    
+    class Point(object):
+        def __init__(self, generator, ix):
+            self.ix = ix
+            self.hr = random.uniform(120, 180)
+            generator.max_heartrate = max(self.hr, generator.max_heartrate)
+            self.elevation = random.uniform(generator.min_elev, generator.max_elev)
+            self.corrected_elevation = self.elevation + random.uniform(-5, 5)
+    
+    class Generator(DataSource, Axis):
+        def __init__(self, points):
+            super(Generator, self).__init__(property = "ix",
+                                            name = "Generator", offset = 0)
+            self.min_elev = 300
+            self.max_elev = 400
+            self.max_heartrate = None
+            self._points = [ Point(self, ix) for ix in range(0, points) ]
+            
+        def fetch(self):
+            return self._points
+
+    class GraphTest(QWidget):
+        def __init__(self):
+            super(GraphTest, self).__init__()
+
+            x, y, w, h = 500, 200, 370, 320
+            self.setGeometry(x, y, w, h)
+
+            generator = Generator(100)
+            self.graphs = Graph(self, generator)
+            self.graphs.addSeries(Series(
+                    max = generator.max_heartrate,
+                    name = "Heartrate",
+                    property = "hr",
+                    color = Qt.red))
+            self.graphs.addSeries(Series(
+                min = generator.min_elev,
+                max = generator.max_elev,
+                value = (lambda wp :
+                         wp.corrected_elevation
+                         if wp.corrected_elevation is not None
+                         else wp.elevation if wp.elevation else 0),
+                name = "elevation",
+                color = "peru",
+                shade = "sandybrown"))
+
+        def show_and_raise(self):
+            self.show()
+            self.raise_()
+
+    app = QApplication(sys.argv)
+
+    demo = GraphTest()
+    demo.show_and_raise()
+
+    sys.exit(app.exec_())
+ 

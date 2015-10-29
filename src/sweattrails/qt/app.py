@@ -30,6 +30,8 @@ from PySide.QtGui import QIcon
 from PySide.QtGui import QPixmap
 from PySide.QtGui import QSplashScreen
 
+sys.path.append(".")
+
 import gripe
 import gripe.db
 import grizzle
@@ -267,7 +269,7 @@ parser.add_argument("-W", "--withings", action = "store_true",
 parser.add_argument("-u", "--user", type = str,
     help = """Username to log in as. Note that this overrides a possibly stored username""")
 parser.add_argument("-P", "--password", type = str,
-    help = """Password to use when logging in. Only used when -u/--user is specified as well. 
+    help = """Password to use when logging in. Only used when -u/--user is specified as well.
 Note that this overrides a possibly stored password.""")
 parser.add_argument("-S", "--savecredentials", action = "store_true")
 parser.add_argument("-s", "--session", type = str,
