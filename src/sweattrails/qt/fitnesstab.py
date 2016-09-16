@@ -87,10 +87,8 @@ class BikeFitnessPage(QWidget):
 class WeightList(grumble.qt.view.TableView):
     def __init__(self, parent):
         super(WeightList, self).__init__(parent = parent)
-        user = QCoreApplication.instance().user
-        part = user.get_part("WeightMgmt")
-        query = sweattrails.userprofile.WeightHistory.query(keys_only = False,
-                    parent = part).add_sort("snapshotdate",  False)
+        query = sweattrails.userprofile.WeightHistory.query(keys_only = False)
+        query.add_sort("snapshotdate",  False)
         self.setQueryAndColumns(query,
                 grumble.qt.model.TableColumn("snapshotdate", format = "%A %B %d %Y", header = "Date"),
                 grumble.qt.model.TableColumn("weight"),
@@ -99,6 +97,12 @@ class WeightList(grumble.qt.view.TableView):
                 grumble.qt.model.TableColumn("waist"))
         self.setMinimumHeight(150)
         QCoreApplication.instance().refresh.connect(self.refresh)
+
+    def resetQuery(self):
+        user = QCoreApplication.instance().user
+        part = user.get_part("WeightMgmt")
+        self.query().set_parent(part)
+        
 
 class WithingsPoints(sweattrails.qt.graphs.QueryDataSource, sweattrails.qt.graphs.Axis):
     def __init__(self):
@@ -116,9 +120,10 @@ class WeightPage(QWidget):
         super(WeightPage, self).__init__(parent)
         self.setMinimumSize(800, 600)
         layout = QVBoxLayout(self)
+        self.graphs = None
         
         self.graphs = sweattrails.qt.graphs.Graph(
-            self, WithingsPoints())
+            self, None)
         self.graphs.addSeries(
             sweattrails.qt.graphs.Series(property = "weight",
                                          color = Qt.red))
@@ -137,7 +142,8 @@ class WeightPage(QWidget):
         layout.addWidget(buttonWidget)
 
     def activate(self):
-        pass
+        if not self.graphs.datasource():
+            self.graphs.setDatasource(WithingsPoints())
         
     def withingsDownload(self):
         job = sweattrails.withings.WithingsJob()

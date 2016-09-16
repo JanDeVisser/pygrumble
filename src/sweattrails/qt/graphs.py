@@ -245,24 +245,25 @@ class Series(Axis):
                     if self.offset() != 0
                     else self.padding()) * float(self.scale()))
         logger.debug("%s.draw() xscale %s yscale %s", self, xscale, yscale)
-        self._graph.painter.scale(
-          (self._graph.width() - 40) / xscale,
-          - (self._graph.height() - 40) / yscale)
+        if xscale != 0 and yscale != 0:
+            self._graph.painter.scale(
+              (self._graph.width() - 40) / xscale,
+              - (self._graph.height() - 40) / yscale)
 
-        p = QPen(self.color())
-        p.setStyle(self.style())
-        self._graph.painter.setPen(p)
-        if self.shade() is not None:
-            self._graph.painter.setBrush(QColor(self.shade()))
-            self._graph.painter.drawPolygon(self.polygon())
-        else:
-            self._graph.painter.drawPolyline(self.polygon())
-
-        for trendline in self.trendLines():
             p = QPen(self.color())
-            p.setStyle(trendline.style())
+            p.setStyle(self.style())
             self._graph.painter.setPen(p)
-            self._graph.painter.drawPolyline(trendline.polygon())
+            if self.shade() is not None:
+                self._graph.painter.setBrush(QColor(self.shade()))
+                self._graph.painter.drawPolygon(self.polygon())
+            else:
+                self._graph.painter.drawPolyline(self.polygon())
+
+            for trendline in self.trendLines():
+                p = QPen(self.color())
+                p.setStyle(trendline.style())
+                self._graph.painter.setPen(p)
+                self._graph.painter.drawPolyline(trendline.polygon())
 
     def addTrendLine(self, formula, style = None):
         trendline = (formula
@@ -278,8 +279,7 @@ class Series(Axis):
 class Graph(QWidget):
     def __init__(self, parent, ds, **kwargs):
         super(Graph, self).__init__(parent)
-        self._ds = ds
-        self.setXAxis(ds if ds and hasattr(ds, "value") else None)
+        self.setDatasource(ds)
         self._series = []
         self.setMinimumSize(350, 300)
         self.update()
@@ -298,6 +298,10 @@ class Graph(QWidget):
     def datasource(self):
         return self._ds
 
+    def setDatasource(self, ds):
+        self._ds = ds
+        self.setXAxis(ds if ds and hasattr(ds, "value") else None)
+        
     def addSeries(self, series):
         self._series.append(series)
         series.setGraph(self)
