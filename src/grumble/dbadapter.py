@@ -92,6 +92,9 @@ class ModelQueryRenderer(object):
     def filters(self):
         return self._query.filters()
 
+    def joins(self):
+        return self._query.joins()
+
     def sortorder(self):
         return self._query.sortorder()
 
@@ -148,15 +151,37 @@ class ModelQueryRenderer(object):
             elif query_type in (QueryType.Columns, QueryType.KeyName):
                 if query_type == QueryType.Columns:
                     cols = [c.name for c in self.columns()]
-                    collist = '"' + '", "'.join(cols) + '"'
-                    key_ix = cols.index(self.key_column().name)
-                elif query_type == QueryType.KeyName:
-                    cols = (self.key_column().name,)
-                    collist = '"%s"' % cols[0]
+                    collist = 'k."' + '", k."'.join(cols) + '"'
+                    key_name = self.key_column().name
+                    key_ix = cols.index(key_name)
+                    jix = 0
+                    for j in self.joins():
+                        jixstr = 'j' + str(jix) + '."'
+                        join_cols = [c.name for c in j.columns()]
+                        collist += ' ' + jixstr + ('", ' + jixstr).join(join_cols) + '"'
+                        jix += 1
+                        cols.extend(join_cols)
+                else:
+                    assert query_type == QueryType.KeyName
+                    key_name = self.key_column().name
+                    cols = [key_name]
+                    collist = 'k."%s"' % cols[0]
                     key_ix = 0
-                sql = 'SELECT %s FROM %s' % (collist, self.tablename())
+                    jix = 0
+                    for j in self.joins():
+                        collist += ' j%s."%s"' % (str(jix), j.key_column().name)
+                        jix += 1
+                        cols.append(j.key_column().name)
+                sql = 'SELECT %s FROM %s k ' % (collist, self.tablename())
+
+                jix = 0
+                for j in self.joins():
+                    sql += ' INNER JOIN %s j%s ON (j%s."%s" = k."_key")' % \
+                           (j.tablename(), str(jix), str(jix), j.key_name())
+                    jix += 1
             else:
                 assert 0, "Huh? Unrecognized query query_type %s in query for table '%s'" % (query_type, self.name())
+
             if query_type != QueryType.Insert:
                 glue = ' WHERE '
                 if self.has_key():
@@ -184,21 +209,34 @@ class ModelQueryRenderer(object):
                     glue = ' AND '
                     vals.append(self.owner())
                 for (e, v) in self.filters():
-                    if v is not None:
-                        sql += glue + '(%s %%s)' % e
-                        vals.append(v)
-                    else:
-                        e = e.strip()
+                    oldlen = len(sql)
+                    e = e.strip()
+                    if v is None:
                         if e.endswith("!="):
                             e = e[:-2]
                             n = " IS NOT NULL"
-                        elif e.endswith("="):
+                        elif v is None and e.endswith("="):
                             e = e[:-1]
                             n = " IS NULL"
                         else:
                             n = ""
-                        sql += glue + '(%s %s)' % (e, n)
-                    glue = ' AND '
+                        sql += glue + '(%s%s)' % (e, n)
+                    elif e[-3:].upper().endswith(" IN"):
+                        try:
+                            vals.extend(v)
+                            l = len(v)
+                        except TypeError:
+                            vs = str(v).split(",")
+                            vals.extend(vs)
+                            l = len(vs)
+                        if l > 1:
+                            sql += (glue + ' (%s (' + ', '.join(["%%s" for i in range(l)]) + ')') % e
+                        elif l == 1:
+                            sql += glue + '(%s = %%s)' % e[:-3]
+                    else:
+                        sql += glue + '(%s %%s)' % e
+                        vals.append(v)
+                    glue = ' AND ' if len(sql) > oldlen else glue
             if query_type == QueryType.Columns and self.sortorder():
                 sql += ' ORDER BY ' + ', '.join([('"' + c.colname + '" ' + c.order()) for c in self.sortorder()])
             if self.limit():
@@ -207,7 +245,3 @@ class ModelQueryRenderer(object):
             cur = tx.get_cursor()
             cur.execute(sql, vals, columns = cols, key_index = key_ix)
             return cur
-
-
-
-

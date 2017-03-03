@@ -25,9 +25,13 @@ class Key(object):
                 self._assign(value)
             elif isinstance(value, dict):
                 if "id" in value:
-                    self.__init__(value[id])
-                else:
+                    self.__init__(value["id"])
+                elif "key" in value:
+                    self.__init__(value["key"])
+                elif "kind" in value and "name" in value and "scope" in value:
                     self.__init__(value["kind"], value["name"], value.get("scope"))
+                else:
+                    assert 0, "Cannot create Key object from dict %s" % value
             elif hasattr(value, "key") and callable(value.key):
                 k = value.key()
                 self._kind = k.kind()

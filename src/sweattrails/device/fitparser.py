@@ -17,12 +17,15 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
+import StringIO
+
 import gripe
 import sweattrails.device.exceptions
 import sweattrails.device.fitparse
 import sweattrails.device.parser
 
 logger = gripe.get_logger(__name__)
+
 
 class FITRecord(object):
     def __init__(self, rec):
@@ -64,7 +67,10 @@ class FITParser(sweattrails.device.parser.Parser):
         
     def parse_file(self):
         self.fitactivity = sweattrails.device.fitparse.Activity(self.filename)
-        self.status_message("Parsing FIT file {}", self.filename)
+        if not isinstance(self.filename, StringIO.StringIO):
+            self.status_message("Parsing FIT file {}", self.filename)
+        else:
+            self.status_message("Parsing FIT buffer")
         self.fitactivity.parse()
         
         # Walk all records and wrap them in our types:

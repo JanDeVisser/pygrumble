@@ -21,14 +21,14 @@ import sys
 import threading
 import traceback
 
-from PySide.QtCore import QCoreApplication
-from PySide.QtCore import QObject
-from PySide.QtCore import Signal
+from PyQt5.QtCore import QCoreApplication
+from PyQt5.QtCore import QObject
+from PyQt5.QtCore import pyqtSignal
 
-from PySide.QtGui import QApplication
-from PySide.QtGui import QIcon
-from PySide.QtGui import QPixmap
-from PySide.QtGui import QSplashScreen
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtWidgets import QSplashScreen
 
 sys.path.append(".")
 
@@ -52,7 +52,7 @@ class SplashScreen(QSplashScreen):
 
 
 class SweatTrailsCore(object):
-    refresh = Signal(QObject)
+    refresh = pyqtSignal(QObject)
 
     def init_config(self, args):
         save = False
@@ -122,7 +122,7 @@ class SweatTrailsCore(object):
                     logger.debug("Authenticated. Setting self.user")
                 self.user_id = uid
                 self.user = user
-                self.refresh.emit()
+                self.refresh.emit(None)
                 ret = True
         return ret
 

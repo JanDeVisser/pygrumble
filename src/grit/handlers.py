@@ -1,8 +1,21 @@
-# To change this template, choose Tools | Templates
-# and open the template in the editor.
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
-__author__ = "jan"
-__date__ = "$16-Nov-2012 10:01:52 PM$"
 
 import json
 import traceback
@@ -12,12 +25,12 @@ import webapp2
 import gripe
 import grumble
 import grit.requesthandler
+import grumble.image
 
 logger = gripe.get_logger(__name__)
 
+
 class ModelBridge(object):
-#    def __init__(self, kind):
-#        self.kind(kind)
 
     def _initialize_bridge(self, key = None, kind = None):
         if kind:
@@ -118,8 +131,10 @@ class ModelBridge(object):
     def can_query(self):
         return self.kind().can_query()
 
+
 class BridgedHandler(ModelBridge, grit.requesthandler.ReqHandler):
     pass
+
 
 class PageHandler(BridgedHandler):
     def get_template(self):
@@ -133,12 +148,12 @@ class PageHandler(BridgedHandler):
         ctx["object"] = obj
         return ctx
 
-    def get(self, key = None, kind = None, template = None):
+    def get(self, key=None, kind=None, template=None):
         self._initialize_bridge(key, kind)
         if template:
             self.template = template
         has_access = True
-        if hasattr(self, "allow_access") and callable(self.allow__access):
+        if hasattr(self, "allow_access") and callable(self.allow_access):
             has_access = self.allow_access()
         if has_access:
             if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
@@ -156,6 +171,7 @@ class PageHandler(BridgedHandler):
         else:
             self.error(401)
 
+
 class JSHandler(BridgedHandler):
     content_type = "text/javascript"
     template_dir = "/js"
@@ -172,7 +188,7 @@ class JSHandler(BridgedHandler):
             self.template = kwargs["template"]
         self._initialize_bridge(key, kind)
         has_access = True
-        if hasattr(self, "allow_access") and callable(self.allow__access):
+        if hasattr(self, "allow_access") and callable(self.allow_access):
             has_access = self.allow_access()
         if has_access:
             if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
@@ -180,6 +196,7 @@ class JSHandler(BridgedHandler):
             self.render()
         else:
             self.error(401)
+
 
 class PropertyBridgedHandler(BridgedHandler):
     def _initialize_bridge(self, key, kind, prop):
@@ -200,6 +217,7 @@ class PropertyBridgedHandler(BridgedHandler):
         assert prop_obj, "PropertyBridgedHandler: no property %s" % prop
         self._prop = prop
         return self._prop
+
 
 class ImageHandler(PropertyBridgedHandler):
     def post(self, key = None, kind = None, prop = None):
@@ -244,6 +262,7 @@ class ImageHandler(PropertyBridgedHandler):
         else:
             self.error(401)
 
+
 class JSONHandler(BridgedHandler):
     def get_parent(self):
         return self._query.get("parent")
@@ -277,28 +296,26 @@ class JSONHandler(BridgedHandler):
                 (data, _, _) = data.rpartition("=")
             logger.debug("initialize_bridge() - data = %s", data)
             self._query = json.loads(data)
-            if "_flags" in self._query:
-                self._flags = self._query["_flags"]
-                del self._query["_flags"]
-                logger.debug("initialize_bridge() - flags = %s", self._flags)
-            else:
-                self._flags = {}
+            self._flags = self._query.pop("_flags") if "_flags" in self._query else {}
+            logger.debug("initialize_bridge() - flags = %s", self._flags)
         else:
             self._flags = {}
             self._query = {}
-            
+
+    def get_schema(self):
+        return self.kind().schema()
+
     def _load(self):
         return self._query
-    
+
     def post(self, key = None, kind = None):
         logger.info("JSONHandler.post(%s,%s)\n%s", key, kind, self.request.body)
         self._initialize_bridge(key, kind)
         has_access = True
-        if hasattr(self, "allow_access") and callable(self.allow__access):
+        if hasattr(self, "allow_access") and callable(self.allow_access):
             has_access = self.allow_access()
         if has_access:
-            if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
-                self.initialize_bridge()
+            self.initialize_bridge()
             descriptors = self._query
             descriptors = descriptors if isinstance(descriptors, list) else [descriptors]
             ret = []
@@ -333,9 +350,9 @@ class JSONHandler(BridgedHandler):
             data = [o.to_dict(**self._flags) for o in objs] if objs else None
             count = 0 if data is None else len(data)
             data = data if data is None or len(data) > 1 else data[0]
-            schema = self.kind().schema()
-            meta = { "schema": schema, "count": count }
-            ret = { "meta": meta, "data": data }
+            meta = {"schema": self.get_schema(), "count": count}
+            ret = {"meta": meta, "data": data}
+            logger.debug("JSONHandler returns\n%s", ret)
             self.json_dump(ret)
             return
         self.error(401)
@@ -370,17 +387,17 @@ class RedirectHandler(BridgedHandler):
             self.redirect(self.get_redirect_url())
         else:
             self.error(401)
-            
+
+
 class SchemaHandler(grit.requesthandler.ReqHandler):
     def get(self, kind = None):
         logger.info("SchemaHandler.get(%s)", kind)
         k = grumble.Model.for_name(kind)
         self.json_dump(k.schema())
-        
+
 app = webapp2.WSGIApplication([
         webapp2.Route(r'/json/<kind>', handler = JSONHandler, name = 'json-update'),
         webapp2.Route(r'/json/<kind>/<key>', handler = JSONHandler, name = 'json-query'),
         webapp2.Route(r'/img/<kind>/<prop>/<key>', handler = ImageHandler, name = 'image'),
         webapp2.Route(r'/schema/<kind>', handler = SchemaHandler, name = 'schema'),
     ], debug = True)
-

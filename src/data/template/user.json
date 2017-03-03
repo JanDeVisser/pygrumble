@@ -11,7 +11,7 @@
                     "password": "wbw417",
                     "display_name": "Jan de Visser",
                     "status": "Active",
-                    "has_roles": [ "admin" ]
+                    "has_roles": [ "admin", "athlete" ]
                 },
                 {
                     "email": "mod@de-visser.net",

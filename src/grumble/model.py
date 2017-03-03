@@ -31,10 +31,11 @@ import grumble.schema
 
 logger = gripe.get_logger(__name__)
 
+
 class Model():
     __metaclass__ = grumble.meta.ModelMetaClass
     classes = {}
-    acl = { "admin": "RUDQC", "owner": "R" }
+    acl = { "admin": "RUDQC", "owner": "RUDQ" }
 
     def __new__(cls, **kwargs):
         cls.seal()
@@ -215,6 +216,7 @@ class Model():
                 p = self.parent_key()
                 values['_parent'] = str(p) if p else None
                 values['_ancestors'] = self._ancestors
+                values['_key'] = str(self.key())
             values["_acl"] = self._acl.to_json()
             values["_ownerid"] = self._ownerid if hasattr(self, "_ownerid") else None
             grumble.query.ModelQuery.set(hasattr(self, "_brandnew"), self.key(), values)
@@ -642,22 +644,36 @@ class Model():
     def query(cls, *args, **kwargs):
         cls.seal()
         logger.debug("%s.query: args %s kwargs %s", cls.__name__, args, kwargs)
-        assert (args is None) or (len(args) % 2 == 0), "Must specify a value for every filter"
         assert cls != Model, "Cannot query on unconstrained Model class"
         q = Query(cls, kwargs.get("keys_only", True), kwargs.get("include_subclasses", True))
-        if "ancestor" in kwargs and not cls._flat:
-            q.set_ancestor(kwargs["ancestor"])
-        if "parent" in kwargs and "ancestor" not in kwargs and not cls._flat:
-            q.set_parent(kwargs["parent"])
-        if "ownerid" in kwargs:
-            q.owner(kwargs["ownerid"])
-        if "_sortorder" in kwargs:
-            for s in kwargs["_sortorder"]:
-                q.add_sort(s["column"], s.get("ascending", True))
+        for (k, v) in kwargs.items():
+            if k == "ancestor" and not cls._flat:
+                q.set_ancestor(v)
+            elif k == "parent" and "ancestor" not in kwargs and not cls._flat:
+                q.set_parent(v)
+            elif k == "ownerid":
+                q.owner(v)
+            elif k == "_sortorder":
+                for s in kwargs["_sortorder"]:
+                    q.add_sort(s["column"], s.get("ascending", True))
+            elif isinstance(v, (list, tuple)):
+                q.add_filter(k, *v)
+            elif k in ("keys_only", "include_subclasses"):
+                pass
+            else:
+                q.add_filter(k, v)
         ix = 0
         while ix < len(args):
-            q.add_filter(args[ix], args[ix + 1])
-            ix += 2
+            arg = args[ix]
+            print ix, arg
+            if isinstance(arg, (list, tuple)):
+                q.add_filter(*arg)
+                ix += 1
+            else:
+                assert len(args) > ix+1
+                expr = args[ix+1]
+                q.add_filter(arg, expr)
+                ix += 2
         return q
 
     @classmethod
@@ -699,6 +715,7 @@ class Model():
             else:
                 cls._import_template_data(d)
 
+
 def delete(model):
     ret = 0
     if not hasattr(model, "_brandnew") and model.exists():
@@ -709,17 +726,21 @@ def delete(model):
             logger.info("on_delete trigger prevented deletion of model %s.%s", model.kind(), model.key())
     return ret
 
+
 def abstract(cls):
     cls._abstract = True
     return cls
+
 
 def flat(cls):
     cls._flat = True
     return cls
 
+
 def unaudited(cls):
     cls._audit = False
     return cls
+
 
 class Query(grumble.query.ModelQuery):
     def __init__(self, kind, keys_only = True, include_subclasses = True, **kwargs):
@@ -832,4 +853,3 @@ class Query(grumble.query.ModelQuery):
             #=======================================================================
             logger.debug("Query(%s, %s, %s).fetchall(): len = %s", self.kind, self.filters, self._ancestor if hasattr(self, "_ancestor") else None, len(results))
             return results
-

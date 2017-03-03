@@ -18,6 +18,7 @@ _running = False
 _queue = Queue.Queue()
 _lock = threading.Lock()
 
+
 def _restart(path):
     _queue.put(True)
     prefix = 'monitor (pid=%d):' % os.getpid()
@@ -31,6 +32,7 @@ def _restart(path):
     else:
         # Linux. Assuming daemon mode.
         os.kill(os.getpid(), signal.SIGINT)
+
 
 def _modified(path):
     try:

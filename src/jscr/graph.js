@@ -6,7 +6,7 @@ com.sweattrails.api.Graph = function(id, container) {
     this.container = container;
     this.id = id;
     this.type = "graph";
-    com.sweattrails.api.STManager.register(this);
+    $$.register(this);
     this.canvas = null;
     if (arguments.length > 2) {
         this.setDataSource(arguments[2]);
@@ -18,7 +18,7 @@ com.sweattrails.api.Graph = function(id, container) {
 };
 
 com.sweattrails.api.Graph.prototype.reset = function() {
-    $$.log(this, "Graph.initialize");
+    $$.log(this, "Graph.reset");
     this.header.erase();
     this.footer.erase();
     this.header.render();
@@ -28,7 +28,7 @@ com.sweattrails.api.Graph.prototype.reset = function() {
         this.canvas.height = this.container.innerHeight;
         this.canvas.id = this.id + "-canvas";
         this.container.appendChild(this.canvas);
-        if (!canvas.getContext) {
+        if (!this.canvas.getContext) {
             alert("Your browser does not support graphs");
             return;
         }
@@ -52,83 +52,77 @@ com.sweattrails.api.Graph.prototype.reset = function() {
 
 com.sweattrails.api.Graph.prototype.addPlot = function(plot) {
     if (typeof(this.plots[plot.id]) === 'undefined') {
-	this.plots[plot.id] = plot;
-	var s = document.getElementById('plot_selector')
-	var lbl = document.createElement("label")
-	s.appendChild(lbl)
-	var cb = document.createElement('input')
-	cb.type = 'checkbox'
-	cb.value = plot.id
-	cb.defaultChecked = true
-	cb.checked = true
-	cb.id = 'cb-' + plot.id
-	cb.onclick = redraw
-	lbl.appendChild(cb)
-	var span = document.createElement("span")
-	span.style.color = plot.color
-	span.innerHTML = "&#160;" + plot.label + "&#160;"
-	lbl.appendChild(span)
+        this.plots[plot.id] = plot;
+        var s = document.getElementById('plot_selector');
+        var lbl = document.createElement("label");
+        s.appendChild(lbl);
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = plot.id;
+        cb.defaultChecked = true;
+        cb.checked = true;
+        cb.id = 'cb-' + plot.id;
+        cb.onclick = redraw;
+        lbl.appendChild(cb);
+        var span = document.createElement("span");
+        span.style.color = plot.color;
+        span.innerHTML = "&#160;" + plot.label + "&#160;";
+        lbl.appendChild(span);
     }
-}
+};
 
 PlotContext.prototype.plot = function () {
     this.smoothing = parseInt(document.getElementById("smoothing").value)
     for(var pid in this.plots) {
-	var p = this.plots[pid]
-	cb = document.getElementById('cb-' + pid)
-	if (cb.checked) {
-	    this.plotIt(p)
-	}
-    }
-}
-
-PlotContext.prototype.plotIt = function(plot) {
-    var ctx = this.ctx
-    var sx = this.maxx / session.interval.seconds;
-    var sy = this.maxy / plot.max;
-    ctx.beginPath()
-    var moved = false
-    ctx.strokeStyle = plot.color
-    var n = 0
-    var t = 0
-    var sum = 0
-    var pt = 0
-    for (var ix = 0; ix < waypoints.length; ix++) {
-        var d = waypoints[ix]
-    	var v = plot.data(d)
-        if (ix == 0) {
-	    t = d.seconds
-	    n = 1
-	    sum = v
-	    pt = d.seconds
-        } else {
-	    if (d.seconds > (t + this.smoothing)) {
-		var x = 40 + sx*pt
-		var y = this.gh - 40 - sy*(sum/n)
-		if (!moved) {
-		    ctx.moveTo(x,y)
-		    moved = true
-		} else {
-		    ctx.lineTo(x,y)
-		}
-		t = d.seconds
-		n = 1
-		sum = v
-		pt = d.seconds
-	    } else {
-		n++;
-		sum += v
-		pt = d.seconds
-	    }
+        var p = this.plots[pid];
+        var cb = document.getElementById('cb-' + pid)
+        if (cb.checked) {
+            this.plotIt(p)
         }
     }
-    ctx.moveTo(40, this.gh - 40 - sy*plot.avg)
-    ctx.lineTo(this.gw - 40, this.gh - 40 - sy*plot.avg)
-    ctx.textAlign = "right"
-    ctx.strokeText(plot.avg, 38, this.gh - 40 - sy*plot.avg)
-    ctx.stroke()
-}
+};
 
-
-
-
+PlotContext.prototype.plotIt = function(plot) {
+    var ctx = this.ctx;
+    var sx = this.maxx / session.interval.seconds;
+    var sy = this.maxy / plot.max;
+    ctx.beginPath();
+    var moved = false;
+    ctx.strokeStyle = plot.color;
+    var n = 0;
+    var t = 0;
+    var sum = 0;
+    var pt = 0;
+    for (var ix = 0; ix < waypoints.length; ix++) {
+        var d = waypoints[ix];
+    	var v = plot.data(d);
+        if (ix == 0) {
+            t = d.seconds;
+            n = 1;
+            sum = v;
+            pt = d.seconds;
+        } else if (d.seconds > (t + this.smoothing)) {
+            var x = 40 + sx*pt;
+            var y = this.gh - 40 - sy*(sum/n);
+            if (!moved) {
+                ctx.moveTo(x,y);
+                moved = true
+            } else {
+                ctx.lineTo(x,y)
+            }
+            t = d.seconds;
+            n = 1;
+            sum = v;
+            pt = d.seconds;
+        } else {
+            n++;
+            sum += v;
+            pt = d.seconds;
+        }
+    }
+    ctx.moveTo(40, this.gh - 40 - sy*plot.avg);
+    ctx.lineTo(this.gw - 40, this.gh - 40 - sy*plot.avg);
+    ctx.textAlign = "right";
+    ctx.strokeText(plot.avg, 38, this.gh - 40 - sy*plot.avg);
+    ctx.stroke();
+};

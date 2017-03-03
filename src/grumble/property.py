@@ -1,9 +1,20 @@
-# To change this license header, choose License Headers in Project Properties.
-# To change this template file, choose Tools | Templates
-# and open the template in the editor.
-
-__author__ = "jan"
-__date__ = "$17-Sep-2013 1:24:18 PM$"
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
 import datetime
 import hashlib
@@ -16,6 +27,7 @@ import grumble.errors
 import grumble.schema
 
 logger = gripe.get_logger(__name__)
+
 
 class Validator(object):
     def property(self, prop = None):
@@ -51,6 +63,17 @@ class ChoicesValidator(Validator, set):
                 raise grumble.errors.InvalidChoice(self.prop.name, value)
 
 
+class RangeValidator(Validator):
+    def __init__(self, minval = None, maxval = None):
+        self._minval = minval if minval is not None else -float("inf")
+        self._maxval = maxval if maxval is not None else float("inf")
+        assert self._minval < self._maxval, "Minimum value for RangeValidator must be less than maximum value"
+
+    def __call__(self, instance, value):
+        if value < self._minval or value > self._maxval:
+            raise grumble.errors.OutOfRange(self.prop.name, value)
+
+
 class RegExpValidator(Validator):
     def __init__(self, pat = None):
         self._pattern = None
@@ -68,6 +91,7 @@ class RegExpValidator(Validator):
         if value and not re.match(self.pattern(), value):
             raise grumble.errors.PatternNotMatched(self.prop.name, value)
 
+
 class ModelProperty(object):
     property_counter = 0
     _default_validators = []
@@ -79,6 +103,7 @@ class ModelProperty(object):
             ret.name = prop.name
             ret.column_name = prop.column_name
             ret.verbose_name = prop.verbose_name
+            ret.readonly = prop.readonly
             ret.default = prop.default
             ret.private = prop.private
             ret.transient = prop.transient
@@ -106,11 +131,11 @@ class ModelProperty(object):
             ret.config = {}
             ret.seq_nr = ModelProperty.property_counter
             ModelProperty.property_counter += 1
-            ret.name = args[0] if args else None
+            ret.name = kwargs.get("name", None)
             ret.column_name = kwargs.get("column_name", cls.column_name if hasattr(cls, "column_name") else None)
-            ret.verbose_name = kwargs.get("verbose_name", 
-                cls.verbose_name 
-                    if hasattr(cls, "verbose_name") 
+            ret.verbose_name = kwargs.get("verbose_name",
+                cls.verbose_name
+                    if hasattr(cls, "verbose_name")
                     else ret.name)
             ret.readonly = kwargs.get("readonly", cls.readonly if hasattr(cls, "readonly") else False)
             ret.default = kwargs.get("default", cls.default if hasattr(cls, "default") else None)
@@ -144,6 +169,10 @@ class ModelProperty(object):
             choices = kwargs.get("choices", None)
             if choices:
                 ret.validator(ChoicesValidator(choices))
+            minval = kwargs.get("minimum", None)
+            maxval = kwargs.get("maximum", None)
+            if minval is not None or maxval is not None:
+                ret.validator(RangeValidator(minval, maxval))
             v = kwargs.get("validator")
             if v is not None:
                 ret.validator(v)
@@ -228,7 +257,7 @@ class ModelProperty(object):
     def _values_tosql(self, instance, values):
         if not self.transient:
             values[self.column_name] = self._to_sqlvalue(self.__get__(instance))
-            
+
     def _get_storedvalue(self, instance):
         instance._load()
         return instance._values[self.name] if self.name in instance._values else None
@@ -403,10 +432,11 @@ class CompoundProperty(object):
     def _to_json_value(self, instance, value):
         raise gripe.NotSerializableError(self.name)
 
+
 class StringProperty(ModelProperty):
     datatype = str
     sqltype = "TEXT"
-    
+
 TextProperty = StringProperty
 StrProperty = StringProperty
 
@@ -431,12 +461,14 @@ class PasswordProperty(StringProperty):
             if password and password.startswith("sha://") \
             else "sha://%s" % hashlib.sha1(password if password else "").hexdigest()
 
+
 class JSONProperty(ModelProperty):
     datatype = dict
     sqltype = "JSONB"
 
     def _initial_value(self):
         return {}
+
 
 class ListProperty(ModelProperty):
     datatype = list
@@ -445,10 +477,11 @@ class ListProperty(ModelProperty):
     def _initial_value(self):
         return []
 
+
 class IntegerProperty(ModelProperty):
     datatype = int
     sqltype = "INTEGER"
-    
+
 IntProperty = IntegerProperty
 
 
@@ -507,36 +540,36 @@ class TimeDeltaProperty(ModelProperty):
 
 if gripe.db.Tx.database_type == "postgresql":
     import psycopg2.extensions
-    
+
     def adapt_json(d):
         return psycopg2.extensions.AsIs("'%s'" % json.dumps(d))
-    
+
     psycopg2.extensions.register_adapter(dict, adapt_json)
     psycopg2.extensions.register_adapter(list, adapt_json)
-    
+
     def cast_jsonb(value, cur):
         try:
             return json.loads(value) if value is not None else None
         except:
             raise psycopg2.InterfaceError("bad JSON representation: %r" % value)
-    
+
     with gripe.db.Tx.begin() as tx:
         cur = tx.get_cursor()
         cur.execute("SELECT NULL::jsonb")
         jsonb_oid = cur.description[0][1]
-    
+
     JSONB = psycopg2.extensions.new_type((jsonb_oid,), "JSONB", cast_jsonb)
     psycopg2.extensions.register_type(JSONB)
-    
-    
+
+
 elif gripe.db.Tx.database_type == "sqlite3":
     import sqlite3
-    
+
     def adapt_json(d):
         return json.dumps(d)
-    
+
     def convert_json(value):
         return json.loads(value) if value is not None else None
-    
+
     sqlite3.register_adapter(dict, adapt_json)
     sqlite3.register_converter("JSONB", convert_json)

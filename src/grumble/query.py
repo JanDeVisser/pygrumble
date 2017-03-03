@@ -33,12 +33,37 @@ class Sort(object):
     def order(self):
         return "ASC" if self.ascending else "DESC"
 
+
+class Join(object):
+    def __init__(self, kind, property):
+        if isinstance(kind.__class__, grumble.ModelMetaClass):
+            self._kind = kind.__class__
+        elif isinstance(kind, grumble.ModelMetaClass):
+            self._kind = kind
+        else:
+            self._kind = grumble.Model.for_name(str(kind))
+        self._property = property
+
+    def tablename(self):
+        return self._kind.modelmanager.tablename()
+
+    def columns(self):
+        return self._kind.modelmanager.columns
+
+    def key_column(self):
+        return self._kind.modelmanager.key_col
+
+    def key_column(self):
+        return self.key_column().name
+
+
 class ModelQuery(object):
     def __init__(self):
         self._owner = None
         self._limit = None
         self._filters = []
         self._sortorder = []
+        self._joins = []
 
     def _reset_state(self):
         pass
@@ -161,6 +186,12 @@ class ModelQuery(object):
             value = str(value.key())
         self._filters.append((expr, value))
         return self
+
+    def add_join(self, kind, property):
+        self._joins.append(Join(kind, property))
+
+    def joins(self):
+        return self._joins
 
     def filters(self):
         return self._filters

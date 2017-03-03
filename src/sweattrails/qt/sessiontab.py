@@ -17,13 +17,13 @@
 #
 
 
-from PySide.QtCore import QCoreApplication
-from PySide.QtCore import Qt
+from PyQt5.QtCore import QCoreApplication
+from PyQt5.QtCore import Qt
 
-from PySide.QtGui import QSplitter
-from PySide.QtGui import QTabWidget
-from PySide.QtGui import QVBoxLayout
-from PySide.QtGui import QWidget
+from PyQt5.QtWidgets import QSplitter
+from PyQt5.QtWidgets import QTabWidget
+from PyQt5.QtWidgets import QVBoxLayout
+from PyQt5.QtWidgets import QWidget
 
 import gripe
 import grumble.qt.bridge

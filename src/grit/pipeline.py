@@ -1,12 +1,25 @@
-# To change this license header, choose License Headers in Project Properties.
-# To change this template file, choose Tools | Templates
-# and open the template in the editor.
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
-__author__ = "jan"
-__date__ = "$19-Sep-2013 4:44:54 PM$"
 
 import datetime
 import gripe.db
+import grit
 
 logger = gripe.get_logger(__name__)
 
@@ -25,6 +38,7 @@ class TxWrapper(object):
 
     def __exit__(self, exception_type, exception_value, trace):
         return self._tx.__exit__(exception_type, exception_value, trace)
+
 
 class Auth(object):
     def __init__(self, reqctx):
@@ -60,7 +74,8 @@ class Auth(object):
         logger.debug("Auth.confirm_role(%s)", self.reqctx.roles)
         if not self.session.user().has_role(self.reqctx.roles):
             logger.warn("Auth.confirm_role: user %s doesn't have any role in %s",
-                        Session.get_usermanager().id(self.user), self.reqctx.roles)
+                        grit.Session.get_usermanager(),
+                        self.reqctx.roles)
             self.response.status = "401 Unauthorized"
 
     @classmethod

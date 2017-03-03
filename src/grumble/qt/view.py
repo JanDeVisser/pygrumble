@@ -4,15 +4,15 @@ Created on Jul 29, 2014
 @author: jan
 '''
 
-from PySide.QtCore import Qt
-from PySide.QtCore import Signal
+from PyQt5.QtCore import Qt
+from PyQt5.QtCore import pyqtSignal
 
-from PySide.QtGui import QTableView
+from PyQt5.QtWidgets import QTableView
 
 import grumble.qt.model
 
 class TableView(QTableView):
-    objectSelected = Signal(grumble.key.Key)
+    objectSelected = pyqtSignal(grumble.key.Key)
     
     def __init__(self, query = None, columns = None, parent = None):
         super(TableView, self).__init__(parent)

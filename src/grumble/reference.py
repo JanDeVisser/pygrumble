@@ -24,6 +24,7 @@ class ReferenceConverter(grumble.converter.PropertyConverter):
         else:
             assert isinstance(value, grumble.model.Model)
             k = value.key()
+
             return str(k)
 
     def from_sqlvalue(self, sqlvalue):
@@ -67,6 +68,7 @@ class ReferenceProperty(grumble.property.ModelProperty):
     sqltype = "TEXT"
 
     def __init__(self, *args, **kwargs):
+        super(ReferenceProperty, self).__init__(args, kwargs)
         if args and isinstance(args[0], ReferenceProperty):
             prop = args[0]
             self.reference_class = prop.reference_class
@@ -122,4 +124,3 @@ class SelfReferenceProperty(ReferenceProperty):
         self.reference_class = grumble.model.Model.for_name(kind)
         super(SelfReferenceProperty, self).set_kind(kind)
         self.converter = ReferenceConverter(self)
-

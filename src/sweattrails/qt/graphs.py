@@ -18,14 +18,14 @@
 
 import datetime
 
-from PySide.QtCore import QPointF
-from PySide.QtCore import Qt
+from PyQt5.QtCore import QPointF
+from PyQt5.QtCore import Qt
 
-from PySide.QtGui import QColor
-from PySide.QtGui import QPainter
-from PySide.QtGui import QPen
-from PySide.QtGui import QPolygonF
-from PySide.QtGui import QWidget
+from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QPainter
+from PyQt5.QtGui import QPen
+from PyQt5.QtGui import QPolygonF
+from PyQt5.QtWidgets import QWidget
 
 import gripe
 
@@ -335,7 +335,7 @@ class Graph(QWidget):
 if __name__ == "__main__":
     import random
     import sys
-    from PySide.QtGui import QApplication
+    from PyQt5.QtWidgets import QApplication
     
     class Point(object):
         def __init__(self, generator, ix):

@@ -364,12 +364,16 @@ class GearTypeNode(TreeNodeBase):
     partOf = grumble.SelfReferenceProperty(collection_name = "parts")
     usedFor = grumble.ReferenceProperty(SessionTypeNode)
 
+
 class CriticalPowerIntervalNode(NodeBase):
     criticalPowerInterval = grumble.ReferenceProperty(CriticalPowerInterval, serialize = False)
+
 
 class CriticalPaceNode(NodeBase):
     criticalPace = grumble.ReferenceProperty(CriticalPace, serialize = False)
 
+
+logger.debug("Config: %s", gripe.Config.app.sweattrails)
 
 for (part, partdef) in gripe.Config.app.sweattrails.activityprofileparts.items():
     definition = NodeTypeDefinition(part, gripe.resolve(partdef.refClass), gripe.resolve(partdef.nodeClass))

@@ -25,6 +25,7 @@ import os
 import os.path
 import sys
 import threading
+import traceback
 
 import gripe.json_util
 
@@ -138,6 +139,7 @@ def resolve(funcname, default = None):
         if callable(funcname):
             return funcname
         (module, dot, fnc) = funcname.rpartition(".")
+        logger.debug("Resolving function %s in module %s", fnc, module)
         mod = importlib.import_module(module)
         return getattr(mod, fnc) if hasattr(mod, fnc) and callable(getattr(mod, fnc)) else default
     else:
@@ -215,6 +217,7 @@ class LoggerSwitcher(object):
     @classmethod
     def begin(cls, packages, logger):
         return LoggerSwitcher(packages, logger)
+
 
 class ContentType(object):
     Binary, Text = range(2)
@@ -295,11 +298,12 @@ class ConfigMeta(type):
     def keys(cls):
         return cls._sections
 
+
 class Config(object):
     __metaclass__ = ConfigMeta
     _loaded = False
     _sections = set([])
-    
+
     # We set a bunch of dummies here to keep IDEs happy:
     logging = {}
     app = {}
@@ -348,7 +352,7 @@ class Config(object):
         config.file_write(os.path.join("conf", "%s.json" % section), 4)
         setattr(cls, section, config)
         return config
-    
+
     @classmethod
     def _load(cls):
         for f in os.listdir(os.path.join(root_dir(), "conf")):
@@ -416,41 +420,41 @@ class Enum(tuple):
 class LoggerProxy(object):
     def __init__(self, logger):
         self._logger = logger;
-        
+
     def __getattr__(self, name):
         return getattr(self._logger, name)
-    
+
 class LogConfig(object):
     _configs = {}
     _defaults = None
     _default_config = {
-        "level": logging.INFO, 
+        "level": logging.INFO,
         "destination": "stderr",
         "filename": None,
         "append": False,
         "format": "%(name)-15s:%(asctime)s:%(levelname)-7s:%(message)s",
         "dateformat": "%y%m%d %H:%M:%S"
     }
-    
+
     def __init__(self, name = None, config = None):
         if config:
             self._build(name, config)
         else:
             if LogConfig._defaults is None:
-                LogConfig._defaults = LogConfig("builtin.defaults", 
+                LogConfig._defaults = LogConfig("builtin.defaults",
                                                 LogConfig._default_config)
             self.name = name if name else ""
             self.config = self._get_config()
             self.parent = self._get_parent()
             self._logger = None
             self._handler = None
-            
+
             self.log_level = getattr(logging, self.config["level"].upper()) \
                 if "level" in self.config \
-                else self.parent.log_level 
-                
+                else self.parent.log_level
+
             self.destination = self.config.get(
-                                   "destination", 
+                                   "destination",
                                    self.parent.destination).lower()
             assert self.destination in ("stderr", "file"), \
                     "Invalid logging destination %s" % self.destination
@@ -459,14 +463,14 @@ class LogConfig(object):
             self.flat = self.config.get("flat", not bool(self.name))
             self.format = self.config.get("format", self.parent.format)
             self.dateformat = self.config.get("dateformat", self.parent.dateformat)
-        
+
     def _build(self, name, config):
         self.name = name
         self.config = config
         self.parent = None
         self._logger = None
         self._handler = None
-        
+
         self.log_level   = config.get("level")
         self.destination = config.get("destination")
         self.filename    = config.get("filename")
@@ -474,40 +478,40 @@ class LogConfig(object):
         self.format      = self.config.get("format")
         self.dateformat  = self.config.get("dateformat")
         self.flat        = True
-        
+
     def _get_config(self):
         ret = Config["logging"].get(self.name) \
             if self.name \
             else Config["logging"].get("__root__")
         return ret or {}
-        
+
     def _get_parent(self):
         if not self.name:
             return LogConfig._defaults
         else:
             (parent, _, _) = self.name.rpartition(".")
             return LogConfig.get(parent)
-    
+
     def _get_filename(self):
         if self.filename or not self.parent:
             return self.filename
         else:
             return self.parent._get_filename()
-            
+
     def get_filename(self):
         ret = self._get_filename()
         if ret is None:
             ret = (self.name if self.name else "__grumble__") + ".log"
         return ret
-    
+
     def _create_file_handler(self):
         mkdir("logs")
         mode = "a" if self.append else "w"
         return logging.FileHandler(os.path.join(root_dir(), "logs", self.get_filename()), mode)
-    
+
     def _create_stderr_handler(self):
         return logging.StreamHandler(sys.stderr)
-            
+
     def _get_handler(self):
         if not self._handler:
             formatter = logging.Formatter(self.format, self.dateformat)
@@ -515,7 +519,7 @@ class LogConfig(object):
             self._handler = handler_factory()
             self._handler.setFormatter(formatter)
         return self._handler
-    
+
     def get_logger(self):
         if not self._logger:
             self._logger = logging.getLogger(self.name)
@@ -528,8 +532,8 @@ class LogConfig(object):
     @classmethod
     def _get_handler_factory(cls, config):
         return getattr(config, "_create_%s_handler" % config.destination)
-        
-    @classmethod        
+
+    @classmethod
     def get(cls, name):
         name = name or ""
         ret = LogConfig._configs.get(name)
@@ -537,24 +541,33 @@ class LogConfig(object):
             ret = LogConfig(name)
             LogConfig._configs[name] = ret
         return ret
-    
+
 def get_logger(name):
     return LogConfig.get(name).get_logger()
 
-# Tie our logging config into the platform's by pre-initializing all loggers 
+def print_stack(logger, caption):
+    stack = traceback.format_stack()
+    s = caption + "\n"
+    for frame in stack[:-2]:
+        s += frame
+    logger.debug(s)
+
+
+# Tie our logging config into the platform's by pre-initializing all loggers
 # we know of. This way we can use propagate = True to combine logging across
 # a package.
-# 
+#
 # FIXME: I should really do this properly and have the platform logging use
 # gripe.Config.
 for name in filter(lambda n: n in ("__root__", "__main__") or not n.startswith("_"), Config["logging"].keys()):
     get_logger(name if name != "__root__" else "")
-    
-logging.basicConfig(stream = sys.stderr, 
-                    level = LogConfig._default_config["level"], 
-                    datefmt = LogConfig._default_config["dateformat"], 
+
+logging.basicConfig(stream = sys.stderr,
+                    level = LogConfig._default_config["level"],
+                    datefmt = LogConfig._default_config["dateformat"],
                     format = LogConfig._default_config["format"])
+
+logger = gripe.get_logger("gripe")
 
 if __name__ == "__main__":
     Config.backup()
-

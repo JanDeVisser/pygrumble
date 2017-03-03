@@ -1,7 +1,21 @@
-#! /usr/bin/python
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
-# To change this template, choose Tools | Templates
-# and open the template in the editor.
 
 import atexit
 import datetime
@@ -12,18 +26,22 @@ import webapp2
 
 import gripe
 import gripe.db
+import gripe.role
 import gripe.sessionbridge
 import grumble
 
-logger = gripe.get_logger(__name__)
-
-class Error(gripe.Error):
-    pass
 
 import grit.log
 import grit.pipeline
 import grit.requesthandler
 import grit.statichandler
+
+logger = gripe.get_logger(__name__)
+
+
+class Error(gripe.Error):
+    pass
+
 
 class UserData(grumble.Model):
     _flat = True
@@ -31,6 +49,8 @@ class UserData(grumble.Model):
     cookie = grumble.TextProperty(is_key = True)
     last_access = grumble.DateTimeProperty(auto_now = True)
     userid = grumble.TextProperty()
+    access_token = grumble.TextProperty()
+    valid_until = grumble.DateTimeProperty()
 
 
 class SessionData(dict):
@@ -74,6 +94,7 @@ class SessionData(dict):
 
     def user(self):
         return self._user
+
 
 class SessionManager(object):
     _singleton = None
@@ -204,6 +225,7 @@ class RequestCtx(object):
     def sessionid(self):
         return self.request.cookies.get("grit")
 
+
 class Session(gripe.role.Guard):
     _tl = threading.local()
 
@@ -278,12 +300,12 @@ class Session(gripe.role.Guard):
         password = ctx.get("password")
         remember_me = bool(ctx.get("remember_me", False))
         logger.debug("Session.login(%s, %s, %s)", userid, password, remember_me)
-        user = Session.get_usermanager().get(userid)
+        user = gripe.role.Guard.get_usermanager().get(userid)
         if user:
             if user.authenticate(**ctx):
                 self.user(user)
                 if remember_me:
-                    Session.get_sessionmanager().remember_user(self)
+                    gripe.role.Guard.get_sessionmanager().remember_user(self)
                 self.user().logged_in(self)
                 return self.user()
         return None
@@ -294,15 +316,15 @@ class Session(gripe.role.Guard):
             del self._request.session
         if hasattr(self._request, "user"):
             del self._request.user
-        Session.get_sessionmanager().logout(str(self._data.id()))
+        gripe.role.Guard.get_sessionmanager().logout(str(self._data.id()))
         del self._request.cookies["grit"]
         self._request.response.delete_cookie("grit")
-        if self._user:
-            self._user.logged_out(self)
+        if self.user():
+            self.user().logged_out(self)
 
     def end_session(self):
         logger.debug("Guard.end_session")
-        Session.get_sessionmanager().persist(self._data)
+        gripe.role.Guard.get_sessionmanager().persist(self._data)
         if hasattr(self._request, "session"):
             del self._request.session
         if hasattr(self._request, "user"):
@@ -312,7 +334,7 @@ class Session(gripe.role.Guard):
 
     def user(self, u = None):
         if u is not None:
-            self._data.set_user(user)
+            self._data.set_user(u)
         return self._data.user()
 
     def userid(self):
@@ -424,7 +446,6 @@ class WSGIApplication(webapp2.WSGIApplication):
         for mp in config["mounts"]:
             raw_path = mp.get("path")
             app_path = mp.get("app")
-            logger.debug("WSGIApplication(): Mounting app %s at path %s", app_path, raw_path)
             assert raw_path, "Must specify a path for each mount in app.conf"
             path = "<:^%s$>" % raw_path
             roles = mp.get("roles", [])
@@ -432,17 +453,21 @@ class WSGIApplication(webapp2.WSGIApplication):
             defaults = { "root": self, "roles": roles }
 
             if app_path:
+                logger.debug("WSGIApplication(): Mounting app %s at path %s", app_path, raw_path)
                 wsgi_sub_app = gripe.resolve(app_path, None)
                 assert wsgi_sub_app, "WSGI app %s not found" % app_path
                 defaults["app"] = app_path
                 logger.info("WSGIApplication(): Adding handler app %s for path %s", app_path, raw_path)
-            else:
+            elif "abspath" in mp or "relpath" in mp:
+                logger.debug("WSGIApplication(): Redirecting %s to StaticHandler", raw_path)
                 defaults["handler"] = grit.statichandler.StaticHandler
                 if "abspath" in mp:
                     defaults["abspath"] = mp["abspath"]
                 if "relpath" in mp:
                     defaults["relpath"] = mp["relpath"]
-                logger.info("WSGIApplication(): Adding static handler for path %s", raw_path)
+            else:
+                logger.debug("WSGIApplication(): mount for path %s ignored", raw_path)
+                continue
             self.router.add(webapp2.Route(path, handler = handle_request, defaults = defaults))
         self.error_handlers[404] = grit.requesthandler.handle_404
 

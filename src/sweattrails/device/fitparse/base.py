@@ -1,9 +1,9 @@
 import os
+import StringIO
 import struct
 
 from sweattrails.device.fitparse.exceptions import FitParseError, FitParseComplete
 from sweattrails.device.fitparse import records as r
-
 
 class FitFile(object):
     FILE_HEADER_FMT = '2BHI4s'
@@ -30,7 +30,12 @@ class FitFile(object):
 
         # Private: call FitFile._read(), don't read from this. Important for CRC.
         self._file = f
-        self._file_size = os.path.getsize(f.name)
+        if isinstance(self._file, StringIO.StringIO):
+            self._file_size = len(self._file.getvalue())
+        elif isinstance(self._file, file):
+            self._file_size = os.path.getsize(self._file.name)
+        else:
+            assert 0, "Unknown FIT file type '%s'" % type(f)
         self._data_read = 0
         self._crc = 0
 

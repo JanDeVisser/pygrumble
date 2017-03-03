@@ -1,3 +1,22 @@
+/*
+ * Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 2 of the License, or (at your option)
+ * any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
+
 com.sweattrails.api.JSONRequest = function(url) {
     this.url = url;
     if (arguments.length > 1) {
@@ -68,6 +87,8 @@ com.sweattrails.api.getHttpRequest = function(jsonRequest) {
 
 com.sweattrails.api.JSONRequest.prototype.execute = function() {
     var httpRequest = com.sweattrails.api.getHttpRequest(this);
+    var url;
+
     if (!httpRequest) {
         return false;
     }
@@ -88,7 +109,7 @@ com.sweattrails.api.JSONRequest.prototype.execute = function() {
     if (this.json) {
         this.log(((this.post) ? "POST " : "GET " ) + url + " as JSON data with body\n" + this.body);
         httpRequest.open((this.post) ? "POST" : "GET", url, this.async);
-        httpRequest.setRequestHeader("ST-JSON-Request", (this.post) ? "true": this.body);
+        httpRequest.setRequestHeader("ST-JSON-Request", (this.post) ? "true" : this.body);
         httpRequest.send((this.post) ? this.body : null);
     } else {
         var parameters = new FormData();
@@ -285,7 +306,7 @@ com.sweattrails.api.internal.DataSource.prototype.popState = function() {
 
 com.sweattrails.api.internal.DataSource.prototype.createObjectFrom = function(context) {
     if (!this.submitparams) {
-	this.submitparams = {};
+	    this.submitparams = {};
     }
     this.object = null;
     if (this.factory) {
@@ -639,7 +660,7 @@ com.sweattrails.api.NullDataSourceBuilder.prototype.build = function(elem) {
  * ProxyDataSource -
  * 
  * @param {object} proxy Object to obtain/submit data from and to. The object 
- * should have <tt>getProxyData()</tt> and <tt>submutProxyData(object)</tt>
+ * should have <tt>getProxyData()</tt> and <tt>submitProxyData(object)</tt>
  * methods.
  */
 com.sweattrails.api.ProxyDataSource = function(proxy) {

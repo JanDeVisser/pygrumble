@@ -1,3 +1,21 @@
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
+
 import datetime
 import gripe
 import gripe.db
@@ -13,6 +31,7 @@ logger = gripe.get_logger("grudge")
 #  If action returns status, and this is the first action in the list to do so,
 #    apply status
 #
+
 
 class Worker(object):
     def __init__(self, q, ix):
@@ -62,6 +81,7 @@ class MessageQueue(object):
 
 _queue = MessageQueue("Grudge WF", 5)
 
+
 class Status(object):
     def __init__(self, name = None, label = None):
         self._name = name or self.__class__.__name__
@@ -105,6 +125,7 @@ class Status(object):
 # -------------------------------------------------------------------------
 #
 
+
 class Action(object):
     def __str__(self):
         return self.__class__.__name__
@@ -137,6 +158,7 @@ class ProcessAction(Action):
         else:
             return ctx().resolve_process(self._target)
 
+
 class Start(ProcessAction):
     def __call__(self, **kwargs):
         process = kwargs.get("process")
@@ -144,12 +166,14 @@ class Start(ProcessAction):
         if target:
             target().start()
 
+
 class Stop(ProcessAction):
     def __call__(self, **kwargs):
         process = kwargs.get("process")
         target = self.get_target(process)
         if target:
             target().stop()
+
 
 class Transition(ProcessAction):
     def __str__(self):
@@ -163,6 +187,7 @@ class Transition(ProcessAction):
         if target:
             target().start()
 
+
 class StatusAction(ProcessAction):
     def __init__(self, *args, **kwargs):
         logger.debug("Add(%s, %s)", args, kwargs)
@@ -174,6 +199,7 @@ class StatusAction(ProcessAction):
         else:
             self._status = None
 
+
 class Add(StatusAction):
     def __str__(self):
         return "(+ %s)" % self._status
@@ -183,6 +209,7 @@ class Add(StatusAction):
         target = self.get_target(process)
         if target:
             target().add_status(self._status)
+
 
 class Remove(StatusAction):
     def __str__(self):
@@ -200,13 +227,14 @@ class Remove(StatusAction):
 # -------------------------------------------------------------------------
 #
 
+
 class Invoke(Action):
     def __init__(self, *args, **kwargs):
         self._args = []
         if args:
             self._method = args[0]
             if len(args) > 1:
-                self._args.extend[args[1:]]
+                self._args.extend(args[1:])
         if "method" in kwargs:
             self._method = kwargs["method"]
         if "args" in kwargs:
@@ -284,6 +312,7 @@ class SendMail(Action):
 # -------------------------------------------------------------------------
 #
 
+
 class Event(object):
     def __init__(self, *args, **kwargs):
         assert len(args), "Event must specify an action"
@@ -299,6 +328,7 @@ class Event(object):
 # -------------------------------------------------------------------------
 #
 
+
 class StatusEvent(Event):
     def __init__(self, status, *args, **kwargs):
         super(StatusEvent, self).__init__(*args, **kwargs)
@@ -307,12 +337,14 @@ class StatusEvent(Event):
     def __str__(self):
         return "StatusEvent %s for status %s" % (self.__class__.__name__, self._status)
 
+
 class OnAdd(StatusEvent):
     def __call__(self, process):
         logger.debug("Calling decorator %s", self)
         s = process().get_status(self._status)
         s.on_added(self._action)
         return process
+
 
 class OnRemove(StatusEvent):
     def __call__(self, process):
@@ -327,13 +359,16 @@ class OnRemove(StatusEvent):
 # -------------------------------------------------------------------------
 #
 
+
 class ProcessEvent(Event):
     pass
+
 
 class OnStarted(ProcessEvent):
     def __call__(self, process):
         process().on_started(self._action)
         return process
+
 
 class OnStopped(ProcessEvent):
     def __call__(self, process):
@@ -346,9 +381,11 @@ class OnStopped(ProcessEvent):
 # -------------------------------------------------------------------------
 #
 
+
 class AddedStatus(grumble.Model):
     status = grumble.TextProperty()
 AddedStatus.seal()
+
 
 class Process(object):
     def __init__(self, *args, **kwargs):
@@ -359,10 +396,12 @@ class Process(object):
         self.start_semaphore = kwargs.get("semaphore", 1)
 
     def __call__(self, cls):
+        assert isinstance(cls, grumble.ModelMetaClass)
         logger.debug("Decorating %s as a process", cls.__name__)
         cls.add_property("starttime", grumble.DateTimeProperty())
         cls.add_property("finishtime", grumble.DateTimeProperty())
         cls.add_property("semaphore", grumble.IntegerProperty(default = 0))
+        cls._grudge_process_class = True
         cls._statuses = {}
         for (propname, propdef) in cls.__dict__.items():
             if isinstance(propdef, Status):
@@ -398,11 +437,10 @@ class Process(object):
             return cls._subprocesses
         cls.subprocesses = classmethod(subprocesses)
 
-        def instantiate(cls, parent = None):
+        def instantiate(cls, parent=None, **kwargs):
             logger.debug("instantiate %s", cls.__name__)
             with gripe.db.Tx.begin():
-                p = cls(parent = parent)
-                p.put()
+                p = cls(parent=parent, **kwargs)
                 for sub in cls.subprocesses():
                     subcls = grumble.Model.for_name(sub.__name__)
                     subcls.instantiate(p)
@@ -511,7 +549,7 @@ class Process(object):
                     proc = proc().parent()
                     logger.debug("resolved '..' -> %s", proc)
                 elif elem and elem != ".":
-                    proc = grumble.Query(elem, parent = proc).get()
+                    proc = grumble.Query(elem, parent=proc).get()
                     logger.debug("resolved '%s' -> %s", elem, proc)
                 else:
                     logger.debug("resolve: no-op '%s'", elem)
@@ -547,6 +585,9 @@ class Process(object):
         return cls
 
 
+def is_process(cls):
+    return hasattr(cls, "_grudge_process_class") and cls._grudge_process_class
+
 if __name__ == "__main__":
 
     @Process(entrypoint = "Step1")
@@ -570,7 +611,7 @@ if __name__ == "__main__":
         recipients = grumble.TextProperty()
 
         def set_recipients(self):
-            self.recipients = "runnr@de-visser.net"
+            self.recipients = "sweattrails@de-visser.net"
             self.put()
             return self.sendmail
 

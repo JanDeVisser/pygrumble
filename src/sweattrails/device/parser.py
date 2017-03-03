@@ -16,11 +16,16 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
+import os.path
+import StringIO
 import traceback
 
 import gripe
 import gripe.conversions
 import grumble.geopt
+import sweattrails.device.exceptions
+import sweattrails.device.fitparser
+import sweattrails.device.tcxparser
 import sweattrails.config
 import sweattrails.session
 
@@ -168,17 +173,17 @@ class Activity(Lap):
         if session:
             raise sweattrails.device.exceptions.SessionExistsError(session)
             
-        session = sweattrails.session.Session()
-        session.athlete = athlete
-        session.start_time = self.start_time
-        session.inprogress = False
+        self.session = sweattrails.session.Session()
+        self.session.athlete = athlete
+        self.session.start_time = self.start_time
+        self.session.inprogress = False
         profile = sweattrails.config.ActivityProfile.get_profile(athlete)
         assert profile, "Activity.convert(): User %s has no profile" % athlete.uid()
         sessiontype = profile.get_default_SessionType(self.get_data("sport"))
         assert sessiontype, "Activity.convert(): User %s has no default session type for sport %s" % (athlete.uid(), self.get_data("sport"))
-        session.sessiontype = sessiontype
+        self.session.sessiontype = sessiontype
         self.status_message("Converting session {}/{} ({:s})", self.index, len(self.container.activities), sessiontype.name)
-        self.convert_interval(session)
+        self.convert_interval(self.session)
 
         num = len(self.laps)
         intervals = []
@@ -187,10 +192,10 @@ class Activity(Lap):
             for ix in range(num):
                 lap = self.laps[ix]
                 self.progress(int((float(ix) / float(num)) * 100.0))
-                interval = sweattrails.session.Interval(parent = session)
+                interval = sweattrails.session.Interval(parent=self.session)
                 lap.convert_interval(interval)
                 intervals.append(interval)
-            intervals.sort(key = lambda interval: interval.timestamp)
+            intervals.sort(key=lambda interval: interval.timestamp)
             self.progress_end()
 
         num = len(self.trackpoints)
@@ -199,7 +204,7 @@ class Activity(Lap):
         interval_ix = 0
         interval = intervals[interval_ix] if interval_ix < len(intervals) else None
         for ix in range(num):
-            trackpoint= self.trackpoints[ix]
+            trackpoint = self.trackpoints[ix]
             self.progress(int((float(ix) / float(num)) * 100.0))
             prev = trackpoint.convert(session, prev) or prev
             if interval and prev and prev.timestamp >= interval.timestamp:
@@ -210,14 +215,15 @@ class Activity(Lap):
         self.progress_end()
 
         self.progress_init("Analyzing session {}/{}", self.index, len(self.container.activities))
-        session.analyze(self)
+        self.session.analyze(self)
         self.progress_end()
-        return session
+        return self.session
 
 
 class Parser(object):
     def __init__(self, filename):
         self.filename = filename
+        self.name = "buffer" if isinstance(self.filename, StringIO.StringIO) else self.filename
         self.user = None
         self.logger = None
         self.activities = []
@@ -265,14 +271,14 @@ class Parser(object):
     def parse(self):
         assert self.user, "No user set on parser"
         assert self.filename, "No filename set on parser"
-        assert gripe.exists(self.filename), "parser: file '%s' does not exist" % self.filename
+        assert not isinstance(self.filename, basestring) or gripe.exists(self.filename), "parser: file '%s' does not exist" % self.filename
         try:
-            self.status_message("Reading file {}", self.filename)
+            self.status_message("Reading file {}", self.name)
             self.parse_file()
-            self.status_message("Processing file {}", self.filename)
-            self._process()
-            self.status_message("File {} converted", self.filename)
-            return None
+            self.status_message("Processing file {}", self.name)
+            ret = self._process()
+            self.status_message("File {} converted", self.name)
+            return ret
         except sweattrails.device.exceptions.SessionExistsError:
             raise
         except Exception as exception:
@@ -292,7 +298,52 @@ class Parser(object):
                 s.add_trackpoint(r)
 
         # Create ST sessions and convert everything:
+        ret = []
         for s in self.activities:
             with gripe.db.Tx.begin():
-                s.convert(self.user)
+                ret.append(s.convert(self.user))
+        return ret
 
+# ---------------------------------------------------------------------------------------------------
+
+_parser_factories_by_ext = {
+    "fit": sweattrails.device.fitparser.FITParser,
+    "tcx": sweattrails.device.tcxparser.TCXParser
+}
+
+_parser_factories = []
+
+if ("sweattrails" in gripe.Config.app and
+            "parsers" in gripe.Config.app.sweattrails):
+    for i in gripe.Config.app.sweattrails.parsers:
+        cls = i["class"]
+        cls = gripe.resolve(cls)
+        ext = i.get("extension")
+        if ext:
+            _parser_factories_by_ext[ext] = cls
+        else:
+            _parser_factories.append(cls)
+
+
+def get_parser(filename):
+    f = os.path.basename(filename)
+    parser = None
+
+    (_, _, extension) = f.rpartition(".")
+    if extension:
+        extension = ext.lower()
+    factory = _parser_factories_by_ext.get(extension)
+    if factory:
+        if hasattr(factory, "create_parser"):
+            parser = factory.create_parser(filename)
+        else:
+            parser = factory(filename)
+    if not parser:
+        for factory in _parser_factories:
+            if hasattr(factory, "create_parser"):
+                parser = factory.create_parser(filename)
+            else:
+                parser = factory(filename)
+            if parser:
+                break
+    return parser

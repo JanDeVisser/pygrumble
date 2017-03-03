@@ -17,10 +17,10 @@
 #
 
 
-from PySide.QtCore import QAbstractListModel
-from PySide.QtCore import QAbstractTableModel
-from PySide.QtCore import QModelIndex
-from PySide.QtCore import Qt
+from PyQt5.QtCore import QAbstractListModel
+from PyQt5.QtCore import QAbstractTableModel
+from PyQt5.QtCore import QModelIndex
+from PyQt5.QtCore import Qt
 
 
 import gripe

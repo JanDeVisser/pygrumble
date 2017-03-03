@@ -21,17 +21,17 @@ import Queue
 import threading
 import traceback
 
-from PySide.QtCore import QCoreApplication
-from PySide.QtCore import QObject
-from PySide.QtCore import QThread
-from PySide.QtCore import Signal
+from PyQt5.QtCore import QCoreApplication
+from PyQt5.QtCore import QObject
+from PyQt5.QtCore import QThread
+from PyQt5.QtCore import pyqtSignal
 
-from PySide.QtGui import QCheckBox
-from PySide.QtGui import QDialog
-from PySide.QtGui import QDialogButtonBox
-from PySide.QtGui import QTableWidget
-from PySide.QtGui import QTableWidgetItem
-from PySide.QtGui import QVBoxLayout
+from PyQt5.QtWidgets import QCheckBox
+from PyQt5.QtWidgets import QDialog
+from PyQt5.QtWidgets import QDialogButtonBox
+from PyQt5.QtWidgets import QTableWidget
+from PyQt5.QtWidgets import QTableWidgetItem
+from PyQt5.QtWidgets import QVBoxLayout
 
 import gripe
 import gripe.db
@@ -39,16 +39,15 @@ import grumble.model
 import grumble.property
 import sweattrails.device.antfs
 import sweattrails.device.exceptions
-import sweattrails.device.fitparser
-import sweattrails.device.tcxparser
+import sweattrails.device.parser
 
 logger = gripe.get_logger(__name__)
 
 class LoggingThread(QThread):
-    statusMessage = Signal(str)
-    progressInit = Signal(str)
-    progressUpdate = Signal(int)
-    progressEnd = Signal()
+    statusMessage = pyqtSignal(str)
+    progressInit = pyqtSignal(str)
+    progressUpdate = pyqtSignal(int)
+    progressEnd = pyqtSignal()
     
     def __init__(self, *args):
         super(LoggingThread, self).__init__(*args)
@@ -80,10 +79,10 @@ class ImportedFITFile(grumble.model.Model):
 
 
 class Job(QObject):
-    jobStarted = Signal(QObject)
-    jobFinished = Signal(QObject)
-    jobError = Signal(QObject)
-    err = Signal(Exception)
+    jobStarted = pyqtSignal(QObject)
+    jobFinished = pyqtSignal(QObject)
+    jobError = pyqtSignal(QObject)
+    err = pyqtSignal(Exception)
     
     def __init__(self):
         super(Job, self).__init__()
@@ -101,6 +100,7 @@ class Job(QObject):
                 self.handle()
             self.jobFinished.emit(self)
         except Exception as e:
+            traceback.print_exc()
             self.jobError.emit(e)
 
     def started(self, msg):
@@ -133,24 +133,6 @@ class Job(QObject):
         
 
 class ImportFile(Job):
-    _parser_factories_by_ext = {
-        "fit": sweattrails.device.fitparser.FITParser,
-        "tcx": sweattrails.device.tcxparser.TCXParser
-    }
-    
-    _parser_factories = []
-
-    if ("sweattrails" in gripe.Config.app and 
-        "parsers" in gripe.Config.app.sweattrails):
-        for i in gripe.Config.app.sweattrails.parsers:
-            cls = i["class"]
-            cls = gripe.resolve(cls)
-            ext = i.get("extension")
-            if ext:
-                _parser_factories_by_ext[ext] = cls
-            else:
-                _parser_factories.append(cls)
-    
     def __init__(self, filename):
         super(ImportFile, self).__init__()
         self.filename = filename
@@ -159,35 +141,12 @@ class ImportFile(Job):
         self.queue = os.path.join(userdir, "queue")
         self.done = os.path.join(userdir, "done")
 
-    def get_parser(self):
-        f = os.path.basename(self.filename)
-        parser = None
-        
-        (_, _, ext) = f.rpartition(".")
-        if ext:
-            ext = ext.lower()
-        factory = ImportFile._parser_factories_by_ext.get(ext)
-        if factory:
-            if hasattr(factory, "create_parser"):
-                parser = factory.create_parser(self.filename)
-            else:
-                parser = factory(self.filename)
-        if not parser:
-            for factory in ImportFile._parser_factories:
-                if hasattr(factory, "create_parser"):
-                    parser = factory.create_parser(self.filename)
-                else:
-                    parser = factory(self.filename)
-                if parser:
-                    break
-        return parser
-
     def handle(self):
         logger.debug("ImportFile: Importing file %s", self.filename)
         self.started("Importing file %s" % self.filename)
         try:
             f = os.path.basename(self.filename)
-            parser = self.get_parser()
+            parser = sweattrails.device.parser.get_parser(self.filename)
             if not parser:
                 logger.warning("No parser registered for %s", f)
                 return
@@ -275,10 +234,10 @@ class ScanInbox(ThreadPlugin):
 
 
 class BackgroundThread(LoggingThread):
-    jobStarted = Signal(str)
-    jobFinished = Signal(str)
-    jobError = Signal(str, str)
-    queueEmpty = Signal()
+    jobStarted = pyqtSignal(str)
+    jobFinished = pyqtSignal(str)
+    jobError = pyqtSignal(str, str)
+    queueEmpty = pyqtSignal()
     
     _singleton = None
     _plugins = []
@@ -328,7 +287,7 @@ class BackgroundThread(LoggingThread):
 
 
 class SelectActivities(QDialog):
-    select = Signal()
+    select = pyqtSignal()
 
     def __init__(self, parent = None):
         super(SelectActivities, self).__init__(parent)

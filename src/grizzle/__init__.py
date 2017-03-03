@@ -1,5 +1,21 @@
-__author__ = "jan"
-__date__ = "$24-Feb-2013 11:13:48 AM$"
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
+
 
 import gripe
 import gripe.db
@@ -9,9 +25,12 @@ import grumble.model
 import grumble.property
 import grumble.reference
 import gripe.auth
+import gripe.managedobject
 import gripe.role
+import gripe.url
 
 logger = gripe.get_logger("grizzle")
+
 
 @grumble.model.flat
 class UserGroup(grumble.model.Model, gripe.auth.AbstractUserGroup):
@@ -22,9 +41,14 @@ class UserGroup(grumble.model.Model, gripe.auth.AbstractUserGroup):
 
     def gid(self):
         return self.group
+    objid = gid
+
+    def objectlabel(self):
+        return self.description
 
     def _explicit_roles(self):
         return set(self.has_roles)
+
 
 class GroupManager():
     def get(self, gid):
@@ -47,6 +71,7 @@ class GroupManager():
             logger.debug("UserGroupManager.add(%s) OK", attrs)
             return g.gid()
 
+
 @grumble.abstract
 class UserPart(grumble.Model):
     def get_user(self):
@@ -58,6 +83,7 @@ class UserPart(grumble.Model):
 
     def urls(self):
         return self._urls if hasattr(self, "_urls") else None
+
 
 class UserPartKennel(UserPart):
     pass
@@ -72,6 +98,7 @@ class UserPartKennel(UserPart):
 """
 UserStatus = gripe.Enum(['Unconfirmed', 'Active', 'Admin', 'Banned', 'Inactive', 'Deleted'])
 GodList = ('jan@de-visser.net',)
+
 
 @grumble.property.transient
 class UserPartToggle(grumble.property.BooleanProperty):
@@ -106,6 +133,7 @@ class UserPartToggle(grumble.property.BooleanProperty):
         self._init_parts(instance)
         return instance._parts[self.name] is not None
 
+
 def customize_user_class(cls):
     for (partname, partdef) in gripe.Config.app.grizzle.userparts.items():
         (_, _, name) = partname.rpartition(".")
@@ -127,14 +155,17 @@ class User(grumble.Model, gripe.auth.AbstractUser):
     password = grumble.property.PasswordProperty()
     status = grumble.property.TextProperty(choices = UserStatus, default = 'Unconfirmed', required = True)
     display_name = grumble.property.TextProperty(is_label = True)
-    has_roles = grumble.property.ListProperty(verbose_name = "Roles", 
-        choices = { r: role["label"] for r, role in gripe.Config.app["roles"].items() })
+    has_roles = grumble.property.ListProperty(verbose_name = "Roles",
+                                              choices = { r: role.get("label", r)
+                                                          for r, role in gripe.Config.app["roles"].items() })
 
     def uid(self):
         return self.email
+    objid = uid
 
     def displayname(self):
         return self.display_name
+    objectlabel = displayname
 
     def groupnames(self):
         return { gfu.group for gfu in self.groupsforuser_set }
@@ -234,8 +265,10 @@ class GroupsForUser(grumble.Model):
     group = grumble.reference.ReferenceProperty(reference_class = UserGroup)
 
 
-class UserManager():
-    def get(self, userid):
+class UserManager(object):
+
+    @classmethod
+    def get(cls, userid):
         ret = User.get_by_key(userid)
         return ret if ret and ret.exists() else None
 
@@ -251,14 +284,14 @@ class UserManager():
             user.put()
             logger.debug("UserManager.add(%s) OK", attrs)
             return user
-        
+
     def has_users(self):
         return User.all(keys_only = True).count() > 0
 
 
-if False:
+if True:
     import webapp2
-    
+
     app = webapp2.WSGIApplication([
             webapp2.Route(
                 r'/users/<key>',
@@ -274,5 +307,4 @@ if False:
                     "kind": User
                 }
             )  # ,
-            # webapp2.Route(r'/user/<key>/json', handler = JSONUser, name = 'manage-user-json', defaults = { "kind": "user" }),
         ], debug = True)

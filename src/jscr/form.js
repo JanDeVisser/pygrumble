@@ -1,4 +1,4 @@
-  /**
+/**
  * Form -
  */
 
@@ -314,9 +314,9 @@ com.sweattrails.api.FormBuilder.prototype.process = function(f) {
     $$.log(this, "Found form " + id);
     var ds = com.sweattrails.api.dataSourceBuilder.build(f);
     var form = new com.sweattrails.api.Form(id, f.parentNode, ds);
-    var kind = elem.getAttribute("kind");
+    var kind = f.getAttribute("kind");
     if (kind) {
-        this.buildFormForKind(form, kind, elem);
+        this.buildFormForKind(form, kind, f);
     } else {
         this.buildForm(form, f);
     }
@@ -460,8 +460,8 @@ com.sweattrails.api.FormField.prototype.build = function(f) {
 };
 
 com.sweattrails.api.FormField.prototype.setType = function(elem) {
-    var type = f.getAttribute("type");
-    var datatype = f.getAttribute("datatype");
+    var type = elem.getAttribute("type");
+    var datatype = elem.getAttribute("datatype");
     var factory = null;
     if (hasChildWithTagNameNS(elem, com.sweattrails.api.xmlns, "value") || hasChildWithTagNameNS(elem, com.sweattrails.api.xmlns, "choices")) {
         factory = com.sweattrails.api.LookupField;
@@ -952,6 +952,91 @@ com.sweattrails.api.LengthField.prototype.setValue = function(value) {
 };
 
 /*
+ * DistanceField -
+ */
+
+com.sweattrails.api.DistanceField = function(fld, elem) {
+    this.field = fld;
+};
+
+com.sweattrails.api.DistanceField.prototype.renderEdit = function(value) {
+    this.span = document.createElement("span");
+    this.control = document.createElement("input");
+    var l = null;
+    if (value) {
+        l = length(parseFloat(value), native_unit, false);
+    }
+    this.control.value = l || "";
+    this.control.name = this.field.id;
+    this.control.id = this.field.id;
+    this.control.type = "text";
+    this.control.maxLength = 6;
+    this.control.size = 6; // WAG
+    this.control.onchange = this.field.onValueChange.bind(this.field);
+    this.control.oninput = this.field.onInput.bind(this.field);
+    this.span.appendChild(this.control);
+    this.nativeUnitIndex = (native_unit === "m") ? 0 : 1;
+    this.unitSelector = document.createElement("select");
+    this.unitSelector.name = this.field.id + "-units";
+    this.unitSelector.id = this.unitSelector.name;
+    var option = document.createElement("option");
+    option.selected = (native_unit === "m");
+    option.value = "1000";
+    option.text = "km";
+    this.unitSelector.appendChild(option);
+    option = document.createElement("option");
+    option.selected = (native_unit === "i");
+    option.value = "1608";
+    option.text = "mile";
+    this.unitSelector.appendChild(option);
+    this.unitSelector.onchange = this.field.onValueChange.bind(this.field);
+    this.span.appendChild(this.unitSelector);
+    return this.span;
+};
+
+com.sweattrails.api.DistanceField.prototype.setValueFromControl = function(bridge, object) {
+    this.value = parseFloat(this.control.value) / parseFloat(this.unitSelector.value);
+    var v = this.control.value;
+    if (v) {
+        v = v.trim();
+        this.value = parseFloat(v) * parseFloat(this.unitSelector.value);
+    } else {
+        this.value = 0;
+    }
+    bridge.setValue(object, this.value);
+};
+
+com.sweattrails.api.DistanceField.prototype.renderView = function(value) {
+    var ret = document.createElement("span");
+    var l = null;
+    if (value) {
+        l = distance(parseFloat(value) / 1000.0, native_unit, true);
+    }
+    ret.innerHTML = l || "";
+    return ret;
+};
+
+com.sweattrails.api.DistanceField.prototype.clear = function() {
+    if (this.control) {
+        this.control.value = "";
+    }
+    if (this.unitSelector) {
+        this.unitSelector.selectedIndex = this.nativeUnitIndex;
+    }
+};
+
+com.sweattrails.api.DistanceField.prototype.setValue = function(value) {
+    // FIXME: This assumes the value set is in the user's native unit. This is 
+    // probably wrong. It's probably in the system unit.
+    if (this.control) {
+        this.control.value = value;
+    }
+    if (this.unitSelector) {
+        this.unitSelector.selectedIndex = this.nativeUnitIndex;
+    }
+};
+
+/*
  * CheckBoxField -
  */
 
@@ -975,13 +1060,13 @@ com.sweattrails.api.CheckBoxField.prototype.setValueFromControl = function(bridg
 com.sweattrails.api.CheckBoxField.prototype.renderView = function(value) {
     var ret = document.createElement("span");
     if (value) {
-	var img = document.createElement("img");
-	img.src = "/image/checkmark.png";
-	img.height = 24;
-	img.width = 24;
-	ret.appendChild(img);
+        var img = document.createElement("img");
+        img.src = "/image/checkmark.png";
+        img.height = 24;
+        img.width = 24;
+        ret.appendChild(img);
     } else {
-	ret.innerHTML = "&#160;";
+	    ret.innerHTML = "&#160;";
     }
     return ret;
 };
@@ -1000,8 +1085,13 @@ com.sweattrails.api.CheckBoxField.prototype.setValue = function(value) {
  * DateTimeField -
  */
 
-com.sweattrails.api.DateTimeField = function() {
+com.sweattrails.api.DateTimeField = function(fld, elem) {
     this.date = this.time = true;
+    if (elem && elem.getAttribute("timeformat")) {
+        this.timeformat = elem.getAttribute("timeformat");
+    } else {
+        this.timeformat = "timeofday";
+    }
 };
 
 com.sweattrails.api.DateTimeField.prototype.renderEdit = function(value) {
@@ -1032,9 +1122,22 @@ com.sweattrails.api.DateTimeField.prototype.setValueFromControl = function(bridg
 
 com.sweattrails.api.DateTimeField.prototype.renderView = function(value) {
     var ret = document.createElement("span");
-    var d = value && new Date(value.year, (value.month - 1), value.day, value.hour, value.minute, 0);
+    var t;
+
+    if (typeof(value.hour) === "undefined") {
+        value = seconds_to_timeobj(value)
+    }
     if (value) {
-        ret.innerHTML = (this.date && (format_date(value) + " ") || "") + (this.time && format_time(value) || "");
+        if (this.time) {
+            if ((typeof(this.timeformat) !== "undefined") && (this.timeformat === "duration")) {
+                t = prettytime(value);
+            } else {
+                t = format_time(value);
+            }
+        } else {
+            t = "";
+        }
+        ret.innerHTML = (this.date && (format_date(value) + " ") || "") + t;
     } else {
         ret.innerHTML = "&#160;";
     }
@@ -1202,6 +1305,7 @@ com.sweattrails.api.internal.fieldtypes.integer = com.sweattrails.api.IntField;
 com.sweattrails.api.internal.fieldtypes.integer = com.sweattrails.api.IntField;
 com.sweattrails.api.internal.fieldtypes.weight = com.sweattrails.api.WeightField;
 com.sweattrails.api.internal.fieldtypes.length = com.sweattrails.api.LengthField;
+com.sweattrails.api.internal.fieldtypes.distance = com.sweattrails.api.DistanceField;
 
 com.sweattrails.api.internal.fieldtypes.checkbox = com.sweattrails.api.CheckBoxField;
 com.sweattrails.api.internal.fieldtypes.boolean = com.sweattrails.api.CheckBoxField;

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block imports %}
+<!-- <script src="/js/users.js" type="text/javascript"></script> -->
+{% endblock %}
+
+{% block tabs %}
+
+<script>
+    function refresh_table() {
+        $("sessions").render();
+    }
+</script>
+
+<st:tab code="sessions" label="Activities">
+    <st:table name="sessions" url="/json/session">
+        <st:sort name="start_time"/>
+        <st:header>
+            <st:action label="New" action="new"/>
+        </st:header>
+        <st:column label="Date/time" type="datetime" property="start_time" width="25%" select="/st/activity/$key"/>
+        <st:column label="Distance" type="distance" property="distance" width="10%"/>
+        <st:column label="Time" type="time" property="duration" width="10%"/>
+        <st:column label="Description" type="text" property="description" select="/st/activity/$key" width="55%"/>
+    </st:table>
+</st:tab>
+
+{% endblock tabs %}

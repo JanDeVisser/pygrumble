@@ -27,6 +27,7 @@ class ModelMetaClass(type):
     def __new__(cls, name, bases, dct):
         kind = type.__new__(cls, name, bases, dct)
         if name != 'Model':
+            logger.debug("Creating new model class %s [%s]", name, bases)
             kind._sealed = False
             Registry.register(kind.__module__, name, kind)
             if "table_name" in dct:
@@ -92,8 +93,8 @@ class Registry(dict):
             hierarchy.append(name)
             fullname = ".".join(hierarchy)
         fullname = fullname.lower()
-        assert fullname not in cls._get_registry(), "Registry.register(%s): Already registered" % fullname
         logger.debug("Registry.register(%s) => %s", fullname, modelclass)
+        assert fullname not in cls._get_registry(), "Registry.register(%s): Already registered" % fullname
         reg[fullname] = modelclass
         modelclass._kind = fullname
 

@@ -22,32 +22,32 @@ import datetime
 import math
 import traceback
 
-from PySide.QtCore import Qt
-from PySide.QtCore import QMargins
-from PySide.QtCore import QRegExp
-from PySide.QtCore import Signal
+from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QMargins
+from PyQt5.QtCore import QRegExp
+from PyQt5.QtCore import pyqtSignal
 
-from PySide.QtGui import QButtonGroup
-from PySide.QtGui import QCheckBox
-from PySide.QtGui import QComboBox
-from PySide.QtGui import QDateEdit
-from PySide.QtGui import QDateTimeEdit
-from PySide.QtGui import QDoubleValidator
-from PySide.QtGui import QGridLayout
-from PySide.QtGui import QGroupBox
-from PySide.QtGui import QHBoxLayout
-from PySide.QtGui import QIntValidator
-from PySide.QtGui import QLabel
-from PySide.QtGui import QLineEdit
-from PySide.QtGui import QMessageBox
-from PySide.QtGui import QPixmap
-from PySide.QtGui import QPushButton
-from PySide.QtGui import QRadioButton
-from PySide.QtGui import QRegExpValidator
-from PySide.QtGui import QTabWidget
-from PySide.QtGui import QTimeEdit
-from PySide.QtGui import QVBoxLayout
-from PySide.QtGui import QWidget
+from PyQt5.QtWidgets import QButtonGroup
+from PyQt5.QtWidgets import QCheckBox
+from PyQt5.QtWidgets import QComboBox
+from PyQt5.QtWidgets import QDateEdit
+from PyQt5.QtWidgets import QDateTimeEdit
+from PyQt5.QtGui import QDoubleValidator
+from PyQt5.QtWidgets import QGridLayout
+from PyQt5.QtWidgets import QGroupBox
+from PyQt5.QtWidgets import QHBoxLayout
+from PyQt5.QtGui import QIntValidator
+from PyQt5.QtWidgets import QLabel
+from PyQt5.QtWidgets import QLineEdit
+from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtWidgets import QPushButton
+from PyQt5.QtWidgets import QRadioButton
+from PyQt5.QtGui import QRegExpValidator
+from PyQt5.QtWidgets import QTabWidget
+from PyQt5.QtWidgets import QTimeEdit
+from PyQt5.QtWidgets import QVBoxLayout
+from PyQt5.QtWidgets import QWidget
 
 import gripe
 import gripe.db
@@ -370,10 +370,10 @@ class DateEdit(WidgetBridge):
         self.assigned = None
 
     def apply(self, value):
-        self.widget.setDate(value)
+        self.widget.setDate(value if value else datetime.date.today())
 
     def retrieve(self):
-        return self.widget.date().toPython()
+        return self.widget.date().toPyDate()
 
 
 class DateTimeEdit(WidgetBridge):
@@ -392,7 +392,7 @@ class DateTimeEdit(WidgetBridge):
         self.widget.setDateTime(value)
 
     def retrieve(self):
-        return self.widget.dateTime().toPython()
+        return self.widget.dateTime().toPyDateTime()
 
 
 class TimeEdit(WidgetBridge):
@@ -597,7 +597,7 @@ class PropertyFormLayout(QGridLayout):
 
 
 class FormPage(QWidget):
-    statusMessage = Signal(str)
+    statusMessage = pyqtSignal(str)
 
     def __init__(self, parent):
         super(FormPage, self).__init__(parent)
@@ -644,10 +644,10 @@ class FormButtons(object):
     AllButtons = 7
 
 class FormWidget(FormPage):
-    instanceAssigned = Signal(str)
-    instanceDeleted = Signal(str)
-    instanceSaved = Signal(str)
-    exception = Signal(str)
+    instanceAssigned = pyqtSignal(str)
+    instanceDeleted = pyqtSignal(str)
+    instanceSaved = pyqtSignal(str)
+    exception = pyqtSignal(str)
 
     def __init__(self, parent = None, buttons = FormButtons.EditButtons):
         super(FormWidget, self).__init__(parent)

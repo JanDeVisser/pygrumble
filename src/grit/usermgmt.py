@@ -15,6 +15,7 @@ import grit.requesthandler
 
 logger = gripe.get_logger(__name__)
 
+
 class Login(grit.requesthandler.ReqHandler):
     def get_context(self, ctx):
         return ctx
@@ -38,14 +39,13 @@ class Login(grit.requesthandler.ReqHandler):
         password = params.get("password")
         remember_me = params.get("remember_me", False)
         logger.debug("main::login.post(%s/%s)", userid, password)
-        url = "/"
         if "redirecturl" in self.session:
             url = str(self.session["redirecturl"])
             del self.session["redirecturl"]
         else:
             url = str(self.request.get("redirecturl", "/"))
         assert self.session is not None, "Session missing from request handler"
-        if self.session.login(userid, password, remember_me):
+        if self.session.login(userid, password = password, remember_me = remember_me):
             logger.debug("Login OK")
             logger.debug("Sending redirect to %s", url)
             if not json_request:
@@ -56,6 +56,7 @@ class Login(grit.requesthandler.ReqHandler):
         else:
             logger.debug("Login FAILED")
             self.response.status_int = 401
+
 
 class Logout(grit.requesthandler.ReqHandler):
     def get_template(self):

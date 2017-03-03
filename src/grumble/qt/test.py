@@ -7,15 +7,15 @@ Created on Jul 29, 2014
 if __name__ == '__main__':
     import sys
 
-    from PySide.QtGui import QAction
-    from PySide.QtGui import QApplication
-    from PySide.QtGui import QComboBox
-    from PySide.QtGui import QHBoxLayout
-    from PySide.QtGui import QLabel
-    from PySide.QtGui import QMainWindow
-    from PySide.QtGui import QPushButton
-    from PySide.QtGui import QVBoxLayout
-    from PySide.QtGui import QWidget
+    from PyQt5.QtWidgets import QAction
+    from PyQt5.QtWidgets import QApplication
+    from PyQt5.QtWidgets import QComboBox
+    from PyQt5.QtWidgets import QHBoxLayout
+    from PyQt5.QtWidgets import QLabel
+    from PyQt5.QtWidgets import QMainWindow
+    from PyQt5.QtWidgets import QPushButton
+    from PyQt5.QtWidgets import QVBoxLayout
+    from PyQt5.QtWidgets import QWidget
 
     import grumble.model
     import grumble.property

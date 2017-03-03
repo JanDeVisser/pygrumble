@@ -16,15 +16,15 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-from PySide.QtCore import QCoreApplication
-from PySide.QtCore import Qt
+from PyQt5.QtCore import QCoreApplication
+from PyQt5.QtCore import Qt
 
-from PySide.QtGui import QGroupBox
-from PySide.QtGui import QHBoxLayout
-from PySide.QtGui import QPushButton
-from PySide.QtGui import QTabWidget
-from PySide.QtGui import QVBoxLayout
-from PySide.QtGui import QWidget
+from PyQt5.QtWidgets import QGroupBox
+from PyQt5.QtWidgets import QHBoxLayout
+from PyQt5.QtWidgets import QPushButton
+from PyQt5.QtWidgets import QTabWidget
+from PyQt5.QtWidgets import QVBoxLayout
+from PyQt5.QtWidgets import QWidget
 
 import gripe
 import grumble.qt.bridge

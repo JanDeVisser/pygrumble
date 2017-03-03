@@ -20,17 +20,16 @@
 #               2011 Mark Liversedge (liversedge@gmail.com)
 
 import os.path
-import string
 
-from PySide.QtCore import QObject
-from PySide.QtCore import QUrl
-from PySide.QtCore import Slot
+from PyQt5.QtCore import QObject
+from PyQt5.QtCore import QUrl
+from PyQt5.QtCore import pyqtSlot
 
-from PySide.QtGui import QSizePolicy 
+from PyQt5.QtWidgets import QSizePolicy
 
-from PySide.QtWebKit import QWebPage
-from PySide.QtWebKit import QWebSettings
-from PySide.QtWebKit import QWebView
+from PyQt5.QtWebKitWidgets import QWebPage
+from PyQt5.QtWebKit import QWebSettings
+from PyQt5.QtWebKitWidgets import QWebView
 
 import gripe
 import sweattrails.session
@@ -49,11 +48,11 @@ class IntervalJsBridge(QObject):
             self._intervals = [i for i in q]
             self._wps = self.interval.waypoints()
             
-    @Slot(result = str)
+    @pyqtSlot(result = str)
     def getConfig(self):
         return gripe.Config.as_json()
 
-    @Slot(result = 'QVariantList')
+    @pyqtSlot(result = 'QVariantList')
     def getBoundingBox(self):
         box = self.interval.geodata.bounding_box
         ret = []
@@ -61,14 +60,14 @@ class IntervalJsBridge(QObject):
         ret.extend(box.ne().tuple())
         return ret
     
-    @Slot(result = int)
+    @pyqtSlot(result = int)
     def intervalCount(self):
         num = len(self._intervals)
         # If there is only one interval, that's the entire session, so
         # there is no separate object for that.
         return num if num else 1
     
-    @Slot(int, result = 'QVariantList')
+    @pyqtSlot(int, result = 'QVariantList')
     def getLatLons(self, intervalnum):
         if not intervalnum:
             i = self.interval
@@ -83,16 +82,16 @@ class IntervalJsBridge(QObject):
             ret.extend(wp.location.tuple())
         return ret
     
-    @Slot()
+    @pyqtSlot()
     def drawOverlays(self):
         self.control.drawShadedRoute()
         pass
     
-    @Slot(int)
+    @pyqtSlot(int)
     def toggleInterval(self, intervalnum):
         pass
     
-    @Slot(str)
+    @pyqtSlot(str)
     def log(self, msg):
         logger.info("JS-Bridge: %s", msg)
 
@@ -116,12 +115,12 @@ class IntervalMap(QWebView):
 
         self.page().mainFrame().javaScriptWindowObjectCleared.connect(self.updateFrame)
 
-    @Slot()
+    @pyqtSlot()
     def updateFrame(self):
         self._bridge = IntervalJsBridge(self, self.interval)
         self.page().mainFrame().addToJavaScriptWindowObject("bridge", self._bridge);
 
-    @Slot()
+    @pyqtSlot()
     def drawMap(self):
         #=======================================================================
         # with open("sweattrails/qt/maps.html") as fd:

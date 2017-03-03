@@ -13,6 +13,7 @@ com.sweattrails.api.internal.format.float = function(value, col) {
 };
 com.sweattrails.api.internal.format.time = function(value) { return prettytime(seconds_to_time(value)); };
 com.sweattrails.api.internal.format.date = format_date;
+com.sweattrails.api.internal.format.datetime = format_datetime;
 com.sweattrails.api.internal.format.distance = function(value) { return format_distance(value); };
 com.sweattrails.api.internal.format.weight = function(value) { return weight(value, native_unit, true); };
 com.sweattrails.api.internal.format.length = function(value) { return length(value, native_unit, true); };
@@ -64,7 +65,7 @@ com.sweattrails.api.internal.build.link = function(col, elem) {
         if (!v || (v === "")) {
             v = n;
         }
-	col.parameters[n] = v;
+	    col.parameters[n] = v;
     }
 };
 
@@ -91,8 +92,8 @@ com.sweattrails.api.Column = function(table, label) {
     return this;
 };
 
-com.sweattrails.api.Column.prototype.setLink = function() {
-    this.link = true;
+com.sweattrails.api.Column.prototype.setLink = function(url) {
+    this.link = url;
 };
 
 com.sweattrails.api.Column.prototype.setProperty = function(prop) {
@@ -126,15 +127,19 @@ com.sweattrails.api.Column.prototype.getValue = function(object) {
     if (ret && this.format) {
         ret = this.format(ret, this, object);
     }
-    if (this.link && this.table.form) {
-        var f = function(object) {
-            if (!this.form.ispopup) {
-                this.data = object;
-                this.form.popup();
-            }
-        };
-        f = f.bind(this.table, object);
-        ret = new com.sweattrails.api.Link(ret, f);
+    if (this.link) {
+        if (this.table.form) {
+            var f = function (object) {
+                if (!this.form.ispopup) {
+                    this.data = object;
+                    this.form.popup();
+                }
+            };
+            f = f.bind(this.table, object);
+            ret = new com.sweattrails.api.Link(ret, f);
+        } else {
+            ret = new com.sweattrails.api.Link(ret, this.link.replace(/\$key/, object.key));
+        }
     }
     return ret;
 };
@@ -361,8 +366,8 @@ com.sweattrails.api.TableBuilder.prototype.process = function(t) {
         } else {
             col.setFunction(c.getAttribute("get"));
         }
-        if (c.getAttribute("select") && ("true" === c.getAttribute("select"))) {
-            col.setLink();
+        if (c.getAttribute("select")) {
+            col.setLink(c.getAttribute("select"));
         }
         col.setWidth(c.getAttribute("width"));
         col.setFormat(c);
@@ -389,10 +394,13 @@ com.sweattrails.api.Image.prototype.render = function() {
     return img;
 };
 
+/* ------------------------------------------------------------------------ */
+
 com.sweattrails.api.Link = function(display, url) {
-    this.display = display;
+    this.display = display || "&#160;";
     this.url = url;
     this.parameters = {};
+    $$.log(this, "new Link: display " + this.display + ", this.url: " + this.url);
     return this;
 };
 

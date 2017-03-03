@@ -32,6 +32,7 @@ class ColumnDefinition(object):
         self.is_key = False
         self.scoped = False
 
+
 class ModelManager(object):
     modelconfig = gripe.Config.model
     models = modelconfig.get("model", {})
@@ -83,7 +84,8 @@ class ModelManager(object):
         if not self.flat:
             logger.debug("%s: _set_columns: Adding _ancestors and _parent columns", self)
             self.columns += (ColumnDefinition("_ancestors", "TEXT", True, None, True), \
-                ColumnDefinition("_parent", "TEXT", False, None, True))
+                             ColumnDefinition("_parent", "TEXT", False, None, True),
+                             ColumnDefinition("_key", "TEXT", True, None, True))
         self.columns += self._prep_columns
         if self.audit:
             logger.debug("%s: _set_columns: Adding audit columns", self)

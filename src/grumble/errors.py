@@ -28,6 +28,17 @@ class InvalidChoice(gripe.Error):
             (self.value, self.propname)
 
 
+class OutOfRange(gripe.Error):
+    """Raised when a value is out of range"""
+    def __init__(self, propname, value):
+        self.propname = propname
+        self.value = value
+
+    def __str__(self):
+        return "Value %s out of range for property %s" % \
+            (self.value, self.propname)
+
+
 class ObjectDoesNotExist(gripe.Error):
     """Raised when an object is requested that does not exist"""
     def __init__(self, cls, id):

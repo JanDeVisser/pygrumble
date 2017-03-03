@@ -1,8 +1,21 @@
-# To change this template, choose Tools | Templates
-# and open the template in the editor.
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
-__author__ = "jan"
-__date__ = "$11-Feb-2013 2:47:51 PM$"
 
 import hashlib
 import os
@@ -12,6 +25,7 @@ import gripe.db
 import grumble.converter
 import grumble.property
 
+
 class BinaryConverter(grumble.converter.PropertyConverter):
     datatype = psycopg2.Binary
 
@@ -19,6 +33,7 @@ class BinaryConverter(grumble.converter.PropertyConverter):
         # psycopg2.Binary is a function, not a class. Therefore our isinstance
         # test in the base convert method doesn't work.
         return self.datatype(value)
+
 
 class BinaryProperty(grumble.property.ModelProperty):
     datatype = psycopg2.Binary
@@ -29,6 +44,7 @@ class BinaryProperty(grumble.property.ModelProperty):
 
     def _from_json_value(self, value):
         raise gripe.NotSerializableError(self.name)
+
 
 class ImageProperty(grumble.property.CompoundProperty):
     def __init__(self, **kwargs):
@@ -59,7 +75,8 @@ class ImageProperty(grumble.property.CompoundProperty):
             with open(value, "rb") as fh:
                 content = fh.read()
             hash = hashlib.md5(content).hexdigest()
-            v = (content, gripe.get_content_type(value), hash)
+            ct = gripe.ContentType.for_path(value)
+            v = (content, ct.content_type if ct else None, hash)
         super(ImageProperty, self).__set__(instance, v)
 
 if __name__ == "__main__":
@@ -86,5 +103,3 @@ if __name__ == "__main__":
         desert = Test.get(k)
         with open("C:/Users/Public/Pictures/Sample Pictures/Desert_1.jpg", "wb") as fh:
             fh.write(desert.image_blob)
-
-

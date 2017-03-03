@@ -17,27 +17,27 @@
 #
 
 
-from PySide.QtCore import QCoreApplication
-from PySide.QtCore import Qt
+from PyQt5.QtCore import QCoreApplication
+from PyQt5.QtCore import Qt
 
-from PySide.QtGui import QAction
-from PySide.QtGui import QApplication
-from PySide.QtGui import QCheckBox
-from PySide.QtGui import QDialog
-from PySide.QtGui import QDialogButtonBox
-from PySide.QtGui import QFileDialog
-from PySide.QtGui import QFormLayout
-from PySide.QtGui import QIcon
-from PySide.QtGui import QLabel
-from PySide.QtGui import QLineEdit
-from PySide.QtGui import QMainWindow
-from PySide.QtGui import QMessageBox
-from PySide.QtGui import QPixmap
-from PySide.QtGui import QProgressBar
-from PySide.QtGui import QTabWidget
-from PySide.QtGui import QValidator
-from PySide.QtGui import QVBoxLayout
-from PySide.QtGui import QWidget
+from PyQt5.QtWidgets import QAction
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QCheckBox
+from PyQt5.QtWidgets import QDialog
+from PyQt5.QtWidgets import QDialogButtonBox
+from PyQt5.QtWidgets import QFileDialog
+from PyQt5.QtWidgets import QFormLayout
+from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QLabel
+from PyQt5.QtWidgets import QLineEdit
+from PyQt5.QtWidgets import QMainWindow
+from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtWidgets import QProgressBar
+from PyQt5.QtWidgets import QTabWidget
+from PyQt5.QtGui import QValidator
+from PyQt5.QtWidgets import QVBoxLayout
+from PyQt5.QtWidgets import QWidget
 
 import gripe
 # import grizzle

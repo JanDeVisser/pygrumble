@@ -1,13 +1,27 @@
-'''
-Created on 2013-04-23
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
-@author: jan
-'''
 
 import operator
 import gripe
 
 logger = gripe.get_logger("gripe")
+
 
 class UrlCollectionElem(object):
 
@@ -44,7 +58,10 @@ class UrlCollectionElem(object):
         if self._ownerobj:
             return self._ownerobj.objectlabel()
         else:
-            return l or self.objid()
+            return self._label or self.objid()
+
+    def label(self):
+        return self.objectlabel()
 
     def level(self, lvl = None):
         if lvl is not None:
@@ -92,6 +109,7 @@ class Url(UrlCollectionElem):
 
     def __repr__(self):
         return '<url id="%s" href="%s" level="%s">%s</url>' % (self.objid(), self.url(), self.level(), self.objectlabel())
+
 
 class UrlCollection(UrlCollectionElem, dict):
     def __init__(self, *args):

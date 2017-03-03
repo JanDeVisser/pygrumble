@@ -16,9 +16,6 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-__author__ = "jan"
-__date__ = "$3-Oct-2013 8:34:23 AM$"
-
 import grizzle
 import grumble.property
 import grumble.geopt
@@ -26,10 +23,12 @@ import grumble.geopt
 
 class UserProfile(grizzle.UserPart):
     country = grumble.property.StringProperty(default = "CA")
-    dob = grumble.property.DateProperty()
+    dob = grumble.property.DateProperty(verbose_name = "Date of Birth")
     gender = grumble.property.StringProperty(choices = ['male', 'female', 'other'], default = 'other')
     height = grumble.property.IntegerProperty(default = 170)  # in cm
     units = grumble.property.StringProperty(choices = ['metric', 'imperial'], default = 'metric')
+    weekstarts = grumble.property.IntegerProperty(minimum = 0, maximum = 6, default = 1)   # 0 = Sunday, 6 = Saturday
+                                                                                # Most people want to start on Monday
     location = grumble.geopt.GeoPtProperty()
     whoami = grumble.property.StringProperty(multiline = True)
     regkey = grumble.property.StringProperty()

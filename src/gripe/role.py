@@ -1,8 +1,21 @@
-# To change this template, choose Tools | Templates
-# and open the template in the editor.
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
-__author__ = "jan"
-__date__ = "$3-Mar-2013 5:24:57 PM$"
 
 import gripe
 import gripe.managedobject
@@ -10,9 +23,11 @@ import gripe.url
 
 logger = gripe.get_logger("gripe")
 
+
 class RoleExists(gripe.managedobject.ObjectExists):
     def __init__(self, cls, role):
         super(RoleExists, self).__init__(cls, role)
+
 
 class RoleDoesntExist(gripe.AuthException):
     def __init__(self, role):
@@ -22,12 +37,14 @@ class RoleDoesntExist(gripe.AuthException):
     def __str__(self):
         return "Role with ID %s does not exists" % self._role
 
+
 class Guard(object):
     _managers = { }
 
     @classmethod
     def _get_manager(cls, manager, default):
         if manager not in cls._managers:
+            logger.debug("Instantiating %s manager - default %s", manager, default)
             cls._managers[manager] = gripe.Config.resolve("app.%smanager" % manager, default)()
         return cls._managers[manager]
 
@@ -130,7 +147,6 @@ class Principal(object):
             else:
                 assert 0, "Class %s must implement either _explicit_roles() or provide a _roles attribute" % self.__class__.__name__
 
-
     def add_role(self, role):
         """
             Assigns the provided role to self. The role can be provided as a 
@@ -160,7 +176,6 @@ class Principal(object):
                 return self._roles.add(role)
             else:
                 assert 0, "Class %s must implement either _add_role() or provide a _roles attribute" % self.__class__.__name__
-
 
     def urls(self, urls = None):
         if not hasattr(self, "_urls"):
@@ -228,6 +243,7 @@ class AbstractRole(Principal):
                     ret.add(has_role)
                     roles.append(has_role)
         return ret
+
 
 @gripe.managedobject.objectexists(RoleExists)
 class Role(AbstractRole, ManagedPrincipal):

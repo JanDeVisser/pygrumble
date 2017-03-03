@@ -5,13 +5,13 @@
 __author__="jan"
 __date__ ="$30-Jul-2014 8:36:09 PM$"
 
-from PySide.QtGui import QButtonGroup
-from PySide.QtGui import QHBoxLayout
-from PySide.QtGui import QGroupBox
-from PySide.QtGui import QPushButton
-from PySide.QtGui import QStackedWidget
-from PySide.QtGui import QVBoxLayout
-from PySide.QtGui import QWidget
+from PyQt5.QtWidgets import QButtonGroup
+from PyQt5.QtWidgets import QHBoxLayout
+from PyQt5.QtWidgets import QGroupBox
+from PyQt5.QtWidgets import QPushButton
+from PyQt5.QtWidgets import QStackedWidget
+from PyQt5.QtWidgets import QVBoxLayout
+from PyQt5.QtWidgets import QWidget
 
 class StackedPage(QWidget):
     def __init__(self, parent = None):

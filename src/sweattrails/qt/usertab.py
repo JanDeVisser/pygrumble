@@ -17,12 +17,12 @@
 #
 
 
-from PySide.QtCore import QCoreApplication
+from PyQt5.QtCore import QCoreApplication
 
-from PySide.QtGui import QPushButton
-from PySide.QtGui import QSplitter
-from PySide.QtGui import QVBoxLayout
-from PySide.QtGui import QWidget
+from PyQt5.QtWidgets import QPushButton
+from PyQt5.QtWidgets import QSplitter
+from PyQt5.QtWidgets import QVBoxLayout
+from PyQt5.QtWidgets import QWidget
 
 import gripe
 import grizzle

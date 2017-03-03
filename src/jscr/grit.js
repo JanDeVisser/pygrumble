@@ -1,3 +1,21 @@
+/*
+ * Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 2 of the License, or (at your option)
+ * any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
 if (typeof(String.prototype.endsWith) !== 'function') {
     String.prototype.endsWith = function(suffix) {
         return this.indexOf(suffix, this.length - suffix.length) !== -1;
@@ -284,7 +302,7 @@ com.sweattrails.api.TabManager.prototype.start = function() {
 };
 
 com.sweattrails.api.TabManager.prototype.addTabFromElem = function(elem) {
-    tab = this.addTab(new com.sweattrails.api.internal.Tab(elem.getAttribute("code"), elem.getAttribute("label"), elem));
+    var tab = this.addTab(new com.sweattrails.api.internal.Tab(elem.getAttribute("code"), elem.getAttribute("label"), elem));
     if (tab) {
         while (elem.childNodes.length > 0) {
             tab.page.appendChild(elem.childNodes[0]);
@@ -458,6 +476,7 @@ com.sweattrails.api.renderObject = function(elem, content) {
     } else if (!content) {
         elem.innerHTML = "&#160;";
     } else {
+        $$.log($$, "elem: " + elem + ", typeof: " + typeof(elem) + " rendering " + content + ", type " + typeof(content));
         elem.appendChild(content);
     }
 };
@@ -598,11 +617,13 @@ function date_to_obj(d) {
 
 function time_to_obj(d) {
     d = d || new Date();
-    return {
-	'hour': d.getUTCHours(),
-	'minute': d.getUTCMinutes(),
-	'second': d.getUTCSeconds()
+    ret = {
+        'hour': d.getUTCHours(),
+        'minute': d.getUTCMinutes(),
+        'second': d.getUTCSeconds()
     };
+    $$.log($$, "time_to_obj -> " + ret.hour + ":" + ret.minute + ":" + ret.second)
+    return ret
 }
 
 function datetime_to_obj(d) {
@@ -611,17 +632,19 @@ function datetime_to_obj(d) {
         'year': d.getUTCFullYear(),
         'month': d.getUTCMonth() + 1,
         'day': d.getUTCDate(),
-	'hour': d.getUTCHours(),
-	'minute': d.getUTCMinutes(),
-	'second': d.getUTCSeconds()
+        'hour': d.getUTCHours(),
+        'minute': d.getUTCMinutes(),
+        'second': d.getUTCSeconds()
     };
     // $$.log($$, "datetime_to_obj: " + format_datetime(ret));
     return ret;
 }
     
 function seconds_to_timeobj(secs) {
+    $$.log($$, "Converting " + secs + " seconds to time object")
     return time_to_obj(new Date(secs * 1000));
 }
+seconds_to_time = seconds_to_timeobj
 
 function timeobj_to_seconds(t) {
     return (t) ? t.hour * 3600 + t.minute * 60 + t.second : 0;
@@ -636,25 +659,25 @@ function format_distance(value, metric_imperial) {
     if (!value) value = 0;
     var meters = parseInt(value);
     if (metric_imperial.toLowerCase().substr(0,1) === "m") {
-	if (meters < 1000) {
-	    return meters + " m";
-	} else {
-	    var km = parseFloat(value) / 1000.0;
-	    if (km < 10) {
-		return km.toFixed(3) + " km";
-	    } else if (meters < 100) {
-		return km.toFixed(2) + " km";
-	    } else {
-		return km.toFixed(1) + " km";
-	    }
-	}
+        if (meters < 1000) {
+            return meters + " m";
+        } else {
+            var km = parseFloat(value) / 1000.0;
+            if (km < 10) {
+                return km.toFixed(3) + " km";
+            } else if (meters < 100) {
+                return km.toFixed(2) + " km";
+            } else {
+                return km.toFixed(1) + " km";
+            }
+        }
     } else {
-	var miles = meters * 0.0006213712;
-	if (miles < 100) {
-	    return miles.toFixed(3) + " mi";
-	} else {
-	    return miles.toFixed(2) + " mi";
-	}
+        var miles = meters * 0.0006213712;
+        if (miles < 100) {
+            return miles.toFixed(3) + " mi";
+        } else {
+            return miles.toFixed(2) + " mi";
+        }
     }
 }
 
@@ -685,10 +708,10 @@ function prettytime(value) {
     if (!value) value = new Date(0);
     ret = "";
     if (value.hour > 0) {
-	ret = value.hour + "hr ";
+	    ret = value.hour + "hr ";
     }
     if (value.minute > 0) {
-	ret += value.minute + "min ";
+	    ret += value.minute + "min ";
     }
     ret += value.second + "s";
     return ret;
@@ -703,9 +726,9 @@ function speed_ms_to_unit(spd, metric_imperial) {
     if (!metric_imperial) metric_imperial = native_unit;
     kmh = spd * 3.6;
     if (metric_imperial.toLowerCase().substr(0,1) === 'm') {
-	return kmh;
+	    return kmh;
     } else {
-	return kmh*0.6213712;
+	    return kmh*0.6213712;
     }
 }
 
@@ -736,11 +759,11 @@ function pace(speed_ms, metric_imperial, include_unit) {
     psec = ((p - pmin) * 60).toFixed();
     ret = pmin + ":";
     if (psec < 10) {
-	ret += "0";
+	    ret += "0";
     }
     ret += psec;
     if (include_unit) {
-	ret += " " + unit("pace", metric_imperial);
+	    ret += " " + unit("pace", metric_imperial);
     }
     return ret;
 }
@@ -758,7 +781,7 @@ function convert(metric_value, what, units, include_unit, digits) {
     factor = units_table[what]['factor_' + units.toLowerCase().substr(0,1)];
     ret = (metric_value * factor).toFixed(digits);
     if (include_unit) {
-	ret += " " + unit(what, units);
+	    ret += " " + unit(what, units);
     }
     return ret;
 }
@@ -766,10 +789,10 @@ function convert(metric_value, what, units, include_unit, digits) {
 function to_metric(value, what, units) {
     if (!units) units = native_unit;
     if (value) {
-	factor = 1.0 / units_table[what]['factor_' + units.toLowerCase().substr(0,1)];
-	return parseFloat(value) * factor;
+	    factor = 1.0 / units_table[what]['factor_' + units.toLowerCase().substr(0,1)];
+	    return parseFloat(value) * factor;
     } else {
-	return 0.0;
+	    return 0.0;
     }
 }
 
@@ -795,21 +818,21 @@ function height(height_in_cm, units, include_unit) {
     if (!units) units = native_unit;
     height_in_cm = parseFloat(height_in_cm);
     if (units.toLowerCase().substr(0,1) === 'm') {
-	h = (height_in_cm / 100).toFixed(2);
-	if (include_units) {
-	    h += ' ' + unit('height', units);
-	}
-	return h;
+	    h = (height_in_cm / 100).toFixed(2);
+	    if (include_units) {
+	        h += ' ' + unit('height', units);
+	    }
+	    return h;
     } else {
-	h_in = Math.round(height_in_cm * 0.393700787);
-	ft = Math.floor(h_in / 12);
-	inches = h_in % 12;
-	ret = '';
-	if (ft > 0) {
-	    ret = ft + "' ";
-	}
-	ret += inches + '"';
-	return ret;
+	    h_in = Math.round(height_in_cm * 0.393700787);
+	    ft = Math.floor(h_in / 12);
+	    inches = h_in % 12;
+	    ret = '';
+	    if (ft > 0) {
+	        ret = ft + "' ";
+	    }
+	    ret += inches + '"';
+	    return ret;
     }
 }
 

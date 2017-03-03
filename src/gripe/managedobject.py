@@ -1,8 +1,21 @@
-'''
-Created on Feb 13, 2014
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
-@author: jan
-'''
 
 import gripe
 
@@ -23,14 +36,14 @@ _temp_mo_map = None
 class ManagedObjectMetaClass(type):
     def __init__(cls, name, bases, dct):
         global _temp_mo_meta, _temp_mo_map
-        cls._meta = _temp_mo_meta if _temp_mo_meta is not None else { } 
-        cls._map = _temp_mo_map if _temp_mo_map is not None else { } 
+        cls._meta = _temp_mo_meta if _temp_mo_meta is not None else { }
+        cls._map = _temp_mo_map if _temp_mo_map is not None else { }
         _temp_mo_meta = None
         _temp_mo_map = None
         cls._objects = {}
         cls._accessors = {}
         cls._idattr = None
-        
+
         def get(cls, val):
             if isinstance(val, dict):
                 idval = val.get(cls._map.get("idval", "id"))
@@ -41,13 +54,13 @@ class ManagedObjectMetaClass(type):
             logger.debug("%s.get(%s) registry %s", cls.__name__, idval, cls._objects)
             return cls._objects.get(idval)
         cls.get = classmethod(get)
-        
+
         def _set(cls, oldid, newid, obj):
             if oldid and (oldid in cls._objects):
                 del cls._objects[oldid]
             cls._objects[newid] = obj
         cls._set = classmethod(_set)
-        
+
         def _add(clazz, idval, **kwargs):
             if idval in clazz._objects:
                 e = clazz._meta.get("exists", ObjectExists)
@@ -56,24 +69,24 @@ class ManagedObjectMetaClass(type):
             obj._mo_init(idval, **kwargs)
             return obj
         cls._add = classmethod(_add)
-        
+
         def add(clazz, idval, **kwargs):
             obj = clazz._add(idval, **kwargs)
             obj.put()
             return obj
         cls.add = classmethod(add)
-        
+
         def put(cls):
             objtag = cls.__name__.lower() + "s"
             configtag = cls._meta.get("configtag", "app")
             objects = {}
-            for idval in cls._objects: 
+            for idval in cls._objects:
                 objects[idval] = cls._objects[idval].to_dict()
             section = gripe.Config[configtag] if configtag in gripe.Config else {}
             section[objtag] = objects
             gripe.Config.set(configtag, section)
         cls.put = classmethod(put)
-        
+
         def objectmanager():
             if not(hasattr(cls, "_initialized")):
                 cls._initialized = True
@@ -97,14 +110,14 @@ class map_attribute(object):
             if not hasattr(self, "attr"):
                 self.attr = self.__class__.__name__
             self.maps_to = maps_to
-        
+
     def __call__(self, obj):
         if isinstance(obj, type):
             obj._map[self.attr] = self.maps_to
             return obj
         else:
             return self._attr(obj)
-        
+
     def _attr(self, obj):
         global _temp_mo_map
         if _temp_mo_map is None:
@@ -121,14 +134,14 @@ class meta_value(object):
             if not hasattr(self, "attr"):
                 self.attr = self.__class__.__name__
             self.value = value
-        
+
     def __call__(self, obj):
         if isinstance(obj, type):
             obj._meta[self.attr] = self.value
             return obj
         else:
             return self._attr(obj)
-        
+
     def _attr(self, obj):
         global _temp_mo_meta
         if _temp_mo_meta is None:
@@ -139,16 +152,16 @@ class meta_value(object):
 
 class idattr(map_attribute):
     attr = "idval"
-        
+
 class labelattr(map_attribute):
     attr = "label"
 
 class objectexists(meta_value):
     attr = "exists"
-        
+
 class configtag(meta_value):
     pass
-        
+
 
 class ManagedObject(object):
     __metaclass__ = ManagedObjectMetaClass
@@ -164,7 +177,7 @@ class ManagedObject(object):
 
     def __hash__(self):
         return self.__id__().__hash__()
-    
+
     def _mo_init(self, idval, **attrs):
         self._attribs = {}
         self.objid(idval)
@@ -175,7 +188,7 @@ class ManagedObject(object):
         for attr in attrs:
             setattr(self, attr, attrs[attr])
         return self
-    
+
     @classmethod
     def _get_accessor(cls, attr):
         accessors = cls._accessors.get(attr)
@@ -188,7 +201,7 @@ class ManagedObject(object):
             accessors = (mapped_to, a)
             cls._accessors[attr] = accessors
         return accessors
-    
+
     @classmethod
     def _get_idattr(cls):
         if cls._idattr is None:
@@ -201,7 +214,7 @@ class ManagedObject(object):
         return self.idval
 
     objid = __id__
-    
+
     def objectlabel(self):
         attr = self._map.get("label", "label")
         return hasattr(self, attr) and getattr(self, attr) or self.objid()
@@ -215,7 +228,7 @@ class ManagedObject(object):
                 raise AttributeError(attr)
             else:
                 return self._attribs[attr]
-        
+
     def __setattr__(self, name, value):
         if name.startswith("_"):
             object.__setattr__(self, name, value)
@@ -228,7 +241,7 @@ class ManagedObject(object):
                 a(self, value)
             else:
                 self._attribs[attr] = value
-                
+
     def to_dict(self):
         ret = {}
         idattr = self._get_idattr()
@@ -240,4 +253,3 @@ class ManagedObject(object):
                 del attrs[idattr]
         ret.update(attrs)
         return ret
-

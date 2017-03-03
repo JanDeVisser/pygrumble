@@ -6,7 +6,7 @@ Created on Sep 3, 2014
 
 import math
 
-from PySide.QtCore import QCoreApplication
+from PyQt5.QtCore import QCoreApplication
 
 import gripe
 import grumble.qt.model

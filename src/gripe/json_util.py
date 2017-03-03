@@ -23,12 +23,13 @@
 # print sys.path
 
 import datetime
-import json
 
 import gripe
+import json
+
 
 def date_to_dict(d):
-    if not(d):
+    if not d:
         return None
     elif isinstance(d, datetime.date) or isinstance(d, datetime.datetime):
         return {
@@ -43,12 +44,14 @@ def date_to_dict(d):
             'day': 0
         }
 
+
 def dict_to_date(d):
     return datetime.date(d['year'], d['month'], d['day']) \
         if (d and (d['year'] > 0) and (d['month'] > 0)) else None
 
+
 def datetime_to_dict(ts):
-    if not(ts):
+    if not ts:
         return None
     elif isinstance(ts, datetime.datetime):
         return {
@@ -69,12 +72,14 @@ def datetime_to_dict(ts):
             'second': 0
         }
 
+
 def dict_to_datetime(d):
     return datetime.datetime(d['year'], d['month'], d['day'], d['hour'], d['minute'], d['second']) \
         if (d and (d['year'] > 0) and (d['month'] > 0)) else None
 
+
 def time_to_dict(t):
-    if not(t):
+    if not t:
         return None
     elif isinstance(t, datetime.time) or isinstance(t, datetime.datetime):
         return {
@@ -89,25 +94,27 @@ def time_to_dict(t):
             'second': 0
         }
 
+
 def dict_to_time(d):
     return datetime.time(d['hour'], d['minute'], d['second']) if d else None
 
-class JSON(object):
-    def json_str(self, indent = None):
-        return json.dumps(self._convert_out(self), indent = indent)
 
-    def file_write(self, fname, indent = None):
-        gripe.write_file(fname, self.json_str(indent))
+class JSON(object):
+    def json_str(self, indent=None):
+        return json.dumps(self._convert_out(self), indent=indent)
+
+    def file_write(self, filename, indent=None):
+        gripe.write_file(filename, self.json_str(indent))
 
     @classmethod
     def _convert(cls, obj):
         if isinstance(obj, dict):
             keys = set(obj.keys())
-            if keys == set(["hour", "minute", "second"]):
+            if keys == {"hour", "minute", "second"}:
                 return dict_to_time(obj)
-            elif keys == set(["day", "month", "year"]):
+            elif keys == {"day", "month", "year"}:
                 return dict_to_date(obj)
-            elif keys == set(["day", "month", "year", "hour", "minute", "second"]):
+            elif keys == {"day", "month", "year", "hour", "minute", "second"}:
                 return dict_to_datetime(obj)
             else:
                 return JSONObject(obj)
@@ -125,7 +132,7 @@ class JSON(object):
         elif isinstance(obj, datetime.time):
             return time_to_dict(obj)
         elif isinstance(obj, dict):
-            return { k: cls._convert_out(v) for (k, v) in obj.items() }
+            return {k: cls._convert_out(v) for (k, v) in obj.items()}
         elif isinstance(obj, list):
             return [cls._convert_out(v) for v in obj]
         else:
@@ -156,25 +163,28 @@ class JSON(object):
     def create(cls, obj):
         return cls._convert(obj)
 
+
 class JSONArray(list, JSON):
     def __init__(self, l):
+        super(JSONArray, self).__init__()
         assert isinstance(l, list)
         self.extend(l)
 
     def append(self, value):
-        o = self._convert(value)
-        super(JSONArray, self).append(o)
+        obj = self._convert(value)
+        super(JSONArray, self).append(obj)
 
     def extend(self, l):
         for i in l:
             self.append(i)
 
     def __setitem__(self, key, value):
-        o = self._convert(value)
-        super(JSONArray, self).__setitem__(key, o)
+        obj = self._convert(value)
+        super(JSONArray, self).__setitem__(key, obj)
+
 
 class JSONObject(dict, JSON):
-    def __init__(self, d = None):
+    def __init__(self, d=None):
         super(JSONObject, self).__init__(d)
         self._id = None
         self._db = None
@@ -197,43 +207,45 @@ class JSONObject(dict, JSON):
         del self[key]
 
     def __setitem__(self, key, value):
-        o = self._convert(value)
-        super(JSONObject, self).__setitem__(key, o)
+        obj = self._convert(value)
+        super(JSONObject, self).__setitem__(key, obj)
 
     def merge(self, other):
         assert isinstance(other, JSONObject), "Can only merge JSONObjects"
         for (k, v) in other.items():
-            myval = self.get(k)
+            my_value = self.get(k)
             if k not in self:
                 self[k] = v
                 continue
             elif isinstance(v, list) and v:
-                assert isinstance(myval, list), "Can only merge two lists when merging JSONObjects"
+                assert isinstance(my_value, list), "Can only merge two lists when merging JSONObjects"
                 if v[-1] == "+":
                     for x in v[0:-1]:
-                        myval.insert(0, x)
+                        my_value.insert(0, x)
                 else:
-                    myval.extend(v)
+                    my_value.extend(v)
                 continue
             elif isinstance(v, dict) and v:
-                assert isinstance(myval, dict), "Can only merge two dicts when merging JSONObjects (key = %s, myval = %s, otherval = %s)" % (k, myval, v)
-                if isinstance(myval, JSONObject) and isinstance(v, JSONObject):
-                    myval.merge(v)
+                assert isinstance(my_value, dict), \
+                    "Can only merge two dicts when merging JSONObjects (key = %s, myval = %s, otherval = %s)" % \
+                    (k, my_value, v)
+                if isinstance(my_value, JSONObject) and isinstance(v, JSONObject):
+                    my_value.merge(v)
                 else:
-                    myval.update(v)
+                    my_value.update(v)
                 continue
             else:
                 # Overwrite current value with value from other:
                 self[k] = v
 
-    def db_put(self, db = None, id = None):
+    def db_put(self, db=None, ident=None):
         self._db = db if db is not None else self._db
-        self._id = id if id is not None else self._id
+        self._id = ident if ident is not None else self._id
         assert self._db is not None
         assert self._id is not None
         self._db[str(self._id)] = self.json_str()
 
-    def file_write(self, fname, indent = None):
+    def file_write(self, fname, indent=None):
         gripe.write_file(fname, self.json_str(indent), "w")
 
     def id(self):
@@ -251,7 +263,7 @@ if __name__ == "__main__":
 "nopope": { "day": 28, "month": 2, "year": 2013, "hour": 18, "minute": 0, "second": 0 },
 "nopope.time": { "hour": 18, "minute": 0, "second": 0 }
 }"""
-    obj = json.loads(s)
+    loaded = json.loads(s)
 
     o = JSON.load(s)
     print o
@@ -261,7 +273,7 @@ if __name__ == "__main__":
     print o.bar.quux
     print o.bar.froz
 
-    o = JSON.load(obj)
+    o = JSON.load(loaded)
     print o
     print o.foo
     print o.foo[1]

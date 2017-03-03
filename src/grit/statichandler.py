@@ -2,8 +2,6 @@
 # To change this template file, choose Tools | Templates
 # and open the template in the editor.
 
-__author__="jan"
-__date__ ="$19-Sep-2013 4:47:28 PM$"
 
 import hashlib
 import os.path
@@ -11,7 +9,11 @@ import os.path
 import gripe
 import grit.requesthandler
 
+__author__="jan"
+__date__ ="$19-Sep-2013 4:47:28 PM$"
+
 logger = gripe.get_logger(__name__)
+
 
 class StaticHandler(grit.requesthandler.ReqHandler):
     etags = {}
@@ -33,7 +35,7 @@ class StaticHandler(grit.requesthandler.ReqHandler):
             if_none_match = self.request.if_none_match
             hashvalue = self.etags.get(path)
             if if_none_match and hashvalue and hashvalue in if_none_match:
-                logger.debug("Client has up-to-date resource %s", path)
+                logger.debug("Client has up-to-date resource %s: %s %s", path, if_none_match, hashvalue)
                 self.response.status = "304 Not Modified"
             else:
                 self.response.content_length = str(os.path.getsize(path))
@@ -50,7 +52,7 @@ class StaticHandler(grit.requesthandler.ReqHandler):
                     hashvalue = hashlib.md5(buf).hexdigest()
                     self.etags[path] = hashvalue
                     if if_none_match and hashvalue in if_none_match:
-                        logger.debug("Client has up-to-date resource %s. I had to hash it though", path)
+                        logger.debug("Client has up-to-date resource %s. I had to hash it though. %s %s", path, if_none_match, hashvalue)
                         self.response.status = "304 Not Modified"
                         return
                 self.response.etag = hashvalue
