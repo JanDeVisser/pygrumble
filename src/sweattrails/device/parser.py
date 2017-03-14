@@ -16,7 +16,6 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-import os.path
 import StringIO
 import traceback
 
@@ -24,12 +23,25 @@ import gripe
 import gripe.conversions
 import grumble.geopt
 import sweattrails.device.exceptions
-import sweattrails.device.fitparser
-import sweattrails.device.tcxparser
 import sweattrails.config
 import sweattrails.session
 
 logger = gripe.get_logger(__name__)
+
+
+class Logger(object):
+    def status_message(self, msg, *args):
+        logger.debug(msg.format(*args))
+
+    def progress_init(self, msg, *args):
+        self.progress_msg = msg.format(*args)
+        logger.debug(self.progress_msg + " - Starting")
+
+    def progress(self, new_progress):
+        pass
+
+    def progress_end(self):
+        logger.debug(self.progress_msg + " - Ended")
 
 
 class Record(object):
@@ -89,13 +101,13 @@ class DictBridge(dict):
         bridge = cls(obj)
         t = obj["type"]
         if t == 'activity':
-            ret = sweattrails.device.parser.Activity(bridge)
+            ret = Activity(bridge)
             container.add_activity(ret)
         elif t == 'lap':
-            ret = sweattrails.device.parser.Lap(bridge)
+            ret = Lap(bridge)
             container.add_lap(ret)
         elif t == 'trackpoint':
-            ret = sweattrails.device.parser.Trackpoint(bridge)
+            ret = Trackpoint(bridge)
             container.add_trackpoint(ret)
         if ret:
             ret.container = container
@@ -223,12 +235,14 @@ class Activity(Lap):
 class Parser(object):
     def __init__(self, filename):
         self.filename = filename
-        self.name = "buffer" if isinstance(self.filename, StringIO.StringIO) else self.filename
+        self.name = self.filename
+        self.buffer = None
         self.user = None
         self.logger = None
         self.activities = []
         self.laps = []
         self.trackpoints = []
+        self.set_logger(Logger())
 
     def set_athlete(self, athlete):
         self.user = athlete
@@ -268,21 +282,26 @@ class Parser(object):
     def add_trackpoint(self, trackpoint):
         self.trackpoints.append(trackpoint)
 
-    def parse(self):
+    def parse_file(self, buffer=None):
+        assert False, "Abstract method parse_file called"
+
+    def parse(self, buffer=None):
         assert self.user, "No user set on parser"
-        assert self.filename, "No filename set on parser"
-        assert not isinstance(self.filename, basestring) or gripe.exists(self.filename), "parser: file '%s' does not exist" % self.filename
+        if buffer is None:
+            assert self.filename, "No filename set on parser"
+            assert gripe.exists(self.filename), "parser: file '%s' does not exist" % self.filename
+
         try:
-            self.status_message("Reading file {}", self.name)
-            self.parse_file()
-            self.status_message("Processing file {}", self.name)
+            self.status_message("Reading file {}", self.filename)
+            self.parse_file(buffer)
+            self.status_message("Processing file {}", self.filename)
             ret = self._process()
-            self.status_message("File {} converted", self.name)
+            self.status_message("File {} converted", self.filename)
             return ret
         except sweattrails.device.exceptions.SessionExistsError:
             raise
         except Exception as exception:
-            traceback.print_exc()
+            logger.exception("Exception parsing FIT file")
             raise sweattrails.device.exceptions.FileImportError(exception)
 
     def _process(self):
@@ -305,45 +324,3 @@ class Parser(object):
         return ret
 
 # ---------------------------------------------------------------------------------------------------
-
-_parser_factories_by_ext = {
-    "fit": sweattrails.device.fitparser.FITParser,
-    "tcx": sweattrails.device.tcxparser.TCXParser
-}
-
-_parser_factories = []
-
-if ("sweattrails" in gripe.Config.app and
-            "parsers" in gripe.Config.app.sweattrails):
-    for i in gripe.Config.app.sweattrails.parsers:
-        cls = i["class"]
-        cls = gripe.resolve(cls)
-        ext = i.get("extension")
-        if ext:
-            _parser_factories_by_ext[ext] = cls
-        else:
-            _parser_factories.append(cls)
-
-
-def get_parser(filename):
-    f = os.path.basename(filename)
-    parser = None
-
-    (_, _, extension) = f.rpartition(".")
-    if extension:
-        extension = ext.lower()
-    factory = _parser_factories_by_ext.get(extension)
-    if factory:
-        if hasattr(factory, "create_parser"):
-            parser = factory.create_parser(filename)
-        else:
-            parser = factory(filename)
-    if not parser:
-        for factory in _parser_factories:
-            if hasattr(factory, "create_parser"):
-                parser = factory.create_parser(filename)
-            else:
-                parser = factory(filename)
-            if parser:
-                break
-    return parser

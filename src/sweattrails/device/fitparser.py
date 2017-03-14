@@ -65,13 +65,10 @@ class FITParser(sweattrails.device.parser.Parser):
         super(FITParser, self).__init__(filename)
         self.fitactivity = None
         
-    def parse_file(self):
+    def parse_file(self, buffer = None):
         self.fitactivity = sweattrails.device.fitparse.Activity(self.filename)
-        if not isinstance(self.filename, StringIO.StringIO):
-            self.status_message("Parsing FIT file {}", self.filename)
-        else:
-            self.status_message("Parsing FIT buffer")
-        self.fitactivity.parse()
+        self.status_message("Parsing FIT file {}", self.filename)
+        self.fitactivity.parse(buffer=buffer)
         
         # Walk all records and wrap them in our types:
         for r in self.fitactivity.records:

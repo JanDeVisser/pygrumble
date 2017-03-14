@@ -17,6 +17,8 @@
 #
 
 import exceptions
+import StringIO
+import traceback
 
 import gripe
 import grit.upload
@@ -24,14 +26,16 @@ import grizzle
 import grumble
 import grumble.model
 import grudge
+import sweattrails.device
 import sweattrails.device.exceptions
-import sweattrails.device.parser
 import sweattrails.session
 
 logger = gripe.get_logger(__name__)
 
 
-@grudge.Process(entrypoint="Check")
+@grudge.OnStarted(grudge.Invoke())
+@grudge.OnAdd("done", grudge.Stop())
+@grudge.Process()
 class UploadActivity(grumble.Model):
     uploadedFile = grumble.ReferenceProperty(grit.upload.UploadedFile)
     athlete = grumble.ReferenceProperty(grizzle.User)
@@ -39,48 +43,56 @@ class UploadActivity(grumble.Model):
     converted = grumble.BooleanProperty(default=False)
     error = grumble.TextProperty()
 
-
-@grudge.OnStarted(grudge.Invoke("./check"))
-@grudge.OnAdd("OK", grudge.Transition("../Import"))
-@grudge.OnAdd("Error", grudge.Transition("../Finished"))
-@grudge.Process(parent="UploadActivity")
-class Check(grumble.Model):
-    OK = grudge.Status()
-    error = grudge.Status()
-
-    def check(self):
-        # Initialize parent: filename, athlete
-        # Check
-        #  - If the user is an athlete
-        #  - If the file hasn't been uploaded yet
-        return self.OK
-
-
-@grudge.OnStarted(grudge.Invoke("./import_file"))
-@grudge.OnAdd("done", grudge.Transition("../Finished"))
-@grudge.Process(parent="UploadActivity")
-class Import(grumble.Model):
     done = grudge.Status()
 
+    def check(self):
+        logger.debug("UploadActivity(%s).check", self.filename)
+        uploaded = self.uploadedFile
+        user = uploaded.get_user()
+        if not user.has_role("athlete"):
+            logger.debug(
+                "UploadActivity(%s).check: User %s cannot upload activities because they don't have the 'athlete' role",
+                self.filename, user.uid())
+            self.error = "User %s cannot upload activities because they don't not have the 'athlete' role" % user.uid()
+            self.put()
+            return False
+        q = UploadActivity.query('"filename" =',   uploaded.filename,
+                                 '"athlete" =',    user,
+                                 '"converted" = ', True)
+        already_uploaded = q.get()
+        if already_uploaded:
+            logger.debug("UploadActivity(%s).check: User '%s' already uploaded file", self.filename, user.uid())
+            self.error = "User '%s' already uploaded file '%s'" % (user.uid(), uploaded.filename)
+            self.put()
+            return False
+        self.filename = uploaded.filename
+        self.athlete = user
+        self.put()
+        logger.debug("UploadActivity(%s).check OK", self.filename)
+        return True
+
     def import_file(self):
-        activity = self.parent()
-        uploaded = activity.uploadedFile
+        logger.debug("UploadActivity(%s).import_file", self.filename)
+        uploaded = self.uploadedFile
         try:
-            parser = sweattrails.device.parser.get_parser(uploaded.filename)
-            parser.set_athlete(activity.athlete)
-            parser.parse()
-            activity.converted = True
+            parser = sweattrails.device.get_parser(uploaded.filename)
+            parser.set_athlete(self.athlete)
+            parser.parse(uploaded.content.adapted)
+            logger.debug("UploadActivity(%s).import_file: file parsed", self.filename)
+            self.converted = True
         except exceptions.Exception as e:
-            activity.error = e.message
-        activity.put()
-        return self.done
+            logger.exception("Exception parsing file %s", self.filename)
+            self.error = traceback.format_exc()
+        self.put()
 
-
-@grudge.OnStarted(grudge.Invoke("./cleanup"))
-@grudge.OnStarted(grudge.Stop)
-@grudge.Process(parent="UploadActivity", exitpoint=True)
-class Finished(grumble.Model):
     def cleanup(self):
-        grumble.model.delete(self.parent().uploadedFile)
-        self.parent().uploadedFile = None
-        self.parent().put()
+        logger.debug("UploadActivity(%s).cleanup", self.filename)
+        grumble.model.delete(self.uploadedFile)
+        self.uploadedFile = None
+        self.put()
+
+    def invoke(self):
+        logger.debug("UploadActivity(%s).invoke", self.filename)
+        if self.check():
+            self.import_file()
+        self.cleanup()

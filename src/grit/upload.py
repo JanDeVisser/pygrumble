@@ -32,36 +32,38 @@ logger = gripe.get_logger(__name__)
 class UploadedFile(grumble.Model):
     timestamp = grumble.DateTimeProperty(auto_now=True)
     user = grumble.StringProperty()
-    process = grumble.StringProperty()
+    action = grumble.StringProperty()
     filename = grumble.StringProperty()
     content_type = grumble.StringProperty()
     content = grumble.image.BinaryProperty()
 
     def get_user(self):
-        return grit.role.Guard.get_usermanager().get(self.user)
+        return gripe.role.Guard.get_usermanager().get(self.user)
 
 
 class Uploader(grit.handlers.BridgedHandler):
-    def post(self, process=None):
-        logger.info("Uploader.post(%s:%s)", process)
+    def post(self, action=None, param="file"):
         if not self.user:
             self.error(401)
-        elif not process:
-            logger.error("No process specified for upload")
+        elif not action:
+            logger.error("No action specified for upload")
             self.error(500)
         else:
-            process_class = gripe.resolve(process)
+            logger.info("Uploader.post(%s, %s)", action, param)
+            process_class = gripe.resolve(action)
             if not process_class:
-                logger.error("Process class '%s' specified in upload not found", process)
+                logger.error("Action class '%s' specified in upload not found", action)
                 self.error(500)
             elif not grudge.is_process(process_class):
-                logger.error("Class '%s' specified as process class in upload is not a grudge process class", process)
+                logger.error("Class '%s' specified as action class in upload is not a grudge process class", process_class)
                 self.error(500)
             else:
-                for upload in self.request.POST.getall("file"):
+                uploads = self.request.POST.get(param);
+
+                def instantiate_activity(upload):
                     uploaded_file = UploadedFile()
                     uploaded_file.user = self.user.uid()
-                    uploaded_file.process = process
+                    uploaded_file.action = action
                     uploaded_file.content = upload.file.read()
                     uploaded_file.filename = os.path.basename(upload.filename)
                     uploaded_file.content_type = upload.type
@@ -69,6 +71,12 @@ class Uploader(grit.handlers.BridgedHandler):
                     p = process_class.instantiate(uploadedFile=uploaded_file)
                     p.start()
 
+                try:
+                    for upload in uploads:
+                        instantiate_activity(upload)
+                except TypeError:
+                    instantiate_activity(uploads)
+
 app = webapp2.WSGIApplication([
-        webapp2.Route(r'/upload/<process>', handler=Uploader, name='uploader'),
+        webapp2.Route(r'/upload/<action>', handler=Uploader, name='uploader'),
     ], debug=True)

@@ -654,8 +654,12 @@ class Model():
             elif k == "ownerid":
                 q.owner(v)
             elif k == "_sortorder":
-                for s in kwargs["_sortorder"]:
-                    q.add_sort(s["column"], s.get("ascending", True))
+                order = kwargs["_sortorder"];
+                if isinstance(order, (list, tuple)):
+                    for s in kwargs["_sortorder"]:
+                        q.add_sort(s["column"], s.get("ascending", True))
+                else:
+                    q.add_sort(order["column"], order.get("ascending", True))
             elif isinstance(v, (list, tuple)):
                 q.add_filter(k, *v)
             elif k in ("keys_only", "include_subclasses"):
@@ -745,10 +749,13 @@ def unaudited(cls):
 class Query(grumble.query.ModelQuery):
     def __init__(self, kind, keys_only = True, include_subclasses = True, **kwargs):
         super(Query, self).__init__()
-        try:
-            kinds = [grumble.meta.Registry.get(k) for k in kind]
-        except TypeError:
+        if isinstance(kind, basestring):
             kinds = [grumble.meta.Registry.get(kind)]
+        else:
+            try:
+                kinds = [grumble.meta.Registry.get(k) for k in kind]
+            except TypeError:
+                kinds = [grumble.meta.Registry.get(kind)]
         self.kind = []
         for k in kinds:
             if not k.abstract():

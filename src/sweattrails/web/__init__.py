@@ -17,30 +17,3 @@
 #
 
 
-import webapp2
-
-import grit.handlers
-import sweattrails.session
-
-
-class SessionHandler(grit.handlers.PageHandler):
-    def prepare_query(self, q):
-        q['"athlete" = '] = str(self.user.key())
-        return q
-
-
-app = webapp2.WSGIApplication([
-    webapp2.Route(
-        r'/st/activities',
-        handler="sweattrails.web.SessionHandler", name='list-activities',
-        defaults={
-            "kind": sweattrails.session.Session
-        }),
-    webapp2.Route(
-        r'/st/activity/<key>',
-        handler="sweattrails.web.SessionHandler", name='manage-activity',
-        defaults={
-            "kind": sweattrails.session.Session
-        }
-    )
-    ], debug = True)

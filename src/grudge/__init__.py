@@ -81,6 +81,8 @@ class MessageQueue(object):
 
 _queue = MessageQueue("Grudge WF", 5)
 
+def wait():
+    _queue.join()
 
 class Status(object):
     def __init__(self, name = None, label = None):
@@ -138,6 +140,7 @@ class Action(object):
 # -------------------------------------------------------------------------
 #
 
+
 class ProcessAction(Action):
     def __init__(self, *args, **kwargs):
         self.set_process(*args, **kwargs)
@@ -149,8 +152,9 @@ class ProcessAction(Action):
             self._target = kwargs["process"]
         else:
             self._target = None
-        if self._target:
-            self._target = grumble.Key(self._target)
+        # Why is this here??
+        # if not self._target:
+        #     self._target = grumble.Key(self._target)
 
     def get_target(self, ctx):
         if not self._target:
@@ -237,10 +241,11 @@ class Invoke(Action):
                 self._args.extend(args[1:])
         if "method" in kwargs:
             self._method = kwargs["method"]
+        else:
+            self._method = ".:invoke()"
         if "args" in kwargs:
             self._args.extend(kwargs["args"])
         self._kwargs = kwargs["kwargs"] if "kwargs" in kwargs else {}
-        assert self._method, "Method must be specified for Invoke action"
         if not self._method.endswith("()"):
             self._method += "()"
 
@@ -441,6 +446,7 @@ class Process(object):
             logger.debug("instantiate %s", cls.__name__)
             with gripe.db.Tx.begin():
                 p = cls(parent=parent, **kwargs)
+                p.put()
                 for sub in cls.subprocesses():
                     subcls = grumble.Model.for_name(sub.__name__)
                     subcls.instantiate(p)
@@ -450,7 +456,7 @@ class Process(object):
         def start(self):
             if self.starttime is None:
                 with gripe.db.Tx.begin():
-                    self.semaphore = self.semaphore + 1
+                    self.semaphore += 1
                     if self.semaphore < self._start_semaphore:
                         logger.debug("start semaphore value is %s threshold of %s not yet reached", self.semaphore, self._start_semaphore)
                         self.put()
@@ -460,17 +466,18 @@ class Process(object):
                         self.starttime = datetime.datetime.now()
                         self.put()
                         for a in self._on_started:
-                            _queue.put_action(a, process = self)
+                            _queue.put_action(a, process=self)
                 with gripe.db.Tx.begin():
                     ep = grumble.Model.for_name(self._entrypoint) if self._entrypoint else None
-                    logger.debug("Entrypoint of %s: %s", self.__class__.__name__, ep.__name__ if ep is not None else "None")
                     if ep:
-                        ep_instance = grumble.Query(ep, False, parent = self).get()
-                        if ep_instance:
-                            logger.debug("Starting entrypoint instance")
-                            ep_instance.start()
-                        else:
-                            logger.debug("No entrypoint instance found")
+                        logger.debug("Entrypoint of %s: %s", self.__class__.__name__, ep.__name__)
+                        ep_instance = grumble.Query(ep, False, parent=self).get()
+                        assert ep_instance, "No instance of entrypoint class '%s' found" % self._entrypoint
+                        logger.debug("Starting entrypoint instance")
+                        ep_instance.start()
+                    else:
+                        logger.debug("No entrypoint")
+
         cls.start = start
 
         def stop(self):
@@ -539,12 +546,8 @@ class Process(object):
             assert path, "Called process.resolve_process with empty path"
             logger.debug("resolving %s for %s", path, self)
             proc = self
-            p = path.split("/")
-            pix = 0
-            maxpix = len(p)
-            while pix < maxpix:
-                elem = p[pix]
-                pix += 1
+            for elem in path.split("/"):
+                logger.debug("Looking for '%s'", elem)
                 if elem == "..":
                     proc = proc().parent()
                     logger.debug("resolved '..' -> %s", proc)
@@ -588,41 +591,3 @@ class Process(object):
 def is_process(cls):
     return hasattr(cls, "_grudge_process_class") and cls._grudge_process_class
 
-if __name__ == "__main__":
-
-    @Process(entrypoint = "Step1")
-    class WF(grumble.Model):
-        pass
-
-    @OnStarted(Transition("../Step2"))
-    @Process(parent = "WF")
-    class Step1(grumble.Model):
-        pass
-
-    @OnStarted(Invoke("./set_recipients"))
-    @OnAdd("sendmail", SendMail(recipients = "@recipients",
-        subject = "Grudge Test", text = "This is a test", status = "stopme"))
-    @OnAdd("stopme", Stop())
-    @OnStopped(Transition("../Step3"))
-    @Process(parent = "WF")
-    class Step2(grumble.Model):
-        sendmail = Status()
-        stopme = Status()
-        recipients = grumble.TextProperty()
-
-        def set_recipients(self):
-            self.recipients = "sweattrails@de-visser.net"
-            self.put()
-            return self.sendmail
-
-    @OnStarted(Add("startme"))
-    @OnAdd("startme", Remove("startme"))
-    @OnRemove("startme", Stop())
-    @Process(parent = "WF", exitpoint = True)
-    class Step3(grumble.Model):
-        startme = Status()
-
-    wf = WF.instantiate()
-    wf.start()
-
-    _queue.join()

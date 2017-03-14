@@ -16,7 +16,7 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-
+import exceptions
 import json
 import traceback
 import urllib
@@ -338,30 +338,34 @@ class JSONHandler(BridgedHandler):
         self.error(401)
 
     def get(self, key = None, kind = None):
-        logger.info("JSONHandler.get(%s,%s) - JSON request: %s", key, kind, self.request.headers.get("ST-JSON-Request"))
-        self._initialize_bridge(key, kind)
-        has_access = True
-        if hasattr(self, "allow_access") and callable(self.allow__access):
-            has_access = self.allow_access()
-        if has_access:
-            if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
-                self.initialize_bridge()
-            objs = self.get_objects()
-            data = [o.to_dict(**self._flags) for o in objs] if objs else None
-            count = 0 if data is None else len(data)
-            data = data if data is None or len(data) > 1 else data[0]
-            meta = {"schema": self.get_schema(), "count": count}
-            ret = {"meta": meta, "data": data}
-            logger.debug("JSONHandler returns\n%s", ret)
-            self.json_dump(ret)
-            return
-        self.error(401)
+        try:
+            logger.info("JSONHandler.get(%s,%s) - JSON request: %s", key, kind, self.request.headers.get("ST-JSON-Request"))
+            self._initialize_bridge(key, kind)
+            has_access = True
+            if hasattr(self, "allow_access") and callable(self.allow__access):
+                has_access = self.allow_access()
+            if has_access:
+                if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
+                    self.initialize_bridge()
+                objs = self.get_objects()
+                data = [o.to_dict(**self._flags) for o in objs] if objs else None
+                count = 0 if data is None else len(data)
+                data = data if data is None or len(data) > 1 else data[0]
+                meta = {"schema": self.get_schema(), "count": count}
+                ret = {"meta": meta, "data": data}
+                logger.debug("JSONHandler returns\n%s", ret)
+                self.json_dump(ret)
+                return
+            self.error(401)
+        except Exception as e:
+            traceback.print_exc()
+            raise
 
     def delete(self, key = None, kind = None):
         logger.debug("JSONHandler.delete(%s, %s)", key, kind)
         self._initialize_bridge(key, kind)
         has_access = True
-        if hasattr(self, "allow_access") and callable(self.allow__access):
+        if hasattr(self, "allow_access") and callable(self.allow_access):
             has_access = self.allow_access()
         if has_access:
             if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
@@ -396,8 +400,8 @@ class SchemaHandler(grit.requesthandler.ReqHandler):
         self.json_dump(k.schema())
 
 app = webapp2.WSGIApplication([
-        webapp2.Route(r'/json/<kind>', handler = JSONHandler, name = 'json-update'),
-        webapp2.Route(r'/json/<kind>/<key>', handler = JSONHandler, name = 'json-query'),
-        webapp2.Route(r'/img/<kind>/<prop>/<key>', handler = ImageHandler, name = 'image'),
-        webapp2.Route(r'/schema/<kind>', handler = SchemaHandler, name = 'schema'),
+        webapp2.Route(r'/json/<kind>', handler=JSONHandler, name='json-update'),
+        webapp2.Route(r'/json/<kind>/<key>', handler=JSONHandler, name='json-query'),
+        webapp2.Route(r'/img/<kind>/<prop>/<key>', handler=ImageHandler, name='image'),
+        webapp2.Route(r'/schema/<kind>', handler=SchemaHandler, name='schema'),
     ], debug = True)

@@ -269,7 +269,6 @@ com.sweattrails.api.Action.prototype.build = function(a) {
     var ac = a.getAttribute("action");
     this.label = a.getAttribute("label");
     this.modes = a.getAttribute("mode");
-    var impl = null;
     if (ac) {
     	var factory = com.sweattrails.api.internal.actions[ac];
         if (factory) {

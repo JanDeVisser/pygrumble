@@ -16,6 +16,22 @@
  * Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+if (typeof(Object.prototype.getName) !== 'function') {
+    Object.prototype.getName = function () {
+        var funcNameRegex = /function (.{1,})\(/;
+        var results = (funcNameRegex).exec((this).constructor.toString());
+        return (results && (results.length > 1)) ? results[1] : "";
+    };
+}
+
+if (typeof(Object.create) !== 'function') {
+    Object.create = function (o) {
+        function F() {}
+        F.prototype = o;
+        return new F();
+    };
+}
+
 if (typeof(String.prototype.endsWith) !== 'function') {
     String.prototype.endsWith = function(suffix) {
         return this.indexOf(suffix, this.length - suffix.length) !== -1;
@@ -38,20 +54,12 @@ com.sweattrails.api.internal = {};
 com.sweattrails.api.prototypes = {};
 
 com.sweattrails.author = "Jan de Visser";
-com.sweattrails.copyright = "(c) Jan de Visser 2012-2013 under the BSD License";
+com.sweattrails.copyright = "(c) Jan de Visser 2012-2017 under the GPLv3 License";
 com.sweattrails.api.xmlns = "http://www.sweattrails.com/html";
 
 if (typeof(ST) !== 'object') {
     var ST = com.sweattrails.api;
     var ST_int = com.sweattrails.api.internal;
-}
-
-if (typeof(Object.create) !== 'function') {
-    Object.create = function (o) {
-        function F() {}
-        F.prototype = o;
-        return new F();
-    };
 }
 
 com.sweattrails.api.internal.dumpobj = function(indent, name, o) {
@@ -66,13 +74,15 @@ com.sweattrails.api.internal.dumpobj = function(indent, name, o) {
 com.sweattrails.api.internal.dump = function(indent, o) {
     if (Array.isArray(o)) {
         console.log(indent + "[ length " + o.length);
-        for (var ix in o) {
+        for (var ix  = 0; ix < o.length; ix++) {
             com.sweattrails.api.internal.dumpobj(indent + "  ", ix, o[ix]);
         }
         console.log(indent + "]");
     } else {
         for (var k in o) {
-            com.sweattrails.api.internal.dumpobj(indent, k, o[k]);
+            if (o.hasOwnProperty(k)) {
+                com.sweattrails.api.internal.dumpobj(indent, k, o[k]);
+            }
         }
     }
 };
@@ -181,7 +191,12 @@ com.sweattrails.api.Manager.prototype.dispatch = function(d) {
 };
 
 com.sweattrails.api.Manager.prototype.log = function(obj, msg) {
-    var o = obj.type + ((obj.id || obj.name) && ("(" + (obj.id||obj.name) + ")"));
+    var o;
+    if (obj.type) {
+        o = obj.type + ((obj.id || obj.name) && ("(" + (obj.id || obj.name) + ")"));
+    } else {
+        o = obj.getName();
+    }
     console.log(o + ": " + msg);
 };
 
@@ -356,10 +371,13 @@ com.sweattrails.api.TabManager.prototype.drawTab = function(tab) {
 
 
 com.sweattrails.api.TabManager.prototype.selectTab = function(code) {
-    //$$.log(this, "selectTab(" + code + ")")
+    $$.log(this, "selectTab(" + code + ")");
     for (var tabcode in this.tabs) {
+        if (!this.tabs.hasOwnProperty(tabcode)) {
+            continue;
+        }
         var tab = this.tabs[tabcode];
-        if (code === tab.code) {
+        if (code === tabcode) {
             if (tab.header.className !== "tab_selected") {
                 tab.select();
             }
@@ -385,6 +403,7 @@ com.sweattrails.api.internal.DataBridge.prototype.setValue = function(object, va
     if (typeof(s) === "function") {
     	s(object, value);
     } else if (s) {
+        $$.log("Setting " + s + " to " + value);
         setvar(s, value, object);
     }
 };
@@ -432,7 +451,15 @@ function setvar(name, value, ns) {
         ns = ns[component];
     }
     component = components[ix].trim();
-    ns[component] = value;
+    if (typeof(ns[component]) !== 'undefined') {
+        if (Array.isArray(ns[component])) {
+            ns[component].push(value);
+        } else {
+            ns[component] = [ ns[component], value ];
+        }
+    } else {
+        ns[component] = value;
+    }
 }
 
 function getfunc(func, ns) {
@@ -504,15 +531,17 @@ com.sweattrails.api.internal.DOMElementLike.prototype.getAttribute = function(at
 
 Object.defineProperty(com.sweattrails.api.internal.DOMElementLike.prototype, "childNodes", {
     get: function() {
-        ret = [];
+        var ret = [];
+        var ns = this._ns;
         if (typeof(this.object) === "object") {
             for (var c in this.object) {
+                if (!this.object.hasOwnProperty(c)) continue;
                 var o = this.object[c];
                 o = (Array.isArray(o)) ? o : [o];
-                for (var ix in o) {
-                    node = new com.sweattrails.api.internal.DOMElementLike(o[ix], this._ns, c);
+                o.forEach(function(child) {
+                    var node = new com.sweattrails.api.internal.DOMElementLike(child, ns, c);
                     ret.append(node);
-                }
+                });
             }
         } else {
             ret.append(this.object.toString());
@@ -834,26 +863,6 @@ function height(height_in_cm, units, include_unit) {
 	    ret += inches + '"';
 	    return ret;
     }
-}
-
-function getXmlHttpRequest() {
-    if (window.XMLHttpRequest) { // Mozilla, Safari, ...
-        httpRequest = new XMLHttpRequest();
-    } else if (window.ActiveXObject) { // IE
-        try {
-            httpRequest = new ActiveXObject("Msxml2.XMLHTTP");
-        } catch (e) {
-            try {
-                httpRequest = new ActiveXObject("Microsoft.XMLHTTP");
-            } catch (e) {}
-        }
-    }
-
-    if (!httpRequest) {
-        alert('Giving up :( Cannot create an XMLHTTP instance');
-        return false;
-    }
-    return httpRequest;
 }
 
 function import_file(url, callback) {

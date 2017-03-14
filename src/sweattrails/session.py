@@ -73,7 +73,7 @@ class Reducable(list):
 
     def report(self):
         s = """{:40.40s}{:6f}
-{:s}""", self, self.clock, "\n".join(["  {:38.38s}{:6f}".format(r, r.clock) for r in self])
+{:s}""".format(self, self.clock, "\n".join(["  {:38.38s}{:6f}".format(r, r.clock) for r in self]))
         return s
 
     def started(self, timepoint):
@@ -147,7 +147,7 @@ reduction() [Total]                     {:.6f}
 Total                                   {:.6f}
 -------------------------------------------------
 """.format(len(self), self.init_c,
-           "\n".join([ r.report() for r in self]),
+           "\n".join([r.report() for r in self]),
            self.reduce_c, self.done_c, self.total_c)
         logger.debug(rep)
 
@@ -933,11 +933,11 @@ class Session(Interval):
                 self._wps = q.fetchall()
         return self._wps
 
-    def analyze(self, callback = None):
+    def analyze(self, callback=None):
         logger.debug("Interval.analyze(): Getting subintervals")
-        intervals = [ self ]
+        intervals = [self]
         intervals.extend(Interval.query(ancestor = self).fetchall())
-        reducers = Reducers([ IntervalReducable(i) for i in intervals ])
+        reducers = Reducers([IntervalReducable(i) for i in intervals])
 
         logger.debug("Interval.analyze(): Getting waypoints")
         wps = self.waypoints()
@@ -953,9 +953,9 @@ class Session(Interval):
     def upload_slice(self, request):
         lines = request.get("slice").splitlines()
         for line in lines:
-            if (line.strip() == ''):
+            if line.strip() == '':
                 continue
-            wp = Waypoint(parent = self)
+            wp = Waypoint(parent=self)
             wp.session = self
             (seqnr, lat, lon, speed, timestamp, altitude, distance) = line.split(";")
             wp.seqnr = int(seqnr)
@@ -973,7 +973,7 @@ class Session(Interval):
     def on_delete(self):
         ret = super(Session, self).on_delete()
         if ret:
-            Waypoint.query(ancestor = self).delete()
+            Waypoint.query(ancestor=self).delete()
             ret = True
         return ret
 
@@ -981,29 +981,18 @@ class Session(Interval):
 class Waypoint(grumble.Model, Timestamped):
     timestamp = grumble.property.TimeDeltaProperty()
     location = grumble.geopt.GeoPtProperty()
-    elevation = grumble.property.FloatProperty(default = 0)  # meters
-    corrected_elevation = grumble.property.IntegerProperty(default = 0)  # meters
-    speed = grumble.property.FloatProperty(default = 0.0)  # m/s
-    distance = grumble.property.IntegerProperty(default = 0)  # meters
-    cadence = grumble.property.IntegerProperty(default = 0)
-    heartrate = grumble.property.IntegerProperty(default = 0)
-    power = grumble.property.IntegerProperty(default = 0)
-    torque = grumble.property.FloatProperty(default = 0)
-    temperature = grumble.property.IntegerProperty(default = 0)
+    elevation = grumble.property.FloatProperty(default=0)  # meters
+    corrected_elevation = grumble.property.IntegerProperty(default=0)  # meters
+    speed = grumble.property.FloatProperty(default=0.0)  # m/s
+    distance = grumble.property.IntegerProperty(default=0)  # meters
+    cadence = grumble.property.IntegerProperty(default=0)
+    heartrate = grumble.property.IntegerProperty(default=0)
+    power = grumble.property.IntegerProperty(default=0)
+    torque = grumble.property.FloatProperty(default=0)
+    temperature = grumble.property.IntegerProperty(default=0)
 
     def get_session(self):
         return self.root()
 
     def get_athlete(self):
         return self.get_session().get_athlete()
-
-
-class SessionFile(grumble.Model):
-    athlete = grumble.ReferenceProperty(reference_class = grizzle.User)
-    next = grumble.SelfReferenceProperty()
-    description = grumble.StringProperty()
-    session_start = grumble.DateTimeProperty()
-    filetype = grumble.StringProperty()
-    blocks = grumble.IntegerProperty()
-    data = grumble.TextProperty()
-

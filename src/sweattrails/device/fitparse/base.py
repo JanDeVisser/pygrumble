@@ -5,6 +5,7 @@ import struct
 from sweattrails.device.fitparse.exceptions import FitParseError, FitParseComplete
 from sweattrails.device.fitparse import records as r
 
+
 class FitFile(object):
     FILE_HEADER_FMT = '2BHI4s'
     RECORD_HEADER_FMT = 'B'
@@ -22,27 +23,7 @@ class FitFile(object):
     )
 
     def __init__(self, f):
-        '''
-        Create a fit file. Argument f can be an open file-like object or a filename
-        '''
-        if isinstance(f, basestring):
-            f = open(f, 'rb')
-
-        # Private: call FitFile._read(), don't read from this. Important for CRC.
-        self._file = f
-        if isinstance(self._file, StringIO.StringIO):
-            self._file_size = len(self._file.getvalue())
-        elif isinstance(self._file, file):
-            self._file_size = os.path.getsize(self._file.name)
-        else:
-            assert 0, "Unknown FIT file type '%s'" % type(f)
-        self._data_read = 0
-        self._crc = 0
-
-        self._last_timestamp = None
-        self._global_messages = {}
-        self.definitions = []
-        self.records = []
+        self._filename = f
 
     def get_records_by_type(self, t):
         # TODO: let t be a list/tuple of arbitary types (str, num, actual type)
@@ -62,7 +43,30 @@ class FitFile(object):
             records = self.get_records_by_type(t)
         return (rec for rec in (rec.as_dict(with_ommited_fields) for rec in records) if rec)
 
-    def parse(self, hook_func=None, hook_definitions=False):
+    def _initialize_parser(self, buffer=None):
+        if isinstance(buffer, (str, bytearray)):
+            self._file = StringIO.StringIO(buffer)
+        elif buffer is None:
+            self._file = open(self._filename, 'rb')
+        else:
+            self._file = buffer
+
+        if isinstance(self._file, StringIO.StringIO):
+            self._file_size = len(self._file.getvalue())
+        elif isinstance(self._file, file):
+            self._file_size = os.path.getsize(self._file.name)
+        else:
+            assert 0, "Unknown FIT buffer type '%s'" % type(self._file)
+        self._data_read = 0
+        self._crc = 0
+
+        self._last_timestamp = None
+        self._global_messages = {}
+        self.definitions = []
+        self.records = []
+
+    def parse(self, buffer=None, hook_func=None, hook_definitions=False):
+        self._initialize_parser(buffer)
         # TODO: Document hook function
         self._parse_file_header()
 

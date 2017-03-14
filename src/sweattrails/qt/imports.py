@@ -37,6 +37,7 @@ import gripe
 import gripe.db
 import grumble.model
 import grumble.property
+import sweattrails.device
 import sweattrails.device.antfs
 import sweattrails.device.exceptions
 import sweattrails.device.parser
@@ -146,7 +147,7 @@ class ImportFile(Job):
         self.started("Importing file %s" % self.filename)
         try:
             f = os.path.basename(self.filename)
-            parser = sweattrails.device.parser.get_parser(self.filename)
+            parser = sweattrails.device.get_parser(self.filename)
             if not parser:
                 logger.warning("No parser registered for %s", f)
                 return

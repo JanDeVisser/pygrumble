@@ -7,16 +7,23 @@
 {% block tabs %}
 
 <script>
-    function refresh_table() {
-        $("sessions").render();
+    function upload_file() {
+        st_show_form("frm_upload_file");
     }
 </script>
 
 <st:tab code="sessions" label="Activities">
-    <st:table name="sessions" url="/json/session">
-        <st:sort name="start_time"/>
+    <st:form name="frm_upload_file" url="/st/upload" modal="true" mode="new" type="json" submit="upload">
+        <st:field id="activity" type="file" label="Activity file(s)" required="true" multiple="false"/>
+        <st:footer>
+            <st:action mode="new" label="Upload" action="save"/>
+            <st:action mode="new" label="Cancel" action="cancel"/>
+        </st:footer>
+    </st:form>
+    <st:table name="sessions" url="/json/session" debug="true">
+        <st:sort name="start_time" descending="true"/>
         <st:header>
-            <st:action label="New" action="new"/>
+            <st:action label="Upload" action="upload_file"/>
         </st:header>
         <st:column label="Date/time" type="datetime" property="start_time" width="25%" select="/st/activity/$key"/>
         <st:column label="Distance" type="distance" property="distance" width="10%"/>

@@ -216,7 +216,7 @@ class Principal(object):
                 otherwise.
         """
         if isinstance(roles, basestring):
-            roles = { roles }
+            roles = {roles}
         myroles = self.roles()
         logger.info("has_role: %s & %s = %s", set(roles), myroles, set(roles) & myroles)
         return len(set(roles) & myroles) > 0
@@ -232,12 +232,12 @@ class ManagedPrincipal(Principal, gripe.managedobject.ManagedObject):
 @gripe.abstract("rolename")
 class AbstractRole(Principal):
 
-    def role_objects(self, include_self = True):
+    def role_objects(self, include_self=True):
         roles = [self]
-        ret = { self } if include_self else set()
+        ret = {self} if include_self else set()
         while roles:
             role = roles.pop()
-            for rname in role.roles(explicit = True):
+            for rname in role.roles(explicit=True):
                 has_role = Guard.get_rolemanager().get(rname)
                 if has_role and has_role not in ret:
                     ret.add(has_role)
@@ -260,4 +260,3 @@ class Role(AbstractRole, ManagedPrincipal):
 @gripe.abstract("get", "add")
 class AbstractRoleManager(object):
     pass
-

@@ -143,7 +143,7 @@ class ReqHandler(webapp2.RequestHandler):
     def json_dump(self, obj):
         if obj:
             logger.info("retstr=%s", json.dumps(obj))
-            self.response.content_type = "application/json"
+            self.response.content_type = "text/json"
             self.response.json = obj
         else:
             self.status = "204 No Content"

@@ -25,9 +25,7 @@ com.sweattrails.api.internal.buildErrors = function(obj, e) {
     }
     obj.errors = obj.errors || [];
     if (Array.isArray(e)) {
-    	for (var ix in e) {
-    	    ST_int.buildErrors(e[ix]);
-    	}
+    	e.forEach(ST_int.buildErrors);
     } else {
     	obj.errors.push(e);
     }
@@ -103,6 +101,7 @@ com.sweattrails.api.Form.prototype.setDataSource = function(ds) {
 };
 
 com.sweattrails.api.Form.prototype.addField = function(fld) {
+    $$.log(this, "Adding field " + fld.getName());
     this.fields.push(fld);
     fld.form = this;
     if (typeof(fld.id) !== "undefined") {
@@ -157,11 +156,8 @@ com.sweattrails.api.Form.prototype.render = function() {
 com.sweattrails.api.Form.prototype.renderData = function(obj) {
     this.header.erase();
     this.footer.erase();
-    var ix;
     if (this.renderedFields) {
-        for (ix in this.renderedFields) {
-            this.renderedFields[ix].erase();
-        }
+        this.renderedFields.forEach(function(f) { f.erase(); });
     }
     this.renderedFields = [];
     if (this.form) {
@@ -181,28 +177,30 @@ com.sweattrails.api.Form.prototype.renderData = function(obj) {
         this.form.action = this.action;
         this.container.appendChild(this.form);
     }
-    for (ix in this.fields) {
-    	var f = this.fields[ix];
+    var form = this;
+    this.fields.forEach(function(f) {
+    	$$.log(form, "rendering field " + f.id);
         f.element = null;
-        if (f.render(this.mode, obj)) {
-            this.renderedFields.push(f);
+        if (f.render(form.mode, obj)) {
+            form.renderedFields.push(f);
         }
-    }
+    });
     this.footer.render();
 };
 
 com.sweattrails.api.Form.prototype.applyData = function() {
+    var obj;
+
     if (this.mode !== com.sweattrails.api.MODE_NEW) {
         this.datasource.reset();
         this.datasource.next();
     }
-    var obj = this.datasource.getObject();
-    for (var fix in this.renderedFields) {
-        var f = this.renderedFields[fix];
+    obj = this.datasource.getObject();
+    this.renderedFields.forEach(function(f) {
         if (!f.readonly) {
             f.assignValueToObject(obj);
         }
-    }
+    });
     if (typeof(this.prepare) === "function") {
         this.prepare(obj);
     }
@@ -213,12 +211,11 @@ com.sweattrails.api.Form.prototype.submit = function() {
     if (this.validator) {
         ST_int.buildErrors(this, this.validator());
     }
-    var f = null;
-    for (var fix in this.renderedFields) {
-    	f = this.renderedFields[fix];
+    var form = this;
+    this.renderedFields.forEach(function(f) {
         f.errors = f.validate();
-        if (f.errors) this.errors = this.errors.concat(f.errors);
-    }
+        if (f.errors) form.errors = form.errors.concat(f.errors);
+    });
     if (this.errors.length > 0) {
         this.render(this.mode);
     } else {
@@ -488,7 +485,7 @@ com.sweattrails.api.FormField.prototype.setType = function(elem) {
 
 com.sweattrails.api.FormField.prototype.render = function(mode, object) {
     if (this.modes && (this.modes.length > 0) && (this.modes.indexOf(mode) < 0)) {
-	return false;
+	    return false;
     }
     this.mode = mode;
     var val = this.getValueFromObject(object);
@@ -518,12 +515,12 @@ com.sweattrails.api.FormField.prototype.render = function(mode, object) {
             tr.appendChild(td);
             var ul = document.createElement("ul");
             ul.appendChild(td);
-            for (eix in this.errors) {
+            this.errors.forEach(function (e) {
             	var li = document.createElement("li");
             	li.className = "validationerror";
-            	li.innerHTML = this.errors[eix].message;
+            	li.innerHTML = e.message;
             	ul.appendChild(li);
-            }
+            });
         }
         tr = this.form.newTR();
         var lbl;
@@ -607,7 +604,7 @@ com.sweattrails.api.FormField.prototype.onInput = function() {
 };
 
 com.sweattrails.api.FormField.prototype.assignValueToObject = function(object) {
-    $$.log(this, "setValue");
+    $$.log(this, "assignValueToObject");
     if (this.bridge) {
         this.impl.setValueFromControl(this.bridge, object);
     }
@@ -699,6 +696,7 @@ com.sweattrails.api.internal.buildTextInput = function(elem, value, id) {
  */
 
 com.sweattrails.api.TextField = function() {
+    this.type = "text";
 };
 
 com.sweattrails.api.TextField.prototype.renderEdit = function(value) {
@@ -733,6 +731,7 @@ com.sweattrails.api.TextField.prototype.setValue = function(value) {
  */
 
 com.sweattrails.api.PasswordField = function(fld, elem) {
+    this.type = "text";
     this.confirm = elem.getAttribute("confirm") && (elem.getAttribute("confirm") === "true");
 };
 
@@ -745,16 +744,16 @@ com.sweattrails.api.PasswordField.prototype.renderEdit = function(value) {
     this.div.appendChild(this.control);
     if (this.confirm) {
         this.control = com.sweattrails.api.internal.buildInput("password", this.field.id + "-check", this.elem, "");
-	this.div.appendChild(this.check);
+	    this.div.appendChild(this.check);
     }
     return this.div;
 };
 
 com.sweattrails.api.PasswordField.prototype.validate = function() {
     if (this.confirm && (this.control.value !== this.check.value)) {
-	return "Password values do not match";
+	    return "Password values do not match";
     } else {
-	return null;
+	    return null;
     }
 };
 
@@ -787,6 +786,7 @@ com.sweattrails.api.PasswordField.prototype.renderView = function(value) {
  */
 
 com.sweattrails.api.WeightField = function(fld, elem) {
+    this.type = "number";
     this.field = fld;
 };
 
@@ -865,6 +865,7 @@ com.sweattrails.api.WeightField.prototype.setValue = function(value) {
  */
 
 com.sweattrails.api.LengthField = function(fld, elem) {
+    this.type = "number";
     this.field = fld;
 };
 
@@ -956,6 +957,7 @@ com.sweattrails.api.LengthField.prototype.setValue = function(value) {
  */
 
 com.sweattrails.api.DistanceField = function(fld, elem) {
+    this.type = "number";
     this.field = fld;
 };
 
@@ -1041,6 +1043,7 @@ com.sweattrails.api.DistanceField.prototype.setValue = function(value) {
  */
 
 com.sweattrails.api.CheckBoxField = function() {
+    this.type = "boolean";
 };
 
 com.sweattrails.api.CheckBoxField.prototype.renderEdit = function(value) {
@@ -1086,6 +1089,8 @@ com.sweattrails.api.CheckBoxField.prototype.setValue = function(value) {
  */
 
 com.sweattrails.api.DateTimeField = function(fld, elem) {
+    this.type = "datetime";
+    this.field = fld;
     this.date = this.time = true;
     if (elem && elem.getAttribute("timeformat")) {
         this.timeformat = elem.getAttribute("timeformat");
@@ -1159,9 +1164,8 @@ com.sweattrails.api.DateTimeField.prototype.setValue = function(value) {
  */
 
 com.sweattrails.api.DateField = function(fld, elem) {
-    this.field = fld;
+    com.sweattrails.api.DateTimeField.call(this, fld, elem);
     this.time = false;
-    this.date = true;
 };
 
 com.sweattrails.api.DateField.prototype = new com.sweattrails.api.DateTimeField();
@@ -1171,8 +1175,7 @@ com.sweattrails.api.DateField.prototype = new com.sweattrails.api.DateTimeField(
  */
 
 com.sweattrails.api.TimeField = function(fld, elem) {
-    this.field = fld;
-    this.time = true;
+    com.sweattrails.api.DateTimeField.call(this, fld, elem);
     this.date = false;
 };
 
@@ -1183,6 +1186,7 @@ com.sweattrails.api.TimeField.prototype = new com.sweattrails.api.DateTimeField(
  */
 
 com.sweattrails.api.FileField = function(fld, elem) {
+    this.type = "file";
     this.multiple = elem.getAttribute("multiple") === "true";
 };
 
