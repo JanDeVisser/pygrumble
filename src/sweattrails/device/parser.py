@@ -16,11 +16,9 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-import StringIO
-import traceback
-
 import gripe
 import gripe.conversions
+import gripe.db
 import grumble.geopt
 import sweattrails.device.exceptions
 import sweattrails.config
@@ -49,12 +47,13 @@ class Record(object):
         self._bridge = bridge
         self._grumble_obj = None
         self.container = None
+        self.activity = None
         self.initialize()
 
     def initialize(self):
         pass
 
-    def object(self, obj = None):
+    def object(self, obj=None):
         if obj is not None:
             self._grumble_obj = obj
         return self._grumble_obj
@@ -115,6 +114,9 @@ class DictBridge(dict):
 
 
 class Lap(Record):
+    def __init__(self, bridge):
+        super(Lap, self).__init__(bridge)
+
     def convert_interval(self, interval):
         self.start_time = self.get_data("start_time")
         interval.interval_id = str(gripe.conversions.local_date_to_utc(self.start_time)) + "Z"
@@ -129,11 +131,14 @@ class Lap(Record):
 
 
 class Trackpoint(Record):
+    def __init__(self, bridge):
+        super(Trackpoint, self).__init__(bridge)
+
     def convert(self, session, prev):
         d = self.get_data("distance")
         if d is None or (prev and prev.distance > d):
             return
-        wp = sweattrails.session.Waypoint(parent = session)
+        wp = sweattrails.session.Waypoint(parent=session)
         wp.timestamp = self.get_data("timestamp") - self.activity.start
         lat = self.get_data("position_lat")
         lon = self.get_data("position_long")
@@ -154,12 +159,14 @@ class Trackpoint(Record):
 
 
 class Activity(Lap):
-    def initialize(self):
+    def __init__(self, bridge):
+        super(Activity, self).__init__(bridge)
         self.start = self.get_data("start_time")
         self.end = self.get_data("timestamp")
         self.laps = []
         self.trackpoints = []
         self.activity = self
+        self.index = 0
 
     def contains(self, obj):
         return self.start < obj.get_data("timestamp") <= self.end \
@@ -192,22 +199,25 @@ class Activity(Lap):
         profile = sweattrails.config.ActivityProfile.get_profile(athlete)
         assert profile, "Activity.convert(): User %s has no profile" % athlete.uid()
         sessiontype = profile.get_default_SessionType(self.get_data("sport"))
-        assert sessiontype, "Activity.convert(): User %s has no default session type for sport %s" % (athlete.uid(), self.get_data("sport"))
+        assert sessiontype, "Activity.convert(): User %s has no default session type for sport %s" % \
+                            (athlete.uid(), self.get_data("sport"))
         self.session.sessiontype = sessiontype
-        self.status_message("Converting session {}/{} ({:s})", self.index, len(self.container.activities), sessiontype.name)
+        self.status_message("Converting session {}/{} ({:s})",
+                            self.index, len(self.container.activities), sessiontype.name)
         self.convert_interval(self.session)
 
         num = len(self.laps)
         intervals = []
         if num > 1:
-            self.progress_init("Session {}/{}: Converting {} intervals", self.index, len(self.container.activities), num)
+            self.progress_init("Session {}/{}: Converting {} intervals",
+                               self.index, len(self.container.activities), num)
             for ix in range(num):
                 lap = self.laps[ix]
                 self.progress(int((float(ix) / float(num)) * 100.0))
                 interval = sweattrails.session.Interval(parent=self.session)
                 lap.convert_interval(interval)
                 intervals.append(interval)
-            intervals.sort(key=lambda interval: interval.timestamp)
+            intervals.sort(key=lambda ival: ival.timestamp)
             self.progress_end()
 
         num = len(self.trackpoints)
@@ -218,7 +228,7 @@ class Activity(Lap):
         for ix in range(num):
             trackpoint = self.trackpoints[ix]
             self.progress(int((float(ix) / float(num)) * 100.0))
-            prev = trackpoint.convert(session, prev) or prev
+            prev = trackpoint.convert(self.session, prev) or prev
             if interval and prev and prev.timestamp >= interval.timestamp:
                 interval.offset = prev.distance
                 interval.put()
@@ -247,8 +257,8 @@ class Parser(object):
     def set_athlete(self, athlete):
         self.user = athlete
         
-    def set_logger(self, logger):
-        self.logger = logger
+    def set_logger(self, log):
+        self.logger = log
 
     def status_message(self, msg, *args):
         if self.logger and hasattr(self.logger, "status_message"):
@@ -282,18 +292,18 @@ class Parser(object):
     def add_trackpoint(self, trackpoint):
         self.trackpoints.append(trackpoint)
 
-    def parse_file(self, buffer=None):
+    def parse_file(self, buf=None):
         assert False, "Abstract method parse_file called"
 
-    def parse(self, buffer=None):
+    def parse(self, buf=None):
         assert self.user, "No user set on parser"
-        if buffer is None:
+        if buf is None:
             assert self.filename, "No filename set on parser"
             assert gripe.exists(self.filename), "parser: file '%s' does not exist" % self.filename
 
         try:
             self.status_message("Reading file {}", self.filename)
-            self.parse_file(buffer)
+            self.parse_file(buf)
             self.status_message("Processing file {}", self.filename)
             ret = self._process()
             self.status_message("File {} converted", self.filename)

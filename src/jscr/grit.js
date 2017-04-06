@@ -16,13 +16,13 @@
  * Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-if (typeof(Object.prototype.getName) !== 'function') {
-    Object.prototype.getName = function () {
-        var funcNameRegex = /function (.{1,})\(/;
-        var results = (funcNameRegex).exec((this).constructor.toString());
-        return (results && (results.length > 1)) ? results[1] : "";
-    };
-}
+// if (typeof(Object.prototype.getName) !== 'function') {
+//     Object.prototype.getName = function () {
+//         var funcNameRegex = /function (.{1,})\(/;
+//         var results = (funcNameRegex).exec((this).constructor.toString());
+//         return (results && (results.length > 1)) ? results[1] : "";
+//     };
+// }
 
 if (typeof(Object.create) !== 'function') {
     Object.create = function (o) {
@@ -60,7 +60,11 @@ com.sweattrails.api.xmlns = "http://www.sweattrails.com/html";
 if (typeof(ST) !== 'object') {
     var ST = com.sweattrails.api;
     var ST_int = com.sweattrails.api.internal;
-}
+};
+
+com.sweattrails.api.TypeError = function(t) {
+  this.message = "Type error: " + t;
+};
 
 com.sweattrails.api.internal.dumpobj = function(indent, name, o) {
     if (typeof(o) === "object") {
@@ -71,7 +75,7 @@ com.sweattrails.api.internal.dumpobj = function(indent, name, o) {
     }
 };
 
-com.sweattrails.api.internal.dump = function(indent, o) {
+com.sweattrails.api.internal.mydump = function(indent, o) {
     if (Array.isArray(o)) {
         console.log(indent + "[ length " + o.length);
         for (var ix  = 0; ix < o.length; ix++) {
@@ -89,10 +93,9 @@ com.sweattrails.api.internal.dump = function(indent, o) {
 
 com.sweattrails.api.dump = function(o) {
     if (arguments.length > 1) {
-        console.log(arguments[1]);
+        console.log.apply(this, Array.prototype.slice.call(arguments, 1));
     }
-    com.sweattrails.api.internal.dump("  ", o);
-    console.log("----");
+    console.dir(o)
 };
 
 com.sweattrails.api.Manager = function() {
@@ -104,12 +107,18 @@ com.sweattrails.api.Manager = function() {
     this.register(this);
 };
 
-com.sweattrails.api.Manager.prototype.register = function(c) {
+com.sweattrails.api.Manager.prototype.registerObject = function(c) {
     var t = c.type;
     var what = t
-            || (c.__proto__ && c.__proto__.constructor && c.__proto__.constructor.name)
-            || "unknown";
+        || (c.__proto__ && c.__proto__.constructor && c.__proto__.constructor.name)
+        || "unknown";
+    if (!c.type) {
+        c.type = what;
+    }
     var name = c.id || c.name;
+    if (!c.id) {
+        c.id = name;
+    }
     if (name) {
         (this[what] || (this[what] = {})) && (this[what][name] = c);
         t && (this[t] || (this[t] = {})) && (this[t][name] = c);
@@ -118,6 +127,11 @@ com.sweattrails.api.Manager.prototype.register = function(c) {
         (this[what] || (this[what] = [])) && this[what].push(c);
         t && (this[t] || (this[t] = [])) && this[t].push(c);
     }
+    return this;
+};
+
+com.sweattrails.api.Manager.prototype.register = function(c) {
+    this.registerObject(c);
     this.components.push(c);
     if (c.container && c.render && this.objects.TabManager) {
         var elem = c.container;
@@ -130,7 +144,8 @@ com.sweattrails.api.Manager.prototype.register = function(c) {
         }
         renderables.push(c);
     }
-    console.log(this.id + ": registered: " + name + ", type " + t + " (" + this.components.length + ")");
+    console.log("%s: registered %s, type %s (%d)", this.id, c.id, c.type, this.components.length);
+    return this;
 };
 
 com.sweattrails.api.Manager.prototype.processor = function(tagname, processor) {
@@ -190,14 +205,33 @@ com.sweattrails.api.Manager.prototype.dispatch = function(d) {
     }
 };
 
-com.sweattrails.api.Manager.prototype.log = function(obj, msg) {
-    var o;
-    if (obj.type) {
-        o = obj.type + ((obj.id || obj.name) && ("(" + (obj.id || obj.name) + ")"));
-    } else {
-        o = obj.getName();
+com.sweattrails.api.Manager.prototype.objectlabel = function(obj) {
+    var o = "";
+    if (obj) {
+        if (obj.type) {
+            o = obj.type + ((obj.id || obj.name) && ("(" + (obj.id || obj.name) + ")"));
+        } else {
+            o = obj.toString();
+        }
+        o += ": ";
     }
-    console.log(o + ": " + msg);
+    return o;
+};
+
+com.sweattrails.api.Manager.prototype.log = function(obj, msg) {
+    var args = [this.objectlabel(obj) + msg];
+    if (arguments.length > 2) {
+        args = args.concat(Array.prototype.slice.call(arguments, 2));
+    }
+    console.log.apply(this, args);
+};
+
+com.sweattrails.api.Manager.prototype.assert = function(obj, condition, msg) {
+    console.assert(condition, this.objectlabel(obj), msg);
+};
+
+com.sweattrails.api.Manager.prototype.dump = function() {
+    com.sweattrails.api.dump.apply(this, Array.from(arguments));
 };
 
 com.sweattrails.api.STManager = new com.sweattrails.api.Manager();
@@ -210,7 +244,9 @@ function _$(type) {
     return com.sweattrails.api.STManager.all(type);
 }
 
-$$ = com.sweattrails.api.STManager;
+__ = com.sweattrails.api;
+___ = com.sweattrails.api.internal;
+$$ = __.STManager;
 _ = $$.objects;
 
 com.sweattrails.api.BasicTab = function() {
@@ -226,9 +262,9 @@ com.sweattrails.api.internal.Tab = function(code, label, elem) {
     if (elem) {
         var factory = null;
         if (elem.getAttribute("factory")) {
-            this.impl = getfunc(elem.getAttribute("factory"))(elem);
+            this.impl = __.getfunc(elem.getAttribute("factory"))(elem);
         } else if (elem.getAttribute("impl")) {
-            this.impl = new getfunc(elem.getAttribute("impl"))(elem);
+            this.impl = new __.getfunc(elem.getAttribute("impl"))(elem);
         } else {
             this.impl = null;
         }
@@ -272,8 +308,8 @@ com.sweattrails.api.internal.Tab.prototype.unselect = function() {
 
 com.sweattrails.api.TabManager = function() {
     if (com.sweattrails.api.tabManager) {
-    	alert("TabManager is a singleton!");
-    	return null;
+        alert("TabManager is a singleton!");
+        return;
     }
     this.id = "TabManager";
     this.type = "manager";
@@ -282,7 +318,6 @@ com.sweattrails.api.TabManager = function() {
     this.tabs = {};
     this.firsttab = null;
     this.select = function(code, ev) { this.selectTab(code); ev.stopPropagation(); };
-    return this;
 };
 
 com.sweattrails.api.TabManager.prototype.build = function() {
@@ -290,7 +325,7 @@ com.sweattrails.api.TabManager.prototype.build = function() {
     if (!this.pagebox) return;
     var tb = this.pagebox.getElementsByTagNameNS(com.sweattrails.api.xmlns, "tabs");
     if (tb && (tb.length > 0)) {
-        tabs_elem = tb[0];
+        var tabs_elem = tb[0];
         var tabs = getChildrenByTagNameNS(tabs_elem, com.sweattrails.api.xmlns, "tab");
         $$.log(this, "Found " + tabs.length + " tabs");
         for (var tabix = 0; tabix < tabs.length; tabix++) {
@@ -340,14 +375,13 @@ com.sweattrails.api.TabManager.prototype.addTab = function(tab) {
 
 com.sweattrails.api.TabManager.prototype.drawTab = function(tab) {
     $$.log(this, "Tab " + tab.code + " visible");
-    var onclick = this.select.bind(this, tab.code);
     tab.manager = this;
     var tabbox = document.getElementById("tabbox");
     var span = document.createElement("span");
     span.className = "tab";
     span.id = "tab_" + tab.code;
     span.tab = tab;
-    span.onclick = onclick;
+    span.onclick = this.select.bind(this, tab.code);
     tabbox.appendChild(span);
     tab.header = span;
     tab.href = document.createElement("a");
@@ -391,55 +425,47 @@ com.sweattrails.api.TabManager.prototype.selectTab = function(code) {
 com.sweattrails.api.tabManager = new com.sweattrails.api.TabManager();
 
 com.sweattrails.api.internal.DataBridge = function() {
-    this.get = null;
-    this.set = null;
+    this.get = (arguments.length > 0) ? arguments[0] : null;
+    this.set = (arguments.length > 1) ? arguments[1] : null;
 };
 
 com.sweattrails.api.internal.DataBridge.prototype.setValue = function(object, value) {
     var s = this.set || this.get;
     if (s && (typeof(s) === "string") && s.endsWith("()")) {
-        s = getfunc(s.substring(0, s.length() - 2));
+        s = __.getfunc(s.substring(0, s.length() - 2));
     }
     if (typeof(s) === "function") {
     	s(object, value);
     } else if (s) {
-        $$.log("Setting " + s + " to " + value);
-        setvar(s, value, object);
+        $$.log(null, "Setting %s := %s", s, value);
+        __.setvar(s, value, object);
+        $$.log(null, "getvar(%s) = %s", s, __.getvar(s, object));
     }
 };
 
 com.sweattrails.api.internal.DataBridge.prototype.getValue = function(object, context) {
-    var ret = null;
-    var g = this.get;
-    if (g && (typeof(g) === "string") && g.endsWith("()")) {
-        g = getfunc(g.substring(0, s.length() - 2));
-    }
-    if (typeof(g) === "function") {
-    	ret = this.get(object, context);
-    } else if (g !== null) {
-        return getvar(g, object);
-    }
-    return ret;
-};
-
-
-function getvar(name, ns) {
-    ns = ns || this;
-    name = name || "";
-    var components = name.split(".");
-    for (var ix = 0; ns && (ix < components.length); ix++) {
-        var component = components[ix].trim();
-        if (component in ns) {
-            ns = ns[component];
-        } else {
-            ns = null;
+    try {
+        var ret = null;
+        var g = this.get;
+        if (g && (typeof(g) === "string") && g.endsWith("()")) {
+            g = __.getfunc(g.substring(0, g.length() - 2));
         }
+        if (typeof(g) === "function") {
+            ret = g(object, context);
+        } else if (g !== null) {
+            return __.getvar(g, object);
+        }
+        return ret;
+    } catch (e) {
+        console.trace("Exception in Databridge.getValue: " + e);
+        com.sweattrails.api.dump(object, "bridge.get: " + this.get + " object =");
+        throw e;
     }
-    return ns;
-}
+};
+/* ----------------------------------------------------------------------- */
 
-function setvar(name, value, ns) {
-    ns = ns || this;
+com.sweattrails.api.internal.walkname = function (name, ns) {
+    ns = ns || window;
     name = name || "";
     var components = name.split(".");
     var component = null;
@@ -451,25 +477,167 @@ function setvar(name, value, ns) {
         ns = ns[component];
     }
     component = components[ix].trim();
-    if (typeof(ns[component]) !== 'undefined') {
-        if (Array.isArray(ns[component])) {
-            ns[component].push(value);
+    return [ ns, component ];
+};
+
+com.sweattrails.api.getvar = function (name, ns) {
+    ns = ns || window;
+    name = name || "";
+    var components = name.split(".");
+    for (var ix = 0; ns && (ix < components.length); ix++) {
+        var component = components[ix].trim();
+        if (component in ns) {
+            ns = ns[component];
         } else {
-            ns[component] = [ ns[component], value ];
+            ns = null;
         }
+    }
+    return ns;
+};
+
+getvar = __.getvar;
+
+com.sweattrails.api.clearvar = function (name, ns) {
+    var wn = ___.walkname(name, ns);
+    if (wn[0] && wn[1]) {
+        wn[0][wn[1]] = null;
+    }
+    return ns;
+};
+
+com.sweattrails.api.setvar = function (name, value, ns) {
+    var wn = ___.walkname(name, ns);
+    if (wn[0] && wn[1]) {
+        ns = wn[0];
+        var component = wn[1];
+        if ((typeof(ns[component]) !== 'undefined') && ns[component]) {
+            if (Array.isArray(ns[component])) {
+                ns[component].push(value);
+            } else {
+                ns[component] = [ns[component], value];
+            }
+        } else {
+            ns[component] = value;
+        }
+    }
+    return ns;
+};
+
+setvar = __.setvar;
+
+com.sweattrails.api.getfunc = function (func, ns, thisObj) {
+    var f = null;
+    if (typeof(func) === "function") {
+        f = func;
     } else {
-        ns[component] = value;
+        var v = __.getvar(func, ns);
+        f = (typeof(v) === "function") && v;
+    }
+    if (f && thisObj) {
+        f = f.bind(thisObj);
+    }
+    return f;
+};
+
+getfunc = __.getfunc;
+
+/**
+ * Builder - Abstract base class for element builders.
+ */
+
+com.sweattrails.api.BuilderFlags = {};
+com.sweattrails.api.BuilderFlags.Int = 1;
+com.sweattrails.api.BuilderFlags.Float = 2;
+com.sweattrails.api.BuilderFlags.Function = 4;
+
+com.sweattrails.api.Builder = function(tagname, objclass) {
+    if (tagname) {
+        this.type = "builder";
+        this.name = tagname + "builder";
+        this.objclass = objclass;
+        $$.processor(tagname, this);
     }
 }
 
-function getfunc(func, ns) {
-    if (typeof(func) === "function") {
-        return func;
-    } else {
-        var v = getvar(func, ns);
-        return (typeof(v) === "function") && v;
+com.sweattrails.api.Builder.prototype.process = function(elem) {
+    var name = elem.getAttribute("name");
+    $$.log(this, "Building %s", name);
+    var obj = new this.objclass(elem.parentNode, name);
+    com.sweattrails.api.GritObject.mixin(obj);
+    obj.build(elem);
+    if (obj.hasDataSource) {
+        obj.buildDataSource(elem);
     }
+};
+
+
+/**
+ * GritObject mix-in.
+ */
+
+com.sweattrails.api.GritObject = {};
+
+com.sweattrails.api.GritObject.set = function (elem, tag, property, flags) {
+    property = property || tag;
+    var val = elem.getAttribute(tag);
+    var converted = null;
+    flags = flags || 0;
+    if (val) {
+        if (flags | com.sweattrails.api.BuilderFlags.Int) {
+            converted = parseInt(val);
+        }
+        if (!converted && (flags | com.sweattrails.api.BuilderFlags.Float)) {
+            converted = parseFloat(val);
+        }
+        if (!converted && (flags | com.sweattrails.api.BuilderFlags.Function)) {
+            converted = __.getfunc(val, null, this);
+        }
+    }
+    if (!converted) {
+        converted = val;
+    }
+    if (typeof(property) === "function") {
+        property.call(this, converted);
+    } else if (val) {
+        __.clearvar(property, this);
+        __.setvar(property, converted, this);
+    }
+    return this;
+};
+
+com.sweattrails.api.GritObject.buildChildren = function (elem, tag, childcls) {
+    var elems = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, tag);
+    for (var j = 0; j < elems.length; j++) {
+        var child = new childcls(this);
+        com.sweattrails.api.GritObject.mixin(child);
+        child.build(elems[j]);
+    }
+    return this;
 }
+
+com.sweattrails.api.GritObject.setDataSource = function (ds) {
+    if (ds) {
+        this.datasource = ds;
+        ds.addView(this);
+    }
+};
+
+com.sweattrails.api.GritObject.buildDataSource = function (elem) {
+    if (_.DataSourceBuilder) {
+        this.setDataSource(_.DataSourceBuilder.build(elem));
+    }
+};
+
+com.sweattrails.api.GritObject.mixin = function (obj) {
+    obj.set = com.sweattrails.api.GritObject.set.bind(obj);
+    obj.buildChildren = com.sweattrails.api.GritObject.buildChildren.bind(obj);
+    if (obj.hasDataSource) {
+        obj.setDataSource = com.sweattrails.api.GritObject.setDataSource.bind(obj);
+        obj.buildDataSource = com.sweattrails.api.GritObject.buildDataSource.bind(obj);
+    }
+};
+
+/* ----------------------------------------------------------------------- */
 
 function getChildrenByTagNameNS(elem, ns, tagname) {
     var ret = [];
@@ -624,10 +792,10 @@ var units_table = {
 function obj_to_datetime(obj) {
     if (obj) {
         return new Date(
-                ((typeof(obj.year) !== "undefined") && obj.year) || 1970, 
-                ((typeof(obj.month) !== "undefined") && (obj.month - 1)) || 0, 
-                ((typeof(obj.day) !== "undefined") && obj.day) || 0, 
-                ((typeof(obj.hour) !== "undefined") && obj.hour) || 0, 
+                ((typeof(obj.year) !== "undefined") && obj.year) || 1970,
+                ((typeof(obj.month) !== "undefined") && (obj.month - 1)) || 0,
+                ((typeof(obj.day) !== "undefined") && obj.day) || 0,
+                ((typeof(obj.hour) !== "undefined") && obj.hour) || 0,
                 ((typeof(obj.minute) !== "undefined") && obj.minute) || 0,
                 ((typeof(obj.second) !== "undefined") && obj.minute) || 0);
     } else {
@@ -646,12 +814,12 @@ function date_to_obj(d) {
 
 function time_to_obj(d) {
     d = d || new Date();
-    ret = {
+    var ret = {
         'hour': d.getUTCHours(),
         'minute': d.getUTCMinutes(),
         'second': d.getUTCSeconds()
     };
-    $$.log($$, "time_to_obj -> " + ret.hour + ":" + ret.minute + ":" + ret.second)
+    // $$.log($$, "time_to_obj -> " + ret.hour + ":" + ret.minute + ":" + ret.second)
     return ret
 }
 
@@ -668,9 +836,9 @@ function datetime_to_obj(d) {
     // $$.log($$, "datetime_to_obj: " + format_datetime(ret));
     return ret;
 }
-    
+
 function seconds_to_timeobj(secs) {
-    $$.log($$, "Converting " + secs + " seconds to time object")
+    // $$.log($$, "Converting " + secs + " seconds to time object")
     return time_to_obj(new Date(secs * 1000));
 }
 seconds_to_time = seconds_to_timeobj
@@ -729,13 +897,22 @@ function format_time(d) {
     }
 }
 
+function format_elapsed_time(t) {
+    var s = "";
+    if (t.hour > 0) {
+        s = rpad(t.hour, 2) + ":";
+    }
+    s += rpad(t.minute, 2) + ":" + rpad(t.second, 2);
+    return s;
+}
+
 function format_datetime(value, format) {
    return format_date(value) + " " + format_time(value);
 }
 
 function prettytime(value) {
     if (!value) value = new Date(0);
-    ret = "";
+    var ret = "";
     if (value.hour > 0) {
 	    ret = value.hour + "hr ";
     }
@@ -753,7 +930,7 @@ function unit(which, metric_imperial) {
 
 function speed_ms_to_unit(spd, metric_imperial) {
     if (!metric_imperial) metric_imperial = native_unit;
-    kmh = spd * 3.6;
+    var kmh = spd * 3.6;
     if (metric_imperial.toLowerCase().substr(0,1) === 'm') {
 	    return kmh;
     } else {
@@ -762,31 +939,52 @@ function speed_ms_to_unit(spd, metric_imperial) {
 }
 
 function speed(spd_ms, metric_imperial, include_unit) {
-    if (arguments.length < 3) include_unit = true;
-    if (!metric_imperial) metric_imperial = native_unit;
-    spd = speed_ms_to_unit(spd_ms, metric_imperial);
-    ret = spd.toFixed(2);
+    if (arguments.length < 3) {
+        include_unit = true;
+    }
+    if (!metric_imperial) {
+        metric_imperial = native_unit;
+    }
+    var spd = speed_ms_to_unit(spd_ms, metric_imperial);
+    var ret = spd.toFixed(2);
     if (include_unit) {
-	ret += " " + unit('speed', metric_imperial);
+	    ret += " " + unit('speed', metric_imperial);
     }
     return ret;
 }
 
 function avgspeed(distance, t, metric_imperial, include_unit) {
-    if (arguments.length < 4) include_unit = true;
-    if (!metric_imperial) metric_imperial = native_unit;
-    seconds = 3600*t.hour + 60*t.minute + t.second;
+    if (arguments.length < 4) {
+        include_unit = true;
+    }
+    if (!metric_imperial) {
+        metric_imperial = native_unit;
+    }
+    var seconds = 3600*t.hour + 60*t.minute + t.second;
     return speed(distance / seconds, metric_imperial, include_unit);
 }
 
+function pace_as_number(speed_ms, metric_imperial) {
+    if (!metric_imperial) {
+        metric_imperial = native_unit;
+    }
+    var spd = speed_ms_to_unit(speed_ms, metric_imperial, false);
+    var p = 60 / spd;
+    return p.toFixed(2);
+}
+
 function pace(speed_ms, metric_imperial, include_unit) {
-    if (arguments.length < 3) include_unit = true;
-    if (!metric_imperial) metric_imperial = native_unit;
-    spd = speed_ms_to_unit(speed_ms, metric_imperial, false);
-    p = 60 / spd;
-    pmin = p.toFixed();
-    psec = ((p - pmin) * 60).toFixed();
-    ret = pmin + ":";
+    if (arguments.length < 3) {
+        include_unit = true;
+    }
+    if (!metric_imperial) {
+        metric_imperial = native_unit;
+    }
+    var spd = speed_ms_to_unit(speed_ms, metric_imperial, false);
+    var p = 60 / spd;
+    var pmin = Math.floor(p);
+    var psec = Math.floor((p - pmin) * 60);
+    var ret = pmin + ":";
     if (psec < 10) {
 	    ret += "0";
     }
@@ -797,18 +995,27 @@ function pace(speed_ms, metric_imperial, include_unit) {
     return ret;
 }
 
+
 function avgpace(distance, t, metric_imperial, include_unit) {
-    if (arguments.length < 4) include_unit = true;
-    if (!metric_imperial) metric_imperial = native_unit;
-    seconds = 3600*t.hour + 60*t.minute + t.second;
+    if (arguments.length < 4) {
+        include_unit = true;
+    }
+    if (!metric_imperial) {
+        metric_imperial = native_unit;
+    }
+    var seconds = 3600*t.hour + 60*t.minute + t.second;
     return pace(distance/seconds, metric_imperial, include_unit);
 }
 
 function convert(metric_value, what, units, include_unit, digits) {
-    if (arguments.length < 5) digits = 2;
-    if (arguments.length < 4) include_unit = true;
-    factor = units_table[what]['factor_' + units.toLowerCase().substr(0,1)];
-    ret = (metric_value * factor).toFixed(digits);
+    if (arguments.length < 5) {
+        digits = 2;
+    }
+    if (arguments.length < 4) {
+        include_unit = true;
+    }
+    var factor = units_table[what]['factor_' + units.toLowerCase().substr(0,1)];
+    var ret = (metric_value * factor).toFixed(digits);
     if (include_unit) {
 	    ret += " " + unit(what, units);
     }
@@ -818,7 +1025,7 @@ function convert(metric_value, what, units, include_unit, digits) {
 function to_metric(value, what, units) {
     if (!units) units = native_unit;
     if (value) {
-	    factor = 1.0 / units_table[what]['factor_' + units.toLowerCase().substr(0,1)];
+	    var factor = 1.0 / units_table[what]['factor_' + units.toLowerCase().substr(0,1)];
 	    return parseFloat(value) * factor;
     } else {
 	    return 0.0;
@@ -826,37 +1033,51 @@ function to_metric(value, what, units) {
 }
 
 function length(len_in_cm, units, include_unit) {
-    if (arguments.length < 3) include_unit = true;
+    if (arguments.length < 3) {
+        include_unit = true;
+    }
     return convert(parseFloat(len_in_cm), 'length', units, include_unit, 0);
 }
 
 function weight(weight_in_kg, units, include_unit) {
-    if (arguments.length < 3) include_unit = true;
-    if (!units) units = native_unit;
+    if (arguments.length < 3) {
+        include_unit = true;
+    }
+    if (!units) {
+        units = native_unit;
+    }
     return convert(parseFloat(weight_in_kg), 'weight', units, include_unit, 0);
 }
 
 function distance(distance_in_km, units, include_unit) {
-    if (arguments.length < 3) include_unit = true;
-    if (!units) units = native_unit;
+    if (arguments.length < 3) {
+        include_unit = true;
+    }
+    if (!units) {
+        units = native_unit;
+    }
     return convert(parseFloat(distance_in_km), 'distance', units, include_unit, 2);
 }
 
 function height(height_in_cm, units, include_unit) {
-    if (arguments.length < 3) include_unit = true;
-    if (!units) units = native_unit;
+    if (arguments.length < 3) {
+        include_unit = true;
+    }
+    if (!units) {
+        units = native_unit;
+    }
     height_in_cm = parseFloat(height_in_cm);
     if (units.toLowerCase().substr(0,1) === 'm') {
-	    h = (height_in_cm / 100).toFixed(2);
-	    if (include_units) {
+	    var h = (height_in_cm / 100).toFixed(2);
+	    if (include_unit) {
 	        h += ' ' + unit('height', units);
 	    }
 	    return h;
     } else {
-	    h_in = Math.round(height_in_cm * 0.393700787);
-	    ft = Math.floor(h_in / 12);
-	    inches = h_in % 12;
-	    ret = '';
+	    var h_in = Math.round(height_in_cm * 0.393700787);
+	    var ft = Math.floor(h_in / 12);
+	    var inches = h_in % 12;
+	    var ret = '';
 	    if (ft > 0) {
 	        ret = ft + "' ";
 	    }
@@ -867,21 +1088,20 @@ function height(height_in_cm, units, include_unit) {
 
 function import_file(url, callback) {
     // Brute-force XSS denial:
-    if (url.indexOf("http://") === 0) return;
-
+    if ((url.indexOf("http://") === 0) || (url.indexOf("https://") === 0)) {
+        return;
+    }
     var head = document.getElementsByTagName('head')[0];
     var script = document.createElement('script');
     script.type = 'text/javascript';
     script.src = url;
 
     if (typeof(callback) === "function") {
-	script.onreadystatechange = callback;
-	script.onload = callback;
+        script.onreadystatechange = callback;
+        script.onload = callback;
     }
-
     head.appendChild(script);
 }
 
 
 // ------------------------------------------------------------------------
-

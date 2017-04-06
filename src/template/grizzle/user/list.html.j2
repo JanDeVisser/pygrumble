@@ -1,0 +1,73 @@
+{% extends "base.html.j2" %}
+
+{% block imports %}
+<!-- <script src="/js/users.js" type="text/javascript"></script> -->
+{% endblock %}
+
+{% block tabs %}
+
+<script>
+    function refresh_table() {
+        $("users").render();
+    }
+</script>
+
+<st:tab code="users" label="Users">
+    <st:table name="users" url="/json/user">
+        <st:sort name="display_name"/>
+        <st:header>
+            <st:action label="New" action="new"/>
+        </st:header>
+        <st:column label="Status" type="icon" property="status" width="10%">
+            <!-- 'Unconfirmed', 'Active', 'Admin', 'Banned', 'Inactive', 'Deleted' -->
+            <st:icon value="Unconfirmed" icon="questionmark"/>
+            <st:icon value="Active" icon="checkmark"/>
+            <st:icon value="Banned" icon="forbidden"/>
+            <st:icon value="Deleted" icon="close"/>
+        </st:column>
+        <st:column label="Email" type="link" property="email" url="/users/$key" width="25%"/>
+        <st:column label="Name" type="link" property="display_name" url="/users/$key" width="65%"/>
+        <st:dataform url="/um/create" onsubmitted="refresh_table">
+            <st:field property="userid" type="text" label="Email"/>
+            <st:field property="display_name" type="text" label="Name"/>
+            <st:action mode="new;edit" label="Save" action="save"/>
+            <st:action mode="view;new;edit" label="Cancel" action="cancel"/>
+        </st:dataform>
+    </st:table>
+</st:tab>
+
+<!--
+<st:tab code="groups" label="Groups">
+    <st:table name="groups" url="/json/usergroup">
+        <st:header>
+            <st:action label="New" action="new"/>
+        </st:header>
+        <st:column label="Name" property="group" width="100%"/>
+        <st:dataform>
+            <st:field property="group" type="text" label="Name"/>
+            <st:action mode="new;edit" label="Save" action="save"/>
+            <st:action mode="view;new;edit" label="Cancel" action="cancel"/>
+        </st:dataform>
+    </st:table>
+</st:tab>
+
+
+<st:tab code="roles" label="Roles">
+    <st:table name="roles" url="/json/role">
+        <st:header>
+            <st:action label="New" action="new"/>
+        </st:header>
+        <st:column label="Name" property="role" width="50%"/>
+        <st:column label="Label" property="display_name" width="50%"/>
+        <st:dataform>
+            <st:field property="role" type="text" label="Name"/>
+            <st:field property="display_name" type="text" label="Label"/>
+            <st:action mode="new;edit" label="Save" action="save"/>
+            <st:action mode="view;new;edit" label="Cancel" action="cancel"/>
+        </st:dataform>
+    </st:table>
+</st:tab>
+-->
+
+{% endblock tabs %}
+

@@ -16,10 +16,6 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-
-__author__ = "jan"
-__date__ = "$3-Oct-2013 8:40:17 AM$"
-
 import gripe
 import gripe.db
 import grizzle
@@ -28,6 +24,7 @@ import grumble.meta
 import grumble.property
 
 logger = gripe.get_logger(__name__)
+
 
 class FlagProperty(grumble.property.StringProperty):
     def getvalue(self, instance):
@@ -38,10 +35,11 @@ class FlagProperty(grumble.property.StringProperty):
     def setvalue(self, instance, value):
         pass
 
+
 class Country(grumble.Model):
-    countryname = grumble.property.StringProperty(verbose_name = "Country name", is_label = True)
-    countrycode = grumble.property.StringProperty(verbose_name = "ISO 3166-1 code", is_key = True)
-    flag_url = FlagProperty(transient = True)
+    countryname = grumble.property.StringProperty(verbose_name="Country name", is_label=True)
+    countrycode = grumble.property.StringProperty(verbose_name="ISO 3166-1 code", is_key=True)
+    flag_url = FlagProperty(transient=True)
 
 #
 # ============================================================================
@@ -53,18 +51,20 @@ class Country(grumble.Model):
 #  PROFILE COMPONENTS
 # ----------------------------------------------------------------------------
 
+
 class ProfileReference(object):
     @classmethod
     def get_node_definition(cls):
         return NodeTypeRegistry.get_by_ref_class(cls)
 
+
 class SessionType(grumble.Model, ProfileReference):
     _resolved_parts = set()
-    name = grumble.property.StringProperty(verbose_name = "Activity", is_key = True, scoped = True)
+    name = grumble.property.StringProperty(verbose_name="Activity", is_key=True, scoped=True)
     description = grumble.property.StringProperty()
     intervalpart = grumble.property.StringProperty()
     trackDistance = grumble.property.BooleanProperty()
-    speedPace = grumble.property.StringProperty(choices = set(['Speed', 'Pace', 'Swim Pace']))
+    speedPace = grumble.property.StringProperty(choices={'Speed', 'Pace', 'Swim Pace'})
     icon = grumble.property.StringProperty()
 
     def get_interval_part_type(self, profile):
@@ -78,18 +78,20 @@ class SessionType(grumble.Model, ProfileReference):
         else:
             return None
 
+
 class GearType(grumble.Model, ProfileReference):
-    name = grumble.property.StringProperty(is_key = True, scoped = True)
+    name = grumble.property.StringProperty(is_key=True, scoped=True)
     description = grumble.property.StringProperty()
     icon = grumble.image.ImageProperty()
 
+
 class CriticalPowerInterval(grumble.Model, ProfileReference):
-    name = grumble.property.StringProperty(is_key = True, scoped = True)
+    name = grumble.property.StringProperty(is_key=True, scoped=True)
     duration = grumble.property.TimeDeltaProperty()
 
 
 class CriticalPace(grumble.Model, ProfileReference):
-    name = grumble.property.StringProperty(is_key = True, scoped = True)
+    name = grumble.property.StringProperty(is_key=True, scoped=True)
     distance = grumble.property.IntegerProperty()  # In m
 
 
@@ -97,10 +99,14 @@ class CriticalPace(grumble.Model, ProfileReference):
 #  NODE MACHINERY
 # ----------------------------------------------------------------------------
 
-class NodeTypeRegistry():
+
+class NodeTypeRegistry(object):
     _by_ref_name = {}
     _by_ref_class = {}
     _by_node_class = {}
+
+    def __init__(self):
+        pass
 
     @classmethod
     def register(cls, definition):
@@ -327,14 +333,14 @@ class TreeNodeBase(NodeBase):
             return None
         return p.get_root_property(prop) if hasattr(p, "get_root_property") else None
 
-    def get_subtypes(self, all = False):
+    def get_subtypes(self, all=False):
         q = self.children() if not all else self.descendents()
         return q.fetchall()
 
     def get_all_subtypes(self):
         return self.get_subtypes(True)
 
-    def has_subtype(self, type, deep = True):
+    def has_subtype(self, type, deep=True):
         q = self.children() if not deep else self.descendents()
         q.add_filter(self.name(), '=', type)
         return q.has()
@@ -352,7 +358,7 @@ class TreeNodeBase(NodeBase):
 # ----------------------------------------------------------------------------
 
 class SessionTypeNode(TreeNodeBase):
-    sessionType = grumble.ReferenceProperty(SessionType, serialize = False)
+    sessionType = grumble.ReferenceProperty(SessionType, serialize=False)
     defaultfor = grumble.StringProperty()
 
     def intervalpart(self):
@@ -360,17 +366,17 @@ class SessionTypeNode(TreeNodeBase):
 
 
 class GearTypeNode(TreeNodeBase):
-    gearType = grumble.ReferenceProperty(GearType, serialize = False)
-    partOf = grumble.SelfReferenceProperty(collection_name = "parts")
+    gearType = grumble.ReferenceProperty(GearType, serialize=False)
+    partOf = grumble.SelfReferenceProperty(collection_name="parts")
     usedFor = grumble.ReferenceProperty(SessionTypeNode)
 
 
 class CriticalPowerIntervalNode(NodeBase):
-    criticalPowerInterval = grumble.ReferenceProperty(CriticalPowerInterval, serialize = False)
+    criticalPowerInterval = grumble.ReferenceProperty(CriticalPowerInterval, serialize=False)
 
 
 class CriticalPaceNode(NodeBase):
-    criticalPace = grumble.ReferenceProperty(CriticalPace, serialize = False)
+    criticalPace = grumble.ReferenceProperty(CriticalPace, serialize=False)
 
 
 logger.debug("Config: %s", gripe.Config.app.sweattrails)
@@ -420,13 +426,11 @@ class ActivityProfile(grizzle.UserPart):
             Import template activity profile data.
         """
         with gripe.db.Tx.begin():
-            if cls.all(keys_only = True).count() > 0:
+            if cls.all(keys_only=True).count() > 0:
                 return
         for profile in data:
             with gripe.db.Tx.begin():
-                p = cls(name = profile.name,
-                    description = profile.description,
-                    isdefault = profile.isdefault)
+                p = cls(name=profile.name, description=profile.description, isdefault=profile.isdefault)
                 p.put()
                 for ref_name in NodeTypeRegistry.names():
                     if ref_name in profile:
@@ -471,7 +475,7 @@ class ActivityProfile(grizzle.UserPart):
     def import_profile(self, profile):
         if type(profile) == str:
             profile = ActivityProfile.by("name", profile, parent = None)
-        if not(profile):
+        if not profile:
             return self
         if (profile.parent() == self.parent()) or not profile.parent():
             for node_type in NodeTypeRegistry.types():
@@ -496,7 +500,8 @@ class ActivityProfile(grizzle.UserPart):
         assert key or name, "ActivityProfile.get_reference_from_descriptor: descriptor must specify name or key"
         if key:
             ref = ref_class.get(key)
-            assert ref, "ActivityProfile.get_reference_from_descriptor(%s): descriptor specified key = '%s' but no reference found" % (ref_class, key)
+            assert ref, "ActivityProfile.get_reference_from_descriptor(%s): " \
+                "descriptor specified key = '%s' but no reference found" % (ref_class, key)
         else:
             return self.get_reference_by_name(ref_class, name)
         return ref
@@ -530,6 +535,7 @@ class ActivityProfile(grizzle.UserPart):
 # ============================================================================
 #
 
+
 class Brand(grumble.Model):
     name = grumble.StringProperty()
     description = grumble.StringProperty()
@@ -546,12 +552,13 @@ class Brand(grumble.Model):
         descriptor["gearTypes"] = gts
         return descriptor
 
+
 class Product(grumble.Model):
     name = grumble.StringProperty()
     icon = grumble.image.ImageProperty()
-    isA = grumble.SelfReferenceProperty(collection_name = "subtypes_set")
+    isA = grumble.SelfReferenceProperty(collection_name="subtypes_set")
     usedFor = grumble.ReferenceProperty(SessionType)
-    partOf = grumble.SelfReferenceProperty(collection_name = "parts_set")
-    baseType = grumble.SelfReferenceProperty(collection_name = "descendenttypes")
+    partOf = grumble.SelfReferenceProperty(collection_name="parts_set")
+    baseType = grumble.SelfReferenceProperty(collection_name="descendenttypes")
 
 

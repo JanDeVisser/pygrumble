@@ -16,7 +16,7 @@ com.sweattrails.api.LookupField = function(fld, elem) {
     /* Projection - need to define */
     /*
     var projection = elem.getAttribute("projection") || "object";
-    this.prj = getfunc(projection) ||
+    this.prj = __.getfunc(projection) ||
         ((projection === "property") && function(obj) { return obj[this.projectionProperty]; }) ||
         function(obj) { return obj; };
     this.projectionProperty = elem.getAttribute("projectionproperty") || this.key;

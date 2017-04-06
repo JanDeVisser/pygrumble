@@ -31,11 +31,25 @@ class SessionHandler(grit.handlers.PageHandler):
         q['"athlete" = '] = str(self.user.key())
         return q
 
+    def get_context(self, ctx):
+        super(SessionHandler, self).get_context(ctx)
+        activity = ctx["object"]
+        if activity:
+            q = sweattrails.session.Interval.query(parent=activity)
+            intervals = [o for o in filter(lambda obj: isinstance(obj, dict) or obj.can_read(), q)]
+            if len(intervals):
+                ctx["intervals"] = intervals
+            ctx["has_heartrate"] = activity.max_heartrate > 0
+            ctx["has_power"] = hasattr(activity.intervalpart, "max_power") and (activity.intervalpart.max_power > 0)
+            ctx["has_cadence"] = hasattr(activity.intervalpart, "max_cadence") and \
+                (activity.intervalpart.max_cadence > 0)
+        return ctx
+
 
 app = webapp2.WSGIApplication([
     webapp2.Route(
         r'/st/activities',
-        handler="sweattrails.web.handlers.SessionHandler", name='list-activities',
+        handler="grit.handlers.PageHandler", name='list-activities',
         defaults={
             "kind": sweattrails.session.Session
         }),

@@ -15,7 +15,7 @@ function execute_job(job) {
     if (typeof(job) === "function") {
         job();
     } else if (typeof(job) === "string") {
-        var f = getfunc(job);
+        var f = __.getfunc(job);
         f();
     } else if (typeof(job) === "object") {
         job.run && job.run();

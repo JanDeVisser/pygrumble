@@ -19,11 +19,13 @@
 import datetime
 
 import gripe
+import gripe.db
 import grumble.meta
 
 logger = gripe.get_logger(__name__)
 
 QueryType = gripe.Enum(['Columns', 'KeyName', 'Update', 'Insert', 'Delete', 'Count'])
+
 
 class DbAdapter(object):
     def __init__(self, modelmanager):
@@ -37,7 +39,7 @@ class DbAdapter(object):
 
 
 class ModelQueryRenderer(object):
-    def __init__(self, kind, query = None):
+    def __init__(self, kind, query=None):
         self._query = query
         if isinstance(kind, grumble.schema.ModelManager):
             self._manager = kind
@@ -45,7 +47,7 @@ class ModelQueryRenderer(object):
             kind = grumble.meta.Registry.get(kind)
             self._manager = kind.modelmanager
 
-    def query(self, q = None):
+    def query(self, q=None):
         if q:
             self._query = q
         return self._query
@@ -101,6 +103,10 @@ class ModelQueryRenderer(object):
     def limit(self):
         return self._query.limit()
 
+    def _custom_condition(self, values):
+        if hasattr(self._query, "condition"):
+            return self._query.condition(values)
+
     def _update_audit_info(self, new_values, insert):
         # Set update audit info:
         new_values["_updated"] = datetime.datetime.now()
@@ -123,7 +129,7 @@ class ModelQueryRenderer(object):
             if c in new_values:
                 del new_values[c]
 
-    def execute(self, query_type, new_values = None):
+    def execute(self, query_type, new_values=None):
         logger.debug("Executing query for model '%s'", self._manager.name)
         self._manager.seal()
         assert self._query is not None, "Must set a Query prior to executing a ModelQueryRenderer"
@@ -237,11 +243,18 @@ class ModelQueryRenderer(object):
                         sql += glue + '(%s %%s)' % e
                         vals.append(v)
                     glue = ' AND ' if len(sql) > oldlen else glue
+                custom_condition = self._custom_condition(vals)
+                if custom_condition:
+                    sql += glue + custom_condition
             if query_type == QueryType.Columns and self.sortorder():
+                for cc in self.sortorder():
+                    print cc.colname, type(cc.colname), cc.order(), type(cc.order())
+                ss = [('"' + c.colname + '" ' + c.order()) for c in self.sortorder()]
+                print ss
                 sql += ' ORDER BY ' + ', '.join([('"' + c.colname + '" ' + c.order()) for c in self.sortorder()])
             if self.limit():
                 sql += ' LIMIT ' + self.limit()
             logger.debug("Rendered query: %s [%s]", sql, vals)
             cur = tx.get_cursor()
-            cur.execute(sql, vals, columns = cols, key_index = key_ix)
+            cur.execute(sql, vals, columns=cols, key_index=key_ix)
             return cur

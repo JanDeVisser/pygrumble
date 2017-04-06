@@ -26,7 +26,7 @@ logger = gripe.get_logger(__name__)
 
 
 class Sort(object):
-    def __init__(self, colname, ascending = True):
+    def __init__(self, colname, ascending=True):
         self.colname = colname
         self.ascending = ascending
 
@@ -35,14 +35,14 @@ class Sort(object):
 
 
 class Join(object):
-    def __init__(self, kind, property):
+    def __init__(self, kind, prop):
         if isinstance(kind.__class__, grumble.ModelMetaClass):
             self._kind = kind.__class__
         elif isinstance(kind, grumble.ModelMetaClass):
             self._kind = kind
         else:
             self._kind = grumble.Model.for_name(str(kind))
-        self._property = property
+        self._property = prop
 
     def tablename(self):
         return self._kind.modelmanager.tablename()
@@ -53,7 +53,7 @@ class Join(object):
     def key_column(self):
         return self._kind.modelmanager.key_col
 
-    def key_column(self):
+    def key_column_name(self):
         return self.key_column().name
 
 
@@ -68,12 +68,12 @@ class ModelQuery(object):
     def _reset_state(self):
         pass
 
-    def set_key(self, key, kind = None):
+    def set_key(self, key, kind=None):
         self._reset_state()
         assert not (self.has_parent() or self.has_ancestor()), \
             "Cannot query for ancestor or parent and key at the same time"
         assert ((key is None) or isinstance(key, (basestring, grumble.key.Key))), \
-                "Must specify an string, Key, or None in ModelQuery.set_key"
+            "Must specify an string, Key, or None in ModelQuery.set_key"
         if isinstance(key, basestring):
             try:
                 key = grumble.key.Key(key)
@@ -109,7 +109,7 @@ class ModelQuery(object):
             ancestor = ancestor.key()
             assert ancestor, "ModelQuery.set_ancestor: not-None ancestor with key() == None. Is the Model stored"
         assert (ancestor is None) or isinstance(ancestor, grumble.key.Key), \
-                "Must specify an ancestor object or None in ModelQuery.set_ancestor"
+            "Must specify an ancestor object or None in ModelQuery.set_ancestor"
         logger.debug("Q: Setting ancestor to %s", ancestor)
         self._ancestor = ancestor
         return self
@@ -138,7 +138,7 @@ class ModelQuery(object):
             parent = parent.key()
             assert parent, "ModelQuery.set_parent: not-None ancestor with key() == None. Is the Model stored"
         assert (parent is None) or isinstance(parent, grumble.key.Key), \
-                "Must specify a parent object or None in ModelQuery.set_parent"
+            "Must specify a parent object or None in ModelQuery.set_parent"
         self._parent = parent
         return self
 
@@ -158,7 +158,7 @@ class ModelQuery(object):
         else:
             return self.key().scope()
 
-    def owner(self, o = None):
+    def owner(self, o=None):
         if o is not None:
             self._reset_state()
             self._owner = o
@@ -187,8 +187,8 @@ class ModelQuery(object):
         self._filters.append((expr, value))
         return self
 
-    def add_join(self, kind, property):
-        self._joins.append(Join(kind, property))
+    def add_join(self, kind, prop):
+        self._joins.append(Join(kind, prop))
 
     def joins(self):
         return self._joins
@@ -199,7 +199,7 @@ class ModelQuery(object):
     def clear_sort(self):
         self._sortorder = []
 
-    def add_sort(self, colname, ascending = True):
+    def add_sort(self, colname, ascending=True):
         self._reset_state()
         self._sortorder.append(Sort(colname, ascending))
         return self
@@ -265,7 +265,8 @@ class ModelQuery(object):
             elif hasattr(key, "key") and callable(key.key):
                 key = key.key()
             else:
-                assert isinstance(key, grumble.key.Key), "ModelQuery.get requires a valid key object, not a %s" % type(key)
+                assert isinstance(key, grumble.key.Key), \
+                    "ModelQuery.get requires a valid key object, not a %s" % type(key)
             q = ModelQuery().set_key(key)
             mm = grumble.schema.ModelManager.for_name(key.kind())
             r = mm.getModelQueryRenderer(q)
@@ -279,4 +280,3 @@ class ModelQuery(object):
             key = key.key()
         assert isinstance(key, grumble.key.Key), "ModelQuery.delete_one requires a valid key object"
         return ModelQuery().set_key(key)._delete(key.kind())
-

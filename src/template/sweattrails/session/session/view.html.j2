@@ -1,0 +1,132 @@
+{% extends "base.html.j2" %}
+
+{%  block head %}
+     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.3/dist/leaflet.css" />
+{%  endblock %}
+
+{% block css %}
+    #map-route           { height: 700px; }
+    #graph-graph         { height: 700px; width: 100%; }
+    #graph-laps-canvas   { height: 700px; width: 1000px; }
+{% endblock %}
+
+{% block imports %}
+    {{ import_maps() }}
+    {{ import_graphs() }}
+{% endblock %}
+
+{% block javascript %}
+    {% if intervals is defined and intervals is not none %}
+        <script type="text/javascript">
+            var intervals = [
+                {%  for interval in intervals %}
+                    {
+                        "timestamp": {{ interval.timestamp.total_seconds() }},
+                        "duration": {{ interval.duration.total_seconds() }},
+                        "distance": {{ interval.distance }},
+                        "average_heartrate": {{ interval.average_heartrate }},
+                        "max_heartrate": {{ interval.max_heartrate }},
+                        "average_speed": {{ interval.average_speed }},
+                        "max_speed": {{ interval.max_speed }},
+                        "work": {{ interval.work }},
+                        "calories_burnt": {{ interval.calories_burnt }}
+                    }{% if not loop.last %},{% endif %}
+                {%  endfor %}
+            ];
+            decorateLapsXAxis = function() {
+                this.ctx.textAlign = "center";
+                this.ctx.strokeStyle = "#000000";
+                for (var ix = 0; ix &lt; intervals.length; ix++) {
+                    this.ctx.strokeText(format_elapsed_time(seconds_to_timeobj(intervals[ix].timestamp)),
+                        this.toCanvasXCoordinate(intervals[ix].timestamp), this.gh - 20);
+                }
+                this.ctx.strokeText(format_elapsed_time(seconds_to_timeobj(this.max)),
+                    this.toCanvasXCoordinate(this.max), this.gh - 20);
+            };
+            decorateLapsYAxis = function() {
+                this.graph.ctx.textAlign = "right";
+                this.graph.ctx.strokeStyle = this.color;
+                    this.graph.ctx.strokeText("min/km", 38, this.graph.pad.top + 10);
+                for (var ix = 0; ix &lt; intervals.length; ix++) {
+                    this.graph.ctx.strokeText(pace(intervals[ix].average_speed, "metric", false),
+                         38, this.toCanvasYCoordinate(intervals[ix].average_speed));
+                }
+            }
+        </script>
+    {% endif %}
+{% endblock %}
+
+{% block mainpage %}
+{% endblock mainpage %}
+
+{% block tabs %}
+    <st:tab code="activity" label="Activity">
+        <div>
+            <st:form name="session" url="/json/session/{{ key }}" layout="none">
+                <div>
+                    <div style="width: 10%; float: left">
+                        <st:field id="icon" type="icon" property="sessiontype.icon" readonly="true"/>
+                    </div>
+                    <div style="width: 90%; float: left">
+                        <table>
+                            <tr>
+                                <td class="formlabel"><st:field type="label" field="description"/></td>
+                                <td class="formdata"><st:field type="text" property="description" label="Description"/></td>
+                            </tr>
+                            <tr>
+                                <td class="formlabel"><st:field type="label" field="start_time"/></td>
+                                <td class="formdata"><st:field type="datetime" property="start_time" label="Date/time" readonly="true"/></td>
+                            </tr>
+                            <tr>
+                                <td class="formlabel"><st:field type="label" field="distance"/></td>
+                                <td class="formdata"><st:field type="distance" property="distance" label="Distance" readonly="true"/></td>
+                            </tr>
+                            <tr>
+                                <td class="formlabel"><st:field type="label" field="duration"/></td>
+                                <td class="formdata"><st:field type="time" timeformat="duration" property="duration" label="Duration" readonly="true"/></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <st:footer position="right">
+                        <st:action mode="view" label="Edit" action="edit"/>
+                        <st:action mode="view" label="Delete" action="delete"/>
+                        <st:action mode="edit" label="Save" action="save"/>
+                        <st:action mode="edit" label="Cancel" action="cancel"/>
+                    </st:footer>
+                </div>
+            </st:form>
+        </div>
+        {% if intervals is defined and intervals is not none %}
+            <div>
+                <st:graph name="laps" object="intervals" xcoordinate="timestamp"
+                          bucketwidth="duration" height="500px" width="1200px"
+                          decorate="decorateLapsXAxis">
+                    <st:parameter name="parent" value="{{ key }}"/>
+                    <st:series label="Pace" coordinate="average_speed" color="red" style="bar"
+                               decorate="decorateLapsYAxis"/>
+                </st:graph>
+            </div>
+        {% endif %}
+    </st:tab>
+
+    <st:tab code="graphs" label="Graphs">
+        <st:graph name="graph" url="/json/waypoint" dsid="graph-waypoints" xcoordinate="timestamp">
+            <st:parameter name="parent" value="{{ key }}"/>
+            <st:sort name="timestamp"/>
+            {% if has_power %}
+                <st:series coordinate="power" color="red" type="line"/>
+            {% endif %}
+            <st:series coordinate="speed" color="blue" type="line"/>
+            {% if has_heartrate %}
+                <st:series coordinate="heartrate" color="magenta" type="line"/>
+            {% endif %}
+        </st:graph>
+    </st:tab>
+
+    <st:tab code="route" label="Route">
+        <st:map name="route" url="/json/waypoint" dsid="route-waypoints" coordinate="location">
+            <st:parameter name="named_search" value="map"/>
+            <st:parameter name="session" value="{{ key }}"/>
+        </st:map>
+    </st:tab>
+{% endblock tabs %}

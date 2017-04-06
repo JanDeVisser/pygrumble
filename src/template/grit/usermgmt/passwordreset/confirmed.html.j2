@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base.html.j2" %}
 {% do response.headers.setdefault("X-ST-Password", process.password) %}
 
 {% block tabs %}

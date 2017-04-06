@@ -27,12 +27,13 @@ import gripe.url
 
 logger = gripe.get_logger(__name__)
 
+
 class ReqHandler(webapp2.RequestHandler):
     content_type = "application/xhtml+xml"
     template_dir = "template"
-    file_suffix = "html"
+    file_suffix = "html.j2"
 
-    def __init__(self, request = None, response = None):
+    def __init__(self, request=None, response=None):
         super(ReqHandler, self).__init__(request, response)
         logger.info("Creating request handler for %s", request.path)
         self.session = request.session if hasattr(request, "session") else None
@@ -42,11 +43,11 @@ class ReqHandler(webapp2.RequestHandler):
     @classmethod
     def _get_env(cls):
         if not hasattr(cls, "env"):
-            loader = jinja2.ChoiceLoader([ \
-                jinja2.FileSystemLoader("%s/%s" % (gripe.root_dir(), cls.template_dir)), \
-                jinja2.PackageLoader("grit", "template") \
+            loader = jinja2.ChoiceLoader([
+                jinja2.FileSystemLoader("%s/%s" % (gripe.root_dir(), cls.template_dir)),
+                jinja2.PackageLoader("grit", "template")
             ])
-            env = jinja2.Environment(loader = loader, extensions = ['jinja2.ext.do'])
+            env = jinja2.Environment(loader=loader, extensions=['jinja2.ext.do'])
             if hasattr(cls, "get_env") and callable(cls.get_env):
                 env = cls.get_env(env)
             cls.env = env
@@ -77,7 +78,7 @@ class ReqHandler(webapp2.RequestHandler):
     def add_error(self, error):
         self.errors.append(error)
 
-    def _get_context(self, ctx = None):
+    def _get_context(self, ctx=None):
         logger.debug("_get_context %s", ctx)
         if ctx is None:
             logger.debug("_get_context: ctx is None. Building new one")
@@ -119,9 +120,10 @@ class ReqHandler(webapp2.RequestHandler):
             if hasattr(self, "template") \
             else None
         if not ret:
-            ret = self.get_template() \
-                if hasattr(self, "get_template") and callable(self.get_template) \
-                else None
+            if hasattr(self, "get_template") and callable(self.get_template):
+                ret = self.get_template()
+            else:
+                ret = None
         cname = self.__class__.__name__.lower()
         if not ret:
             module = self.__class__.__module__.lower()
@@ -142,7 +144,7 @@ class ReqHandler(webapp2.RequestHandler):
 
     def json_dump(self, obj):
         if obj:
-            logger.info("retstr=%s", json.dumps(obj))
+            # logger.info("retstr=%s", json.dumps(obj))
             self.response.content_type = "text/json"
             self.response.json = obj
         else:
@@ -164,6 +166,7 @@ class ErrorPage(ReqHandler):
     content_type = "text/html"
 
     def __init__(self, status, request, response, exception):
+        super(ErrorPage, self).__init__()
         self.status = status
         self.exception = exception
         super(ErrorPage, self).initialize(request, response)
@@ -173,7 +176,7 @@ class ErrorPage(ReqHandler):
 
     def get(self):
         logger.info("main::ErrorPage_%s.get", self.status)
-        self.render({ "request": self.request, "response": self.response})
+        self.render({"request": self.request, "response": self.response})
 
 
 def handle_404(request, response, exception):
@@ -182,4 +185,3 @@ def handle_404(request, response, exception):
     # handler = ErrorPage(404, request, response, exception)
     # handler.get()
     response.set_status(404)
-

@@ -176,18 +176,18 @@ div.tabbox {
 div.pagebox {
     margin-top: 10px;
     margin-left: 0px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    padding-right: 10px;
-    padding-left: 10px;
-    border-style: solid;
-    border-width: thin;
+    padding: 10px;
+    border: thin solid;
     border-radius: 5px;
     height: 100%;
 }
 
 div.boxtitle {
     font-weight: bold;
+}
+
+div.buttonbar-container {
+    clear: both;
 }
 
 div.buttonbar-header {
@@ -372,4 +372,14 @@ a.disabledmenulink {
 
 div.treeview-daycare {
     margin-left: 20px;
+}
+
+.td.formdata {
+    text-align: left;
+    width: auto;
+}
+
+.td.formlabel {
+    text-align: right;
+    width: auto;
 }

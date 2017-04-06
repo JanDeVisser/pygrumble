@@ -49,13 +49,14 @@ com.sweattrails.api.Map.prototype.onData = function(data) {
         this.container.removeChild(this.mapdiv);
     }
     this.mapdiv = document.createElement("div");
-    this.mapdiv.id = this.id;
+    this.mapdiv.id = "map-" + this.id;
     if (this.height) {
         this.mapdiv.height = this.height;
     }
     $$.log(this, "container: " + typeof(this.container));
     this.container.appendChild(this.mapdiv);
     this.latlngs = [];
+    this.invalid = 0;
 };
 
 com.sweattrails.api.Map.prototype.noData = function() {
@@ -72,13 +73,18 @@ com.sweattrails.api.Map.prototype.noData = function() {
 
 com.sweattrails.api.Map.prototype.renderData = function(obj) {
     if (!obj) return;
-    $$.log(this, "Map.renderData");
-    this.latlngs.push(this.getCoordinates(obj))
+    var coords = this.getCoordinates(obj);
+    if (coords) {
+        this.latlngs.push(coords);
+    } else {
+        this.invalid += 1;
+    }
 };
 
 com.sweattrails.api.Map.prototype.onDataEnd = function() {
-    $$.log(this, "Table.onDataEnd");
-    this.map = L.map(this.id);
+    $$.log(this, "Map.onDataEnd. %d valid coordinates, %d invalid", this.latlngs.length, this.invalid);
+    this.map = L.map("map-" + this.id);
+    $$.log(this, "Map object created");
     L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}', {
             attribution: 'Map data copyright OpenStreetMap contributors, CC-BY-SA, Imagery copyright Mapbox',
             maxZoom: 18,
@@ -104,8 +110,9 @@ com.sweattrails.api.Map.prototype.setCoordinateProperty = function(prop) {
 };
 
 com.sweattrails.api.Map.prototype.getCoordinates = function(object) {
-    return L.latLng(parseFloat(this.latbridge.getValue(object, this)),
-        parseFloat(this.lonbridge.getValue(object, this)));
+    var lat = parseFloat(this.latbridge.getValue(object, this));
+    var lon = parseFloat(this.lonbridge.getValue(object, this));
+    return (!isNaN(lat) && !isNaN(lon)) ? L.latLng(lat, lon) : null;
 };
 
 com.sweattrails.api.Map.prototype.reset = function(data) {
@@ -144,8 +151,8 @@ com.sweattrails.api.MapBuilder.prototype.process = function(t) {
             map.setLongitudeProperty(t.getAttribute("longitude"));
         }
     }
-    map.onrender = t.getAttribute("onrender") && getfunc(t.getAttribute("onrender"));
-    map.onrendered = t.getAttribute("onrendered") && getfunc(t.getAttribute("onrendered"));
+    map.onrender = t.getAttribute("onrender") && __.getfunc(t.getAttribute("onrender"));
+    map.onrendered = t.getAttribute("onrendered") && __.getfunc(t.getAttribute("onrendered"));
 };
 
 new com.sweattrails.api.MapBuilder();

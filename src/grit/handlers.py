@@ -32,12 +32,12 @@ logger = gripe.get_logger(__name__)
 
 class ModelBridge(object):
 
-    def _initialize_bridge(self, key = None, kind = None):
+    def _initialize_bridge(self, key=None, kind=None):
         if kind:
             self.kind(kind)
             self.key(key or self.request.get("id", None))
 
-    def kind(self, kind = None):
+    def kind(self, kind=None):
         if hasattr(self, "_kind"):
             return self._kind
         if not kind:
@@ -57,7 +57,7 @@ class ModelBridge(object):
     def get_context(self, ctx):
         return ctx
 
-    def key(self, key = None, override = False):
+    def key(self, key=None, override=False):
         self._key = None if not hasattr(self, "_key") else self._key
         self._obj = None if not hasattr(self, "_obj") else self._obj
         if key and key.startswith("_$"):
@@ -72,7 +72,7 @@ class ModelBridge(object):
             self._obj = None
         return self._key
 
-    def object(self, key = None):
+    def object(self, key=None):
         if key:
             if isinstance(key, grumble.Model):
                 self._obj = key
@@ -105,15 +105,14 @@ class ModelBridge(object):
         return [o for o in self.kind().query(**q)]
 
     def get_objects(self):
-        ret = []
         if not hasattr(self, "_kind"):
             return None
         elif self.key() and self.object():
-            ret = [ self.object() ]
+            ret = [self.object()]
         else:
             ret = self.query()
-        ret = [ o for o in filter(lambda o: o.can_read(), ret) ]
-        logger.debug("get_objects: returning %s", [ o.id() for o in ret ])
+        ret = [o for o in filter(lambda o: isinstance(o, dict) or o.can_read(), ret)]
+        logger.debug("get_objects: returning %s objects", len(ret))
         return ret
 
     def can_read(self):
@@ -238,11 +237,11 @@ class ImageHandler(PropertyBridgedHandler):
         else:
             self.error(401)
 
-    def get(self, key = None, kind = None, prop = None):
+    def get(self, key=None, kind=None, prop=None):
         logger.debug("ImageHandler.get(%s.%s, %s)", kind, prop, key)
         self._initialize_bridge(key, kind, prop)
         has_access = True
-        if hasattr(self, "allow_access") and callable(self.allow__access):
+        if hasattr(self, "allow_access") and callable(self.allow_access):
             has_access = self.allow_access()
         if has_access and self.key():
             if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
@@ -252,7 +251,7 @@ class ImageHandler(PropertyBridgedHandler):
                     logger.debug("Client has up-to-date image")
                     self.response.status = "304"
                 else:
-                    blob = getattr(self.object(), self.property());
+                    blob = getattr(self.object(), self.property())
                     assert blob, "Couldn't get contents of ImageProperty %s.%s" % (self._kind, self._prop)
                     self.response.content_type = str(blob[1])
                     self.response.etag = str(blob[2])
@@ -282,7 +281,8 @@ class JSONHandler(BridgedHandler):
     def invoke(self, d):
         assert "name" in d, "JSONHandler.invoke called without method name"
         method = d["name"]
-        assert hasattr(self, method) and callable(getattr(self, method)), "%s has not method %s. Can't invoke" % (self.__class__.__name__, method)
+        assert hasattr(self, method) and callable(getattr(self, method)), \
+            "%s has not method %s. Can't invoke" % (self.__class__.__name__, method)
         args = d.get("args") or []
         kwargs = d.get("kwargs") or {}
         logger.info("Invoking %s on %s using arguments *%s, **%s", method, self.__class__.__name__, args, kwargs)
@@ -308,7 +308,7 @@ class JSONHandler(BridgedHandler):
     def _load(self):
         return self._query
 
-    def post(self, key = None, kind = None):
+    def post(self, key=None, kind=None):
         logger.info("JSONHandler.post(%s,%s)\n%s", key, kind, self.request.body)
         self._initialize_bridge(key, kind)
         has_access = True
@@ -330,30 +330,34 @@ class JSONHandler(BridgedHandler):
                     else:
                         self.create(d, **self._flags)
                     if self.object():
-                        ret.append(self.object().to_dict(**self._flags))
+                        obj = self.object()
+                        ret.append(obj.to_dict(**self._flags)
+                                   if isinstance(obj, grumble.Model)
+                                   else obj)
             ret = ret[0] if len(ret) == 1 else ret
             logger.info("JSONHandler.post => %s", ret)
             self.json_dump(ret)
             return
         self.error(401)
 
-    def get(self, key = None, kind = None):
+    def get(self, key=None, kind=None):
         try:
             logger.info("JSONHandler.get(%s,%s) - JSON request: %s", key, kind, self.request.headers.get("ST-JSON-Request"))
             self._initialize_bridge(key, kind)
             has_access = True
-            if hasattr(self, "allow_access") and callable(self.allow__access):
+            if hasattr(self, "allow_access") and callable(self.allow_access):
                 has_access = self.allow_access()
             if has_access:
                 if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
                     self.initialize_bridge()
                 objs = self.get_objects()
-                data = [o.to_dict(**self._flags) for o in objs] if objs else None
+                data = [o.to_dict(**self._flags) if hasattr(o, "to_dict") else o
+                        for o in objs] if objs else None
                 count = 0 if data is None else len(data)
                 data = data if data is None or len(data) > 1 else data[0]
                 meta = {"schema": self.get_schema(), "count": count}
                 ret = {"meta": meta, "data": data}
-                logger.debug("JSONHandler returns\n%s", ret)
+                # logger.debug("JSONHandler returns\n%s", ret)
                 self.json_dump(ret)
                 return
             self.error(401)
@@ -361,7 +365,7 @@ class JSONHandler(BridgedHandler):
             traceback.print_exc()
             raise
 
-    def delete(self, key = None, kind = None):
+    def delete(self, key=None, kind=None):
         logger.debug("JSONHandler.delete(%s, %s)", key, kind)
         self._initialize_bridge(key, kind)
         has_access = True
@@ -378,12 +382,13 @@ class JSONHandler(BridgedHandler):
         else:
             self.error(401)
 
+
 class RedirectHandler(BridgedHandler):
     def get(self, key = None, kind = None):
         logger.info("RedirectHandler(%s): path: %s key: %s", self.__class__.__name__, self.request.path, str(key))
         self._initialize_bridge(kind)
         has_access = True
-        if hasattr(self, "allow_access") and callable(self.allow__access):
+        if hasattr(self, "allow_access") and callable(self.allow_access):
             has_access = self.allow_access()
         if has_access:
             if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):

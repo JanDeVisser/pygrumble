@@ -104,29 +104,35 @@ class Dispatcher(object):
         return Dispatcher(reqctx)
 
     def __enter__(self):
-        logger.debug("Dispatcher: Handling %s %s with body %s", self.request.method, self.request.path_qs, self.request.body)
-        if hasattr(self.reqctx, "app"):
-            app_path = self.reqctx.app
-            logger.info("Dispatcher: dispatching to app %s", app_path)
-            app = self.apps.get(app_path)
-            if not app:
-                app = gripe.resolve(app_path, None)
-                assert app, "WSGI app %s not found" % app_path
-                self.apps[app_path] = app
-            app.router.dispatch(self.request, self.response)
-        elif hasattr(self.reqctx, "handler"):
-            handler = self.reqctx.handler
-            if isinstance(handler, basestring):
-                h = gripe.resolve(handler, None)
-                assert h, "WSGI handler %s not found" % handler
-                handler = h
-            logger.info("Dispatcher: dispatching to handler %s", handler)
-            self.request.route_kwargs = {}
-            h = handler(self.request, self.response)
-            if hasattr(h, "set_request_context") and callable(h.set_request_context):
-                h.set_request_context(self.reqctx)
-            h.dispatch()
+        logger.debug("Dispatcher: Handling %s %s with body %s",
+                     self.request.method, self.request.path_qs, self.request.body)
+        try:
+            if hasattr(self.reqctx, "app"):
+                app_path = self.reqctx.app
+                logger.info("Dispatcher: dispatching to app %s", app_path)
+                app = self.apps.get(app_path)
+                if not app:
+                    app = gripe.resolve(app_path, None)
+                    assert app, "WSGI app %s not found" % app_path
+                    self.apps[app_path] = app
+                app.router.dispatch(self.request, self.response)
+            elif hasattr(self.reqctx, "handler"):
+                handler = self.reqctx.handler
+                if isinstance(handler, basestring):
+                    h = gripe.resolve(handler, None)
+                    assert h, "WSGI handler %s not found" % handler
+                    handler = h
+                logger.info("Dispatcher: dispatching to handler %s", handler)
+                self.request.route_kwargs = {}
+                h = handler(self.request, self.response)
+                if hasattr(h, "set_request_context") and callable(h.set_request_context):
+                    h.set_request_context(self.reqctx)
+                h.dispatch()
+        except Exception:
+            logger.exception("Exception in Dispatcher")
+            raise
         return self
+
 
     def __exit__(self, exception_type, exception_value, trace):
         # TODO: Do fancy HTTP error code stuffs maybe

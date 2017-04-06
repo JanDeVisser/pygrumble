@@ -1,7 +1,7 @@
 <!DOCTYPE xhtml>
 
 {% macro import_script(s) %}
-    <script src="{{s}}" type="text/javascript"></script>
+    <script src="/jscr/{{s}}.js" type="text/javascript"></script>
 {% endmacro %}
 
 {% macro errorblock() %}
@@ -19,11 +19,13 @@
 {% endmacro %}
 
 {% macro import_maps() %}
-    <script type="text/javascript">
-        L_PREFER_CANVAS = false;
-    </script>
     <script src="https://unpkg.com/leaflet@1.0.3/dist/leaflet.js" type="text/javascript"></script>
-    <script src="/jscr/map.js" type="text/javascript"></script>
+    {{ import_script("map") }}
+{% endmacro %}
+
+{% macro import_graphs() %}
+    {{ import_script("color") }}
+    {{ import_script("graph") }}
 {% endmacro %}
 
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:st="http://www.sweattrails.com/html">
@@ -33,7 +35,7 @@
     <link rel="stylesheet" type="text/css" href="/css/grizzle.css"/>
     <style type="text/css">
         {% block css %}
-	    {% endblock css %}
+        {% endblock css %}
     </style>
     <script src="/jscr/grit.js" type="text/javascript"></script>
     <script src="/jscr/action.js" type="text/javascript"></script>
@@ -42,10 +44,8 @@
     <script src="/jscr/alert.js" type="text/javascript"></script>
     <script src="/jscr/form.js" type="text/javascript"></script>
     <script src="/jscr/table.js" type="text/javascript"></script>
-    <script src="/jscr/treeview.js" type="text/javascript"></script>
     <script src="/jscr/lookup.js" type="text/javascript"></script>
-    <script src="/jscr/geocode.js" type="text/javascript"></script>
-    <script>
+    <script type="text/javascript">
         {% block javascript %}
         {% endblock javascript %}
     </script>
@@ -102,7 +102,7 @@
                                     <st:field id="remember_me" type="checkbox" property="remember_me" label="Remember me?"/>
                                     <st:footer>
                                         <st:action mode="new" label="Log in" action="save" redirect="/"/>
-                                        <st:action mode="new" label="I forgot my password" 
+                                        <st:action mode="new" label="I forgot my password"
                                                    action="link" href="/um/reset"/>
                                         <st:action mode="new" label="Cancel" action="cancel"/>
                                     </st:footer>
@@ -171,11 +171,10 @@
                                 </ul>
                             {% endif %}
                         {% endfor %}
-                    {% endfor %}						
+                    {% endfor %}
                 {% endblock sidebar %}
             </div>
         </div>
     </div>
   </body>
 </html>
-

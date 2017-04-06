@@ -104,7 +104,7 @@ com.sweattrails.api.Column.prototype.setFunction = function(func) {
     if (typeof(func) === "function") {
     	this.bridge.get = func;
     } else {
-        this.bridge.get = getfunc(func) || new Function("data", func);
+        this.bridge.get = __.getfunc(func) || new Function("data", func);
     }
 };
 
@@ -338,8 +338,8 @@ com.sweattrails.api.TableBuilder.prototype.process = function(t) {
     console.log("tableBuilder: building " + name);
     var ds = com.sweattrails.api.dataSourceBuilder.build(t);
     var table = new com.sweattrails.api.Table(p, name, ds);
-    table.onrender = t.getAttribute("onrender") && getfunc(t.getAttribute("onrender"));
-    table.onrendered = t.getAttribute("onrendered") && getfunc(t.getAttribute("onrendered"));
+    table.onrender = t.getAttribute("onrender") && __.getfunc(t.getAttribute("onrender"));
+    table.onrendered = t.getAttribute("onrendered") && __.getfunc(t.getAttribute("onrendered"));
     table.footer.build(t);
     var footer = getChildrenByTagNameNS(t, com.sweattrails.api.xmlns, "footer");
     if (footer.length === 1) {
@@ -416,6 +416,9 @@ com.sweattrails.api.Link.prototype.render = function() {
     } else {
         var params = "";
         for (var p in this.parameters) {
+            if (!this.parameters.hasOwnProperty(p)) {
+                continue;
+            }
             if (params === "") {
                 params = "?";
             } else {

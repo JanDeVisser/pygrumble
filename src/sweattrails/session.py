@@ -502,25 +502,25 @@ class NormalizedPowerReducer(Reducer):
 
     def reduction(self):
         if self.count > 0 and self.sum_norm > 0:
-            self.bikepart.normalized_power = int(round((self.sum_norm / self.count) ** (0.25)))
+            self.bikepart.normalized_power = int(round((self.sum_norm / self.count) ** 0.25))
         else:
             self.bikepart.normalized_power = 0
 
 
 class BikePart(IntervalPart):
-    average_power = grumble.IntegerProperty(verbose_name = "Average Power", default = 0, suffix = "W")  # W
-    average_watts_per_kg = WattsPerKgProperty(powerproperty = "average_power", suffix = "W/kg")
-    normalized_power = grumble.IntegerProperty(verbose_name = "Normalized Power", suffix = "W")  # W
-    normalized_watts_per_kg = WattsPerKgProperty(powerproperty = "normalized_power", suffix = "W/kg")
-    max_power = grumble.IntegerProperty(verbose_name = "Maximum Power", default = 0, suffix = "W")  # W
-    max_watts_per_kg = WattsPerKgProperty(powerproperty = "max_power", suffix = "W/kg")
-    average_cadence = grumble.IntegerProperty(verbose_name = "Average Cadence", default = 0, suffix = "rpm")  # rpm
-    max_cadence = grumble.IntegerProperty(verbose_name = "Maximum Cadence", default = 0, suffix = "rpm")  # rpm
-    average_torque = grumble.FloatProperty(verbose_name = "Average Torque", default = 0.0, suffix = "Nm")  # Nm
-    max_torque = grumble.FloatProperty(verbose_name = "Maximum Torque", default = 0.0, suffix = "Nm")  # Nm
-    vi = VIProperty(verbose_name = "VI", default = 0.0)
-    intensity_factor = IFProperty(verbose_name = "IF", default = 0.0)
-    tss = TSSProperty(verbose_name = "TSS", default = 0.0)
+    average_power = grumble.IntegerProperty(verbose_name="Average Power", default=0, suffix="W")  # W
+    average_watts_per_kg = WattsPerKgProperty(powerproperty="average_power", suffix="W/kg")
+    normalized_power = grumble.IntegerProperty(verbose_name="Normalized Power", suffix="W")  # W
+    normalized_watts_per_kg = WattsPerKgProperty(powerproperty="normalized_power", suffix="W/kg")
+    max_power = grumble.IntegerProperty(verbose_name="Maximum Power", default=0, suffix="W")  # W
+    max_watts_per_kg = WattsPerKgProperty(powerproperty="max_power", suffix="W/kg")
+    average_cadence = grumble.IntegerProperty(verbose_name="Average Cadence", default=0, suffix="rpm")  # rpm
+    max_cadence = grumble.IntegerProperty(verbose_name="Maximum Cadence", default=0, suffix="rpm")  # rpm
+    average_torque = grumble.FloatProperty(verbose_name="Average Torque", default=0.0, suffix="Nm")  # Nm
+    max_torque = grumble.FloatProperty(verbose_name="Maximum Torque", default=0.0, suffix="Nm")  # Nm
+    vi = VIProperty(verbose_name="VI", default=0.0)
+    intensity_factor = IFProperty(verbose_name="IF", default=0.0)
+    tss = TSSProperty(verbose_name="TSS", default=0.0)
 
     def get_ftp(self):
         if not hasattr(self, "_ftp"):
@@ -553,7 +553,7 @@ class BikePart(IntervalPart):
         ret = []
         for cpdef in self.get_activityprofile().get_all_linked_references(sweattrails.config.CriticalPowerInterval):
             if cpdef.duration <= self.get_interval().duration:
-                cp = CriticalPower(parent = self)
+                cp = CriticalPower(parent=self)
                 cp.cpdef = cpdef
                 cp.put()
                 ret.append(CriticalPowerReducer(cp))
@@ -722,32 +722,32 @@ class SessionTypeReference(grumble.reference.ReferenceProperty):
                     part = session.intervalpart
                     session.intervalpart = None
                     grumble.delete(part)
-            for i in Interval.query(ancestor = session):
+            for i in Interval.query(ancestor=session):
                 if i.intervalpart and not isinstance(i.intervalpart, t):
                     part = i.intervalpart
                     i.intervalpart = None
                     grumble.delete(part)
                     i.put()
             if t and not sameparttype:
-                part = t(parent = session)
+                part = t(parent=session)
                 part.put()
                 session.intervalpart = part
-                for i in Interval.query(ancestor = session):
+                for i in Interval.query(ancestor=session):
                     if i.intervalpart:
                         part = i.intervalpart
                         i.intervalpart = None
                         grumble.delete(part)
-                    part = t(parent = i)
+                    part = t(parent=i)
                     part.put()
                     i.intervalpart = part
                     i.put()
 
 
 class GeoData(grumble.Model):
-    max_elev = grumble.IntegerProperty(default = -100, verbose_name = "Max. Elevation")  # In meters
-    min_elev = grumble.IntegerProperty(default = 10000, verbose_name = "Min. Elevation")  # In meters
-    elev_gain = grumble.IntegerProperty(default = 0, verbose_name = "Elevation Gain")  # In meters
-    elev_loss = grumble.IntegerProperty(default = 0, verbose_name = "Elevation Loss")  # In meters
+    max_elev = grumble.IntegerProperty(default=-100, verbose_name="Max. Elevation")  # In meters
+    min_elev = grumble.IntegerProperty(default=10000, verbose_name="Min. Elevation")  # In meters
+    elev_gain = grumble.IntegerProperty(default=0, verbose_name="Elevation Gain")  # In meters
+    elev_loss = grumble.IntegerProperty(default=0, verbose_name="Elevation Loss")  # In meters
     bounding_box = grumble.geopt.GeoBoxProperty()
 
     def get_session(self):
@@ -809,20 +809,20 @@ class GeoReducer(Reducer):
 
 
 class Interval(grumble.Model, Timestamped):
-    interval_id = grumble.property.StringProperty(is_key = True)
-    timestamp = grumble.property.TimeDeltaProperty(verbose_name = "Start at")
-    offset = grumble.property.IntegerProperty(default = 0)  # Offset in the session in meters
+    interval_id = grumble.property.StringProperty(is_key=True)
+    timestamp = grumble.property.TimeDeltaProperty(verbose_name="Start at")
+    offset = grumble.property.IntegerProperty(default=0)  # Offset in the session in meters
     intervalpart = grumble.reference.ReferenceProperty(IntervalPart)
     description = grumble.property.StringProperty()
     geodata = grumble.reference.ReferenceProperty(GeoData)
     elapsed_time = grumble.property.TimeDeltaProperty()  # Duration including pauses
     duration = grumble.property.TimeDeltaProperty()  # Time excluding pauses
-    distance = grumble.property.IntegerProperty(default = 0)  # Distance in meters
-    average_heartrate = grumble.property.IntegerProperty(default = 0, verbose_name = "Avg. Heartrate")  # bpm
-    max_heartrate = grumble.property.IntegerProperty(default = 0, verbose_name = "Max. Heartrate")  # bpm
-    average_speed = AvgSpeedProperty(verbose_name = "Avg. Speed/Pace")
-    max_speed = grumble.property.FloatProperty(default = 0, verbose_name = "Max. Speed/Pace")  # m/s
-    work = grumble.property.IntegerProperty(default = 0)  # kJ
+    distance = grumble.property.IntegerProperty(default=0)  # Distance in meters
+    average_heartrate = grumble.property.IntegerProperty(default=0, verbose_name="Avg. Heartrate")  # bpm
+    max_heartrate = grumble.property.IntegerProperty(default=0, verbose_name="Max. Heartrate")  # bpm
+    average_speed = AvgSpeedProperty(verbose_name="Avg. Speed/Pace")
+    max_speed = grumble.property.FloatProperty(default=0, verbose_name="Max. Speed/Pace")  # m/s
+    work = grumble.property.IntegerProperty(default=0)  # kJ
     calories_burnt = grumble.property.IntegerProperty(default = 0)  # kJ
 
     def end_timestamp(self):
@@ -842,10 +842,10 @@ class Interval(grumble.Model, Timestamped):
         return self.root()
 
     def get_intervals(self):
-        return Interval.query(parent = self)
+        return Interval.query(parent=self)
 
     def get_geodata(self):
-        return GeoData.query(parent = self).get()
+        return GeoData.query(parent=self).get()
 
     def waypoints(self, allwps = None):
         if not hasattr(self, "_wps"):
@@ -996,3 +996,54 @@ class Waypoint(grumble.Model, Timestamped):
 
     def get_athlete(self):
         return self.get_session().get_athlete()
+
+    @classmethod
+    def named_search_map(cls, *args, **kwargs):
+        return MapQuery(*args, **kwargs)
+
+
+class MapQuery(grumble.Query):
+    def __init__(self, *args, **kwargs):
+        super(MapQuery, self).__init__(kind=Waypoint, keys_only=False, include_subclasses=False)
+        assert "session" in kwargs
+        session = Session.get(kwargs["session"]);
+        self.set_ancestor(session)
+        self.add_sort("timestamp", True)
+        duration = session.duration.total_seconds()
+        self._max_points = int(kwargs.get("max_points", "1000"))
+        self._interval_len = 1 if duration <= self._max_points else duration / self._max_points + 1
+
+    def initialize_iter(self):
+        self._interval = {}
+        self._current = 0
+
+    def filter(self, waypoint):
+        def running_average(*attrs):
+            d = self._interval
+            o = waypoint
+            for attr in attrs[:-1]:
+                if attr not in d:
+                    d[attr] = {}
+                d = d[attr]
+                o = getattr(o, attr)
+            attr = attrs[-1]
+            value = getattr(o, attr) or 0
+            d[attr] = ((self._current * d.get(attr, 0)) + value) / (self._current + 1)
+
+        running_average("elevation")
+        running_average("corrected_elevation")
+        running_average("speed")
+        running_average("cadence")
+        running_average("heartrate")
+        running_average("power")
+        running_average("location", "lat")
+        running_average("location", "lon")
+        self._current += 1
+
+        if self._current < self._interval_len:
+            return None
+        else:
+            ret = self._interval
+            self._interval = {}
+            self._current = 0
+            return ret

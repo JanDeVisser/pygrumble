@@ -35,7 +35,7 @@ logger = gripe.get_logger(__name__)
 class Model():
     __metaclass__ = grumble.meta.ModelMetaClass
     classes = {}
-    acl = { "admin": "RUDQC", "owner": "RUDQ" }
+    acl = {"admin": "RUDQC", "owner": "RUDQ"}
 
     def __new__(cls, **kwargs):
         cls.seal()
@@ -641,10 +641,7 @@ class Model():
         return q
 
     @classmethod
-    def query(cls, *args, **kwargs):
-        cls.seal()
-        logger.debug("%s.query: args %s kwargs %s", cls.__name__, args, kwargs)
-        assert cls != Model, "Cannot query on unconstrained Model class"
+    def _declarative_query(cls, *args, **kwargs):
         q = Query(cls, kwargs.get("keys_only", True), kwargs.get("include_subclasses", True))
         for (k, v) in kwargs.items():
             if k == "ancestor" and not cls._flat:
@@ -674,11 +671,28 @@ class Model():
                 q.add_filter(*arg)
                 ix += 1
             else:
-                assert len(args) > ix+1
-                expr = args[ix+1]
+                assert len(args) > ix + 1
+                expr = args[ix + 1]
                 q.add_filter(arg, expr)
                 ix += 2
         return q
+
+    @classmethod
+    def _named_search(cls, named_search, *args, **kwargs):
+        factory = getattr(cls, "named_search_" + named_search)
+        return factory(*args, **kwargs) \
+            if factory and callable(factory) \
+            else cls._declarative_query(*args, **kwargs)
+
+    @classmethod
+    def query(cls, *args, **kwargs):
+        cls.seal()
+        logger.debug("%s.query: args %s kwargs %s", cls.__name__, args, kwargs)
+        assert cls != Model, "Cannot query on unconstrained Model class"
+        named_search = kwargs.pop("named_search", None)
+        return cls._named_search(named_search, *args, **kwargs) \
+            if named_search \
+            else cls._declarative_query(*args, **kwargs)
 
     @classmethod
     def all(cls, **kwargs):
@@ -747,79 +761,103 @@ def unaudited(cls):
 
 
 class Query(grumble.query.ModelQuery):
-    def __init__(self, kind, keys_only = True, include_subclasses = True, **kwargs):
+    def __init__(self, kind, keys_only=True, include_subclasses=True, **kwargs):
         super(Query, self).__init__()
+        self.kinds = []
+        self._kindlist = []
         if isinstance(kind, basestring):
-            kinds = [grumble.meta.Registry.get(kind)]
+            self.kinds = [grumble.meta.Registry.get(kind)]
         else:
             try:
-                kinds = [grumble.meta.Registry.get(k) for k in kind]
+                self.kinds = [grumble.meta.Registry.get(k) for k in kind]
             except TypeError:
-                kinds = [grumble.meta.Registry.get(kind)]
-        self.kind = []
-        for k in kinds:
-            if not k.abstract():
-                self.kind.append(k.kind())
-            if include_subclasses:
-                for sub in k.subclasses():
-                    if not sub.abstract():
-                        self.kind.append(sub.kind())
+                self.kinds = [grumble.meta.Registry.get(kind)]
+        self.set_includesubclasses(include_subclasses)
+        self.set_keysonly(keys_only)
         if "ancestor" in kwargs:
             self.set_ancestor(kwargs["ancestor"])
         parent = kwargs.get("parent")
         if parent:
             self.set_parent(parent)
-        self.keys_only = keys_only
 
     def _reset_state(self):
         self._cur_kind = None
         self._results = None
         self._iter = None
 
+    def set_includesubclasses(self, include_subclasses):
+        self._include_subclasses = include_subclasses
+
+    def set_keysonly(self, keys_only):
+        self.keys_only = keys_only
+
     def set_ancestor(self, ancestor):
-        for k in self.kind:
+        for k in self.kinds:
             if grumble.meta.Registry.get(k)._flat:
-                logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
+                logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kinds)
                 return
-        logger.debug("Q(%s): setting ancestor to %s", self.kind, type(ancestor) if ancestor else "<None>")
+        logger.debug("Q(%s): setting ancestor to %s", self.kinds, type(ancestor) if ancestor else "<None>")
         return super(Query, self).set_ancestor(ancestor)
 
     def set_parent(self, parent):
-        for k in self.kind:
+        for k in self.kindlist():
             if grumble.meta.Registry.get(k)._flat:
-                logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kind)
+                logger.debug("Cannot do ancestor queries on flat model %s. Ignoring request to do so anyway", self.kinds)
                 return
-        logger.debug("Q(%s): setting parent to %s", self.kind, parent)
+        logger.debug("Q(%s): setting parent to %s", self.kinds, parent)
         return super(Query, self).set_parent(parent)
 
-    def get_kind(self, ix = 0):
-        return grumble.meta.Registry.get(self.kind[ix]) if self.kind and ix < len(self.kind) else None
+    def get_kind(self, ix=0):
+        return grumble.meta.Registry.get(self.kinds[ix]) if self.kinds and ix < len(self.kinds) else None
+
+    def kindlist(self):
+        if not self._kindlist:
+            assert self.kinds
+            for k in self.kinds:
+                if not k.abstract():
+                    self._kindlist.append(k.kind())
+                if self._include_subclasses:
+                    for sub in k.subclasses():
+                        if not sub.abstract():
+                            self._kindlist.append(sub.kind())
+            assert self._kindlist
+        return self._kindlist
 
     def __iter__(self):
-        self._iter = iter(self.kind)
+        self._iter = iter(self.kindlist())
         self._cur_kind = None
         self._results = None
+        if hasattr(self, "initialize_iter"):
+            self.initialize_iter()
         return self
+
+    def filter(self, model):
+        return model
 
     def next(self):
         ret = None
-        if self._results:
-            ret = next(self._results, None)
+        cur = None
         while ret is None:
-            self._cur_kind = grumble.meta.Registry.get(next(self._iter))
-            self._results = iter(self.execute(self._cur_kind, self.keys_only))
-            ret = next(self._results, None)
-        return self._cur_kind.get(
-                   grumble.key.Key(self._cur_kind, ret[self._results.key_index()]),
-                   None if self.keys_only else zip(self._results.columns(), ret)
-               )
+            if self._results:
+                cur = next(self._results, None)
+            while cur is None:
+                self._cur_kind = grumble.meta.Registry.get(next(self._iter))
+                self._results = iter(self.execute(self._cur_kind, self.keys_only))
+                cur = next(self._results, None)
+            if cur:
+                model = self._cur_kind.get(
+                    grumble.key.Key(self._cur_kind, cur[self._results.key_index()]),
+                    None if self.keys_only else zip(self._results.columns(), cur)
+                )
+                ret = self.filter(model)
+        return ret
 
     def __len__(self):
         return self.count()
 
     def count(self):
         ret = 0
-        for k in self.kind:
+        for k in self.kindlist():
             ret += self._count(k)
         return ret
 
@@ -828,7 +866,7 @@ class Query(grumble.query.ModelQuery):
 
     def delete(self):
         res = 0
-        for k in self.kind:
+        for k in self.kindlist():
             cls = grumble.meta.Registry.get(k)
             if hasattr(cls, "on_delete") and callable(cls.on_delete):
                 for m in self:
@@ -850,7 +888,7 @@ class Query(grumble.query.ModelQuery):
 
     def fetchall(self):
         with gripe.db.Tx.begin():
-            results = [ r for r in self ]
+            results = [r for r in self]
             #=======================================================================
             # ret = results[0] \
             #     if len(results) == 1 \
@@ -858,5 +896,6 @@ class Query(grumble.query.ModelQuery):
             #             if len(results) \
             #             else None)
             #=======================================================================
-            logger.debug("Query(%s, %s, %s).fetchall(): len = %s", self.kind, self.filters, self._ancestor if hasattr(self, "_ancestor") else None, len(results))
+            logger.debug("Query(%s, %s, %s).fetchall(): len = %s", self.kinds, self.filters, self._ancestor
+                         if hasattr(self, "_ancestor") else None, len(results))
             return results
