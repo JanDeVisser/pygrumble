@@ -90,10 +90,10 @@ class SessionData(dict):
             (delta.seconds < 60)
 
     def set_user(self, user):
-        self._user = user
+        self._user = user.uid()
 
     def user(self):
-        return self._user
+        return Session.get_usermanager().get(self._user) if self._user else None
 
 
 class SessionManager(object):
@@ -105,7 +105,7 @@ class SessionManager(object):
         self._sessions = {}
         self._queue = Queue.Queue()
         self._lock = threading.RLock()
-        self._thread = threading.Thread(target = SessionManager._monitor)
+        self._thread = threading.Thread(target=SessionManager._monitor)
         self._thread.setDaemon(True)
         atexit.register(SessionManager._exiting)
         self._lastharvest = None
@@ -138,7 +138,7 @@ class SessionManager(object):
                     logger.info("Weeded %s cookies", result)
                     self._lastharvest = datetime.datetime.now()
             try:
-                return self._queue.get(timeout = 1.0)
+                return self._queue.get(timeout=1.0)
             except:
                 pass
 
@@ -213,6 +213,7 @@ class SessionManager(object):
         with self._lock:
             if cookie in self._sessions:
                 del self._sessions[cookie]
+
 
 class RequestCtx(object):
     def __init__(self, request, response, defaults):
@@ -332,7 +333,7 @@ class Session(gripe.role.Guard):
         if hasattr(Session._tl, "session"):
             del Session._tl.session
 
-    def user(self, u = None):
+    def user(self, u=None):
         if u is not None:
             self._data.set_user(u)
         return self._data.user()
@@ -365,6 +366,7 @@ class SessionBridge(object):
         session = Session.get()
         return session.roles() if session is not None else None
 
+
 def handle_request(request, *args, **kwargs):
     """
         Handles a request to a grit application by feeding it through the 
@@ -395,7 +397,7 @@ def handle_request(request, *args, **kwargs):
         rest of the pipeline is skipped. The __exit__ methods of the entries
         whose __enter__ methods were executed are still executed in that case.
     """
-    root = kwargs["root"]
+    root = request.route.grit_params["root"]
     logger.info("WSGIApplication::handle_request path: %s method: %s", request.path_qs, request.method)
 
     reqctx = RequestCtx(request, request.response, kwargs)
@@ -428,14 +430,16 @@ class WSGIApplication(webapp2.WSGIApplication):
         config = gripe.Config.app
         self.icon = config.get("icon", "/icon.png")
         logger.info("Application icon: %s", self.icon)
-        self.router.add(webapp2.Route("/favicon.ico", handler = grit.statichandler.StaticHandler, defaults = { "root": self, "roles": [], "alias": self.icon }))
+        route = webapp2.Route("/favicon.ico", handler=grit.statichandler.StaticHandler)
+        route.grit_params = {"root": self, "roles": [], "alias": self.icon}
+        self.router.add(route)
 
         container = config.get("container")
         if container:
-            pipeline = container.get("pipeline")
-            if pipeline:
-                assert isinstance(pipeline, list), "Pipeline entry in app.container config must be list"
-                for p in pipeline:
+            pline = container.get("pipeline")
+            if pline:
+                assert isinstance(pline, list), "Pipeline entry in app.container config must be list"
+                for p in pline:
                     logger.info("Adding pipeline entry %s", p)
                     pipeline_class = gripe.resolve(p)
                     assert pipeline_class, "Invalid entry %s in pipeline config" % p
@@ -443,6 +447,8 @@ class WSGIApplication(webapp2.WSGIApplication):
                     self.pipeline.append(pipeline_class)
         self.pipeline.append(grit.pipeline.Dispatcher)
 
+        # Sort mounts so that when two paths have matching prefixes the longer path appears before the shorter one.
+        config["mounts"].sort(cmp=lambda m1, m2: cmp(m2["path"], m1["path"])) # Reverse sort
         for mp in config["mounts"]:
             raw_path = mp.get("path")
             app_path = mp.get("app")
@@ -450,7 +456,7 @@ class WSGIApplication(webapp2.WSGIApplication):
             path = "<:^%s$>" % raw_path
             roles = mp.get("roles", [])
             roles = roles.split() if isinstance(roles, basestring) else roles
-            defaults = { "root": self, "roles": roles }
+            defaults = {"root": self, "roles": roles}
 
             if app_path:
                 logger.debug("WSGIApplication(): Mounting app %s at path %s", app_path, raw_path)
@@ -458,9 +464,11 @@ class WSGIApplication(webapp2.WSGIApplication):
                 assert wsgi_sub_app, "WSGI app %s not found" % app_path
                 defaults["app"] = app_path
                 logger.info("WSGIApplication(): Adding handler app %s for path %s", app_path, raw_path)
-            elif "abspath" in mp or "relpath" in mp:
+            elif "abspath" in mp or "relpath" in mp or "static" in mp:
                 logger.debug("WSGIApplication(): Redirecting %s to StaticHandler", raw_path)
                 defaults["handler"] = grit.statichandler.StaticHandler
+
+                defaults["path"] = raw_path
                 if "abspath" in mp:
                     defaults["abspath"] = mp["abspath"]
                 if "relpath" in mp:
@@ -468,7 +476,9 @@ class WSGIApplication(webapp2.WSGIApplication):
             else:
                 logger.debug("WSGIApplication(): mount for path %s ignored", raw_path)
                 continue
-            self.router.add(webapp2.Route(path, handler = handle_request, defaults = defaults))
+            route = webapp2.Route(path, handler=handle_request, defaults=defaults)
+            route.grit_params = defaults
+            self.router.add(route)
         self.error_handlers[404] = grit.requesthandler.handle_404
 
 

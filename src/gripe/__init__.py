@@ -134,7 +134,7 @@ def mkdir(dirname):
         return False
 
 
-def resolve(funcname, default = None):
+def resolve(funcname, default=None):
     if funcname:
         if callable(funcname):
             return funcname
@@ -183,11 +183,12 @@ class LoopDetector(set):
 
     def __exit__(self, *args):
         self.count -= 1
+        self.loop = False
         if not self.count:
             del LoopDetector._tl.detector
 
     @classmethod
-    def begin(cls, obj = None):
+    def begin(cls, obj=None):
         ret = LoopDetector._tl.detector if hasattr(LoopDetector._tl, "detector") else LoopDetector()
         if obj is not None:
             if obj in ret:
@@ -195,6 +196,7 @@ class LoopDetector(set):
             else:
                 ret.add(obj)
         return ret
+
 
 class LoggerSwitcher(object):
     def __init__(self, packages, logger):

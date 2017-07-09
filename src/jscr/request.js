@@ -262,7 +262,10 @@ com.sweattrails.api.internal.HttpRequest = function(url) {
 };
 
 com.sweattrails.api.internal.HttpRequest.prototype.add = function(name, value) {
-    if (value instanceof Array) {
+    this.log("add(%s = %s)", name, value);
+    if (!name && !value) {
+        return this;
+    } else if (value instanceof Array) {
         value.forEach(function (v) {
             this.add(name, v);
         }, this);
@@ -274,11 +277,13 @@ com.sweattrails.api.internal.HttpRequest.prototype.add = function(name, value) {
             this.add(((name) ? (name + ".") : "") + a, value[a]);
         }
     } else {
+        __.dump(value, "HttpRequest.add(%s)", name);
         var variable = com.sweattrails.api.internal.makeVariable(name, value);
         this.variables.push(variable);
         variable.owner = this;
         variable.request = this.request;
     }
+    return this;
 };
 
 com.sweattrails.api.internal.HttpRequest.prototype.clear = function() {
@@ -302,7 +307,7 @@ com.sweattrails.api.internal.HttpRequest.prototype.execute = function() {
     if (typeof(key) !== "undefined") {
         this.processedUrl = this.processedUrl.replace('$$', key);
     }
-    this.processedUrl = this.processedUrl.replace(/\$([\w]+)/g, function() {
+    this.processedUrl = this.processedUrl.replace(/\$([\w.]+)/g, function() {
         return __.getvar(arguments[1]);
     });
     this.clear();
@@ -337,10 +342,12 @@ com.sweattrails.api.internal.HttpRequest.prototype.onError = function(code, obje
     }
 };
 
-com.sweattrails.api.internal.HttpRequest.prototype.log = function(msg) {
-    this.datasource && $$.log(this.datasource, "XMLHttp - " + msg);
+com.sweattrails.api.internal.HttpRequest.prototype.log = function() {
+    var args = Array.from(arguments);
+    args[0] = "XMLHttp - " + args[0];
+    args.unshift(this);
+    this.datasource && $$.log.apply($$, args);
 };
-
 
 /* ----------------------------------------------------------------------- */
 
@@ -385,8 +392,9 @@ com.sweattrails.api.internal.JSONRequest.prototype.serialize = function() {
 };
 
 com.sweattrails.api.internal.JSONRequest.prototype.submit = function(body) {
-    this.log("POST " + this.processedUrl + " as JSON data with body\n" + body);
-    this.httpRequest.open("POST", this.processedUrl, this.async);
+    var method = this.method || "POST";
+    this.log(method + " " + this.processedUrl + " as JSON data with body\n" + body);
+    this.httpRequest.open(method, this.processedUrl, this.async);
     this.httpRequest.setRequestHeader("ST-JSON-Request", "true");
     this.httpRequest.send(body);
 };
@@ -401,8 +409,9 @@ com.sweattrails.api.internal.GetRequest = function(url) {
 com.sweattrails.api.internal.GetRequest.prototype = new com.sweattrails.api.internal.JSONRequest();
 
 com.sweattrails.api.internal.GetRequest.prototype.submit = function(body) {
-    this.log("GET " + this.processedUrl);
-    this.httpRequest.open("GET", this.processedUrl, this.async);
+    var method = this.method || "GET";
+    this.log(method + " " + this.processedUrl);
+    this.httpRequest.open(method, this.processedUrl, this.async);
     this.httpRequest.setRequestHeader("ST-JSON-Request", body);
     this.httpRequest.send(null);
 };

@@ -38,6 +38,17 @@ def time_to_seconds(t):
 def time_after_offset(t, offset):
     return seconds_to_time(time_to_seconds(t) - offset)
 
+def timedelta_to_string(td):
+    h = int(math.floor(td.seconds / 3600))
+    r = td.seconds - (h * 3600)
+    m = int(math.floor(r / 60))
+    s = r % 60
+    if h > 0:
+        return "%dh %02d'%02d\"" % (h, m, s)
+    else:
+        return "%d'%02d\"" % (m, s)
+
+
 def semicircle_to_degrees(semicircles):
     """Convert a number in semicircles to degrees"""
     return semicircles * (180.0 / 2.0 ** 31)

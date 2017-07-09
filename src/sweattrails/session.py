@@ -19,6 +19,7 @@
 
 import bisect
 import datetime
+import sys
 import time
 
 import gripe
@@ -507,6 +508,57 @@ class NormalizedPowerReducer(Reducer):
             self.bikepart.normalized_power = 0
 
 
+class TimeInZoneReducer(Reducer):
+    def __init__(self, tiz, maxvalue):
+        self.timeinzone = tiz
+        self.minValue = getattr(tiz.zonedef, tiz.zdMinValueAttr, 0)
+        if self.minValue is None:
+            self.minValue = 0
+        self.maxValue = maxvalue if maxvalue is not None else sys.maxint
+
+    def __str__(self):
+        return "{}[{}, {}]".format(self.__class__.__name__, self.minValue, self.maxValue)
+
+    def init_reducer(self):
+        self.prev_timestamp = None
+        self.prev_distance = None
+
+    def reduce(self, wp):
+        if wp.distance is None:
+            return
+        if self.minValue <= getattr(wp, self.timeinzone.wpAttr, 0) < self.maxValue:
+            if self.prev_timestamp is not None:
+                self.timeinzone.timeinzone += wp.timestamp - self.prev_timestamp
+            if self.prev_distance is not None:
+                self.timeinzone.distance += wp.distance - self.prev_distance
+        self.prev_timestamp = wp.timestamp
+        self.prev_distance = wp.distance
+
+    def reduction(self):
+        self.timeinzone.put()
+
+
+class TimeInZone(grumble.Model):
+    zonedef = grumble.reference.ReferenceProperty(sweattrails.config.Zone)
+    timeinzone = grumble.property.TimeDeltaProperty()
+    distance = grumble.IntProperty()
+
+
+class TimeInPaceZone(TimeInZone):
+    zdMinValueAttr = "minSpeed"
+    wpAttr = "speed"
+
+
+class TimeInHeartrateZone(TimeInZone):
+    zdMinValueAttr = "minHeartrate"
+    wpAttr = "heartrate"
+
+
+class TimeInPowerZone(TimeInZone):
+    zdMinValueAttr = "minPower"
+    wpAttr = "power"
+
+
 class BikePart(IntervalPart):
     average_power = grumble.IntegerProperty(verbose_name="Average Power", default=0, suffix="W")  # W
     average_watts_per_kg = WattsPerKgProperty(powerproperty="average_power", suffix="W/kg")
@@ -558,6 +610,13 @@ class BikePart(IntervalPart):
                 cp.put()
                 ret.append(CriticalPowerReducer(cp))
 
+        maxpower = None
+        for pzdef in self.get_activityprofile().get_all_linked_references(sweattrails.config.PowerZone):
+            p = TimeInPowerZone(parent=self)
+            p.pzdef = pzdef
+            ret.append(TimeInZoneReducer(p, maxpower))
+            maxpower = pzdef.minPower - 1
+
         ret.extend([
             Maximize("torque", self, "max_torque"),
             AverageOverTime("timestamp", "torque", self, "average_torque"),
@@ -569,8 +628,18 @@ class BikePart(IntervalPart):
         ])
         return ret
 
-    def analyze(self):
-        self.set_max_power(self.max_power)
+    def reset(self):
+        CriticalPower.query(ancestor=self).delete()
+        self.average_power = 0
+        self.normalized_power = 0
+        self.max_power = 0
+        self.average_cadence = 0
+        self.max_cadence = 0
+        self.average_torque = 0
+        self.max_torque = 0
+        self.vi = 0.0
+        self.intensity_factor = 0.0
+        self.tss = 0.0
 
 
 class RunPaceWindow(RollingWindow):
@@ -644,13 +713,13 @@ class RunPace(grumble.Model, Timestamped):
 
             # See if this is a record at this time, i.e. if there is no
             # faster entry dated before this session:
-            q = BestRunPace.query(parent = self.cpdef).add_sort("snapshotdate")
+            q = BestRunPace.query(parent=self.cpdef).add_sort("snapshotdate")
             q.add_filter("snapshotdate <= ", self.parent().get_session().start_time)
             q.add_filter("duration < ", self.duration)
             best = q.get()
             if not best:
                 logger.debug("RunPace.after_store: this is a record")
-                best = BestRunPace(parent = self.cpdef)
+                best = BestRunPace(parent=self.cpdef)
                 best.cpdef = self.cpdef
                 best.snapshotdate = self.parent().get_session().start_time
                 best.best = self
@@ -658,15 +727,17 @@ class RunPace(grumble.Model, Timestamped):
                 best.distance = self.distance
                 best.put()
             else:
-                logger.debug("RunPace.after_store: didn't beat existing record -> %s in %s", self.cpdef.name, best.duration)
+                logger.debug("RunPace.after_store: didn't beat existing record -> %s in %s",
+                             self.cpdef.name, best.duration)
 
             # Delete records set after this session that are not as good
             # as this one. This can happen if old sessions are imported.
-            q = BestRunPace.query(parent = self.cpdef).add_sort("snapshotdate")
+            q = BestRunPace.query(parent=self.cpdef).add_sort("snapshotdate")
             q.add_filter("snapshotdate > ", self.parent().get_session().start_time)
             q.add_filter("duration <= ", self.duration)
             for brp in q:
-                logger.debug("RunPace.after_store: cleaning up superceded record %s in %s", self.cpdef.name, brp.duration)
+                logger.debug("RunPace.after_store: cleaning up superceded record %s in %s",
+                             self.cpdef.name, brp.duration)
             q.delete()
         else:
             logger.debug("RunPace.after_store: skipping, %s", self.parent().get_interval().__class__.__name__)
@@ -674,25 +745,36 @@ class RunPace(grumble.Model, Timestamped):
 
 class BestRunPace(grumble.Model):
     cpdef = grumble.ReferenceProperty(sweattrails.config.CriticalPace)
-    snapshotdate = grumble.DateTimeProperty(auto_now_add = True)
+    snapshotdate = grumble.DateTimeProperty(auto_now_add=True)
     best = grumble.ReferenceProperty(RunPace)
     distance = grumble.IntProperty()
-    duration = grumble.IntegerProperty()
+    duration = grumble.IntProperty()
     speed = AvgSpeedProperty()
 
 
 class RunPart(IntervalPart):
-    average_cadence = grumble.IntegerProperty(default = 0, suffix = "strides/min")  # rpm
-    max_cadence = grumble.IntegerProperty(default = 0, suffix = "strides/min")  # rpm
+    average_cadence = grumble.IntegerProperty(default=0, suffix="strides/min")  # rpm
+    max_cadence = grumble.IntegerProperty(default=0, suffix="strides/min")  # rpm
+
+    def reset(self):
+        RunPace.query(ancestor=self).delete()
+        self.average_cadence = 0
+        self.max_cadence = 0
 
     def reducers(self):
         ret = []
         for cpdef in self.get_activityprofile().get_all_linked_references(sweattrails.config.CriticalPace):
             if cpdef.distance <= self.get_interval().distance:
-                p = RunPace(parent = self)
+                p = RunPace(parent=self)
                 p.cpdef = cpdef
                 p.distance = cpdef.distance
                 ret.append(RunPaceReducer(p))
+        maxspeed = None
+        for pzdef in self.get_activityprofile().get_all_linked_references(sweattrails.config.PaceZone):
+            p = TimeInPaceZone(parent=self)
+            p.pzdef = pzdef
+            ret.append(TimeInZoneReducer(p, maxspeed))
+            maxspeed = pzdef.minSpeed - 1
         ret.extend([
             Maximize("cadence", self, "max_cadence"),
             AverageOverTime("timestamp", "cadence", self, "average_cadence")])
@@ -872,14 +954,28 @@ class Interval(grumble.Model, Timestamped):
         Interval.query(parent = self).delete()
         return True
 
+    def reset(self):
+        grumble.model.delete(self.get_geodata())
+        self.geodata = None
+        TimeInZone.query(ancestor=self, include_subclasses=True).delete()
+        self.average_heartrate = 0
+        self.max_heartrate = 0
+        self.max_speed = 0.0
+
 
 class IntervalReducable(Reducable):
     def __init__(self, interval):
         super(IntervalReducable, self).__init__()
+        maxheartrate = None
+        for hrzdef in interval.get_activityprofile().get_all_linked_references(sweattrails.config.HeartrateZone):
+            hrz = TimeInHeartrateZone(parent=self)
+            hrz.zonedef = hrzdef
+            self.append(TimeInZoneReducer(hrz, maxheartrate))
+            maxheartrate = hrzdef.minHeartrate - 1
         self.interval = interval
         self.extend([
-            Maximize("heartrate", interval, "max_hr"),
-            AverageOverTime("timestamp", "heartrate", interval, "average_hr"),
+            Maximize("heartrate", interval, "max_heartrate"),
+            AverageOverTime("timestamp", "heartrate", interval, "average_heartrate"),
             Maximize("speed", interval, "max_speed"),
             GeoReducer(interval)
         ])
@@ -933,6 +1029,18 @@ class Session(Interval):
                 self._wps = q.fetchall()
         return self._wps
 
+    def reset(self):
+        intervals = [self]
+        intervals.extend(Interval.query(ancestor = self).fetchall())
+        for i in intervals:
+            i.reset()
+            part = i.intervalpart
+            if part:
+                if hasattr(part, "reset"):
+                    part.reset()
+                part.put()
+            i.put()
+
     def analyze(self, callback=None):
         logger.debug("Interval.analyze(): Getting subintervals")
         intervals = [self]
@@ -949,6 +1057,10 @@ class Session(Interval):
                 part.analyze()
                 part.put()
             i.put()
+
+    def reanalyze(self, callback=None):
+        self.reset()
+        self.analyze(callback)
 
     def upload_slice(self, request):
         lines = request.get("slice").splitlines()
@@ -1038,6 +1150,7 @@ class MapQuery(grumble.Query):
         running_average("power")
         running_average("location", "lat")
         running_average("location", "lon")
+        self._interval["timestamp"] = waypoint.timestamp.total_seconds()
         self._current += 1
 
         if self._current < self._interval_len:

@@ -27,25 +27,39 @@ var osm_attr = 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap
 var tile_sources = {
     OSMMapnik: {
         url: 'http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        attribution: osm_attr
+        attributes: {
+            attribution: osm_attr
+        }
     },
     OpenCycleMap: {
         url: 'http://{s}.tile.opencyclemap.org/cycle/{z}/{x}/{y}.png',
-        attribution: '&copy; OpenCycleMap, ' + osm_attr
+        attributes: {
+            attribution: '&copy; OpenCycleMap, ' + osm_attr
+        }
     },
     MapQuest: {
         url: 'http://otile{s}.mqcdn.com/tiles/1.0.0/osm/{z}/{x}/{y}.png',
-        attribution: osm_attr + ' Tiles &copy; <a href="http://www.mapquest.com/" target="_blank">MapQuest</a> <img src="http://developer.mapquest.com/content/osm/mq_logo.png" />'
-}};
-var source = 'OpenCycleMap';
+        attributes: {
+            attribution: osm_attr + ' Tiles &169; <a href="http://www.mapquest.com/" target="_blank">MapQuest</a> <img src="http://developer.mapquest.com/content/osm/mq_logo.png" />'
+        }
+    },
+    Mapbox: {
+        url:             'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}',
+        attributes: {
+            attribution: 'Map data &#169; OpenStreetMap contributors, CC-BY-SA, Imagery &#169; Mapbox',
+            id:          'mapbox.run-bike-hike',
+            accessToken: 'pk.eyJ1IjoiamFuZGV2IiwiYSI6ImNpenBzbzFzNTAwcmgycnFnd3QycWFpbTgifQ.vIht_WItDuJwLuatY_S5xg'
+        }
+    }
+};
+var source = 'Mapbox';
 
 function createPolyline(points, options) {
     // Populate the route path
-    var path = new Array();
-    var j = 0;
-    while (j < points.length) {
-        path.push(L.latLng(points[j], points[j + 1]));
-        j += 2;
+    var path = [];
+    for (var ix = 0; ix < points.length; ix++) {
+        console.log("ix: " + ix + "lat: " + points[ix][0] + "lon: " + points[ix][1])
+        path.push(L.latLng(points[ix][0], points[ix][1]));
     }
     return L.polyline(path, options);
 }
@@ -59,7 +73,7 @@ function drawInterval(id, options) {
 
 function drawRoute() {
     var routeOptions = {
-        color: '#FFFF00',
+        color: '#FF0000',
         fill:  false
     };
 
@@ -99,7 +113,7 @@ function initialize() {
     try {
         map = L.map('map-canvas');
         var src = tile_sources[source];
-        L.tileLayer(src.url, { attribution: src.attribution }).addTo(map);
+        L.tileLayer(src.url, src.attributes).addTo(map);
 
         markerList = new Array();
         intervalList = new Array();

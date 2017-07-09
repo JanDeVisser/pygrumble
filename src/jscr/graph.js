@@ -29,7 +29,7 @@ com.sweattrails.api.internal.GraphConverter.pace = function(speed_ms) { return p
 com.sweattrails.api.Axis = function () {
     this.bridge = new com.sweattrails.api.internal.DataBridge();
     this.bwbridge = null;
-    this._clear();
+    this.clear();
 }
 
 com.sweattrails.api.Axis.prototype.setProperty = function (prop) {
@@ -46,7 +46,6 @@ com.sweattrails.api.Axis.prototype.setType = function (type) {
     if (typeof(this.converter) === 'undefined') {
         this.converter = com.sweattrails.api.internal.GraphConverter["number"];
     }
-    $$.log(this, "Set type to " + this.converter);
 };
 
 com.sweattrails.api.Axis.prototype.setDecorator = function (decorator) {
@@ -63,22 +62,27 @@ com.sweattrails.api.Axis.prototype.setDecorator = function (decorator) {
     }
 };
 
-com.sweattrails.api.Axis.prototype._clear = function () {
+com.sweattrails.api.Axis.prototype.build = function(elem) {
+    this.set(elem, "type", this.setType);
+    this.set(elem, "decorate", this.setDecorator)
+    this.set(elem, "ticks", null, com.sweattrails.api.BuilderFlags.Function);
+    this.set(elem, "tickscale", null, com.sweattrails.api.BuilderFlags.Function);
+    this.set(elem, "unit", null, com.sweattrails.api.BuilderFlags.Function);
+    this.set(elem, "grid", null, com.sweattrails.api.BuilderFlags.Boolean);
+}
+
+com.sweattrails.api.Axis.prototype.clear = function () {
     this.coordinates = [];
     this.min = NaN;
     this.max = NaN;
     this.range = NaN;
 };
 
-com.sweattrails.api.Axis.prototype.clear = function () {
-    this._clear();
-};
-
 com.sweattrails.api.Axis.prototype.getCoordinateValue = function (bridge, object) {
     var v = bridge.getValue(object, this);
-    $$.log(this, "v: %s converter: %s", v, this.converter);
+    // $$.log(this, "v: %s converter: %s", v, this.converter);
     v = (typeof(this.converter) === 'function') ? this.converter(v) : parseFloat(v);
-    $$.log(this, "Converted: %s", v);
+    // $$.log(this, "Converted: %s", v);
 
     if (isNaN(this.max) || (v > this.max)) {
         this.max = v;
@@ -99,12 +103,106 @@ com.sweattrails.api.Axis.prototype.getCoordinate = function (object) {
     this.coordinates.push(this.getCoordinateValue(this.bridge, object));
 };
 
+com.sweattrails.api.Axis.prototype.decorate = function (column) {
+    if (this.decorator) {
+        this.decorator();
+    } else {
+        var g = this.graph;
+        var p = g.pad;
+        var ctx = g.ctx;
+        var x = NaN, y = NaN, xaxis = false;
+        if (column === 0) {
+            ctx.textAlign = "center";
+            y = this.gh - (p.bottom - 20);
+            xaxis = true;
+        } else if (column < 0) {
+            ctx.textAlign = "right";
+            x = p.left - 2 + 20 * (column + 1);
+        } else {
+            ctx.textAlign = "left";
+            x = g.gw - p.right + 2 + 20 * (column - 1);
+        }
+        ctx.save();
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 1;
+        var ticks;
+        if (typeof(this.ticks) === "function") {
+            ticks = this.ticks();
+            $$.log(this, "ticks function returns %s (%s %s)", ticks, typeof(ticks), Array.isArray(ticks));
+        } else if (this.ticks) {
+            ticks = [];
+            ticks = this.ticks.split(",").forEach(function (t) { ticks.push(parseFloat(t)); });
+        } else if (this.tickscale) {
+            var scale = (typeof(this.tickscale) === "function") ? this.tickscale() : parseFloat(this.tickscale);
+            ticks = [];
+            for (var t = Math.ceil((this.min - 0.5*this.range) / scale) * scale;
+                 t < (this.max + 0.5 * this.range); t += scale) {
+                ticks.push(t);
+                t += scale;
+            }
+        } else {
+            ticks = [ this.min, this.max ];
+        }
+        ticks.forEach(function(t, ix) {
+                if (typeof(t) !== "object") {
+                    t = {value: t, label: t.toString()};
+                    ticks[ix] = t;
+                }
+                var v = t.value;
+                if (typeof(v) !== "number") {
+                    v = v + "";
+                    v = (v.indexOf(v, ".") >= 0) ? parseFloat(v) : parseInt(v);
+                    t.value = v;
+                }
+            });
+        ticks.sort(function(t1, t2) {
+            return t1.value - t2.value;
+        });
+        $$.log(this, "ticks %s (%s %s)", ticks, typeof(ticks), Array.isArray(ticks));
+        var prev = NaN;
+        for (var ix = 0; ix < ticks.length; ix++) {
+            var tick = ticks[ix];
+            var xc = (!xaxis) ? x : this.toCanvasXCoordinate(tick.value);
+            var yc = (xaxis) ? y : this.toCanvasYCoordinate(tick.value);
+            var cur = (xaxis) ? xc : -yc;
+            if (!isNaN(prev) && ((cur - prev) < 15)) {
+                $$.log(this, "Skipping tick: value: %f x: %d xc: %d y: %d yc: %d lbl: %s",
+                    tick.value, x, xc, y, yc, tick.label);
+                continue;
+            } else {
+                $$.log(this, "Drawing tick: value: %f x: %d xc: %d y: %d yc: %d lbl: %s",
+                    tick.value, x, xc, y, yc, tick.value);
+            }
+
+            prev = cur;
+            ctx.strokeText(tick.label, xc, yc);
+
+            if (this.grid || tick.grid) {
+                ctx.save();
+                ctx.setLineDash([7, 5]);
+                ctx.moveTo((!xaxis) ? p.left : xc, (xaxis) ? g.gh - p.bottom : yc);
+                ctx.lineTo((!xaxis) ? (g.gw - p.right) : xc, (xaxis) ? p.top : yc);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+        var unit = (this.unit) ? ((typeof(this.unit) === "function") ? this.unit() : this.unit) : "";
+        if (unit) {
+            ctx.strokeText(unit, (!xaxis) ? x : g.gw - p.right, (xaxis) ? y : p.top);
+        }
+        ctx.restore();
+    }
+};
+
 /**
  * Graph -
  */
 
 com.sweattrails.api.Graph = function (container, id) {
+    this.series = [];
+    this.graph = this;
     com.sweattrails.api.Axis.call(this);
+    this.color = "#000000";
     this.hasDataSource = true;
     this.container = document.createElement("div")
     this.container.id = "graph-" + id;
@@ -135,13 +233,13 @@ com.sweattrails.api.Graph = function (container, id) {
 
     this.footer = new com.sweattrails.api.ActionContainer(this, "footer");
     this.header = new com.sweattrails.api.ActionContainer(this, "header");
-    this.series = [];
     return this;
 };
 
 com.sweattrails.api.Graph.prototype = new com.sweattrails.api.Axis();
 
 com.sweattrails.api.Graph.prototype.build = function(elem) {
+    com.sweattrails.api.Axis.prototype.build.call(this, elem);
     this.set(elem, "height", "height",
         com.sweattrails.api.BuilderFlags.Int | com.sweattrails.api.BuilderFlags.Bind);
     this.set(elem, "width", "width",
@@ -151,9 +249,7 @@ com.sweattrails.api.Graph.prototype.build = function(elem) {
     this.set(elem, "top", "pad.top", com.sweattrails.api.BuilderFlags.Int);
     this.set(elem, "bottom", "pad.bottom", com.sweattrails.api.BuilderFlags.Int);
     this.set(elem, "xcoordinate", this.setProperty);
-    this.set(elem, "type", this.setType);
     this.set(elem, "bucketwidth", this.setBucketWidthProperty);
-    this.set(elem, "decorate", this.setDecorator)
     this.set(elem, "onrender");
     this.set(elem, "onrendered");
     this.set(elem, "onnodata");
@@ -228,7 +324,7 @@ com.sweattrails.api.Graph.prototype.render = function () {
 };
 
 com.sweattrails.api.Graph.prototype.onData = function (data) {
-    $$.log(this, "Table.onData");
+    $$.log(this, "onData");
     this.onrender && this.onrender(data);
     this.header.render();
 
@@ -240,7 +336,7 @@ com.sweattrails.api.Graph.prototype.onData = function (data) {
 };
 
 com.sweattrails.api.Graph.prototype.noData = function () {
-    $$.log(this, "Graph.noData");
+    $$.log(this, "noData");
     this.pleasewait.hidden = true;
     this.onnodata && this.onnodata();
     if (this.canvas) {
@@ -265,7 +361,7 @@ com.sweattrails.api.Graph.prototype.renderData = function (obj) {
 };
 
 com.sweattrails.api.Graph.prototype.clear = function () {
-    this._clear();
+    com.sweattrails.api.Axis.prototype.clear.call(this);
     this.buckets = [];
     this.series.forEach(function (s) {
         s.clear();
@@ -285,7 +381,7 @@ com.sweattrails.api.Graph.prototype.getCoordinates = function (object) {
                 this.range = this.max - this.min;
             }
         }
-        $$.log(this, "Added X coordinates (%d, +%d) max: %d range: %d", x, v, this.max, this.range);
+        // $$.log(this, "Added X coordinates (%d, +%d) max: %d range: %d", x, v, this.max, this.range);
     }
     this.series.forEach(function (s) {
         s.getCoordinate(object);
@@ -301,37 +397,33 @@ com.sweattrails.api.Graph.prototype.onDataEnd = function () {
     }
 };
 
-com.sweattrails.api.Graph.prototype.decorate = function () {
-    if (this.decorator) {
-        this.decorator();
-    } else {
-        this.ctx.textAlign = "center";
-        this.ctx.strokeStyle = "#000000";
-        this.ctx.strokeText(this.min, this.toCanvasXCoordinate(this.min), this.gh - this.pad.bottom);
-        this.ctx.strokeText(this.max, this.toCanvasXCoordinate(this.max), this.gh - this.pad.bottom);
-    }
-};
-
 com.sweattrails.api.Graph.prototype.plot = function () {
     this.pleasewait.hidden = true;
-    this.controls.hidden = false;
+    this.controls.hidden = this.series.length <= 1;
 
     this.createCanvas();
+    this.ctx.save();
     this.ctx.beginPath();
     this.ctx.strokeStyle = "#000000";
+    this.ctx.lineWidth = 2;
     this.ctx.moveTo(this.pad.left, this.pad.top);
     this.ctx.lineTo(this.pad.left, this.gh - this.pad.bottom);
     this.ctx.lineTo(this.gw - this.pad.right, this.gh - this.pad.bottom);
     this.ctx.lineTo(this.gw - this.pad.right, this.pad.top);
     this.ctx.stroke();
+    this.ctx.restore();
 
     this.xscale = this.maxx / this.range;
     $$.log(this, "plot() x.min: %f x.max: %f x.range: %f x.scale: %f",
         this.min, this.max, this.range, this.xscale);
-    this.series.forEach(function (s) {
-        s.plot();
+    this.decorate(0);
+    this.series.forEach(function (s, ix) {
+        /*
+         * First one gets index -1, then 1, then -2, then 2, etc. Negative indicates that the scale goes left,
+         * positive right.
+         */
+        s.plot(Math.floor(-1*Math.pow(-1,ix)*((ix+1)/2)));
     });
-    this.decorate();
 };
 
 com.sweattrails.api.Graph.prototype.redraw = function () {
@@ -370,18 +462,18 @@ com.sweattrails.api.Series.prototype = new com.sweattrails.api.Axis();
 
 com.sweattrails.api.Series.prototype.build = function (elem) {
     this.id = elem.getAttribute("id") || elem.getAttribute("coordinate");
+    com.sweattrails.api.Axis.prototype.build.call(this, elem);
     this.set(elem, "label", function(v) { this.label = v || this.id; });
     this.set(elem, "color", function(v) { this.color = v || this.graph.nextColor(); });
     this.set(elem, "coordinate", this.setProperty);
-    this.set(elem, "type", this.setType);
-    this.set(elem, "decorate", this.setDecorator);
     this.set(elem, "style",
         function(v) {
-            v = v || "line";
-            this.plotter = this[v.toLowerCase() + "Plot"];
-            if (typeof(this.plotter) !== 'function') {
-                this.plotter = this.linePlot();
+            v = v || "Line";
+            var plotter = com.sweattrails.api[v.toTitleCase() + "Plot"];
+            if (typeof(plotter) !== 'function') {
+                plotter = com.sweattrails.api.LinePlot;
             }
+            this.plotter = new plotter(this, elem);
         });
 };
 
@@ -405,18 +497,7 @@ com.sweattrails.api.Series.prototype.render = function () {
     }
 };
 
-com.sweattrails.api.Series.prototype.decorate = function () {
-    if (this.decorator) {
-        this.decorator();
-    } else {
-        this.graph.ctx.textAlign = "right";
-        this.graph.ctx.strokeStyle = "#000000";
-        this.graph.ctx.strokeText(this.min, this.graph.pad.left - 2, this.toCanvasYCoordinate(this.min));
-        this.graph.ctx.strokeText(this.max, this.graph.pad.left - 2, this.toCanvasYCoordinate(this.max));
-    }
-};
-
-com.sweattrails.api.Series.prototype.plot = function () {
+com.sweattrails.api.Series.prototype.plot = function (column) {
     $$.log(this, "plot()");
     if (isNaN(this.min)) {
         this.onoff.hidden = true;
@@ -428,8 +509,8 @@ com.sweattrails.api.Series.prototype.plot = function () {
     this.scale = this.graph.maxy / (this.range * 2);
     $$.log(this, "plot(). y.min: %f y.max: %f y.range: %f y.scale: %f",
         this.min, this.max, this.range, this.scale);
-    this.plotter();
-    this.decorate();
+    this.plotter.plot();
+    this.decorate(column);
 };
 
 com.sweattrails.api.Series.prototype.toCanvasYCoordinate = function (y) {
@@ -445,48 +526,89 @@ com.sweattrails.api.Series.prototype.toCanvasCoordinates = function (ix) {
     };
 };
 
-com.sweattrails.api.Series.prototype.linePlot = function () {
-    var g = this.graph;
+/* ----------------------------------------------------------------------- */
+
+com.sweattrails.api.LinePlot = function(series, elem) {
+    com.sweattrails.api.GritObject.mixin(this);
+    this.series = series;
+    this.set(elem, "fill", null, com.sweattrails.api.BuilderFlags.Boolean);
+};
+
+com.sweattrails.api.LinePlot.prototype.plot = function () {
+    var g = this.series.graph;
     var ctx = g.ctx;
-    ctx.beginPath();
+    ctx.save();
     ctx.strokeStyle = this.color;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = this.series.color;
+    if (typeof(this.fill) === "string") {
+        ctx.fillStyle = this.fill;
+    } else if (this.fill) {
+        var c = __.getColor(this.series.color);
+        c = c.shade(0.7);
+        ctx.fillStyle = c.rgb();
+    }
+    ctx.beginPath();
+    var xy;
     for (var ix = 0; ix < g.coordinates.length; ix++) {
-        var xy = this.toCanvasCoordinates(ix);
+        xy = this.series.toCanvasCoordinates(ix);
         if (ix === 0) {
             ctx.moveTo(xy.x, xy.y);
         } else {
             ctx.lineTo(xy.x, xy.y);
         }
     }
+    if (this.fill) {
+        ctx.lineTo(xy.x, g.gh - g.pad.bottom);
+        ctx.lineTo(g.pad.left, g.gh - g.pad.bottom);
+        ctx.closePath();
+        ctx.fill();
+    }
     ctx.stroke();
+    ctx.restore();
 };
 
-com.sweattrails.api.Series.prototype.barPlot = function () {
-    var g = this.graph;
+/* ----------------------------------------------------------------------- */
+
+com.sweattrails.api.BarPlot = function(series) {
+    this.series = series;
+};
+
+com.sweattrails.api.BarPlot.prototype.plot = function () {
+    var g = this.series.graph;
     var ctx = g.ctx;
-    ctx.strokeStyle = this.color;
-    var c = __.getColor(this.color);
+    ctx.save();
+    ctx.strokeStyle = this.series.color;
+    var c = __.getColor(this.series.color);
     c = c.shade(0.7);
     ctx.fillStyle = c.rgb();
     var ybase = g.gh - g.pad.bottom;
     for (var ix = 0; ix < g.coordinates.length; ix++) {
-        var xy = this.toCanvasCoordinates(ix);
+        var xy = this.series.toCanvasCoordinates(ix);
         var bucketwidth = g.toCanvasXDistance(g.buckets[ix]);
-        $$.log(this, "(%d+%d,%d+%d)", xy.x, bucketwidth, xy.y, ybase - xy.y);
+        // $$.log(this, "(%d+%d,%d+%d)", xy.x, bucketwidth, xy.y, ybase - xy.y);
         ctx.roundedRect(xy.x, xy.y, bucketwidth, ybase - xy.y, 5, true);
     }
+    ctx.restore();
 };
 
-com.sweattrails.api.Series.prototype.scatterPlot = function () {
-    var g = this.graph;
+/* ----------------------------------------------------------------------- */
+
+com.sweattrails.api.ScatterPlot = function(series) {
+    this.series = series;
+};
+
+com.sweattrails.api.ScatterPlot.prototype.plot = function () {
+    var g = this.series.graph;
     var ctx = g.ctx;
-    ctx.fillStyle = this.color;
-    ctx.beginPath();
+    ctx.save();
+    ctx.fillStyle = this.series.color;
     for (var ix = 0; ix < g.coordinates.length; ix++) {
-        var xy = this.toCanvasCoordinates(g.coordinates[ix], this.coordinates[ix]);
+        var xy = this.series.toCanvasCoordinates(ix);
         ctx.arc(xy.x, xy.y, 3, 0, 2 * Math.PI, true);
         ctx.fill();
     }
+    ctx.restore();
 };
 
 /**

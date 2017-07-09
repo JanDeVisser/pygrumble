@@ -6,16 +6,16 @@
     	"level": "debug", "destination": "file", "append": false
     },
     "__main__": { "destination": "stderr" },
-  
+
     "sweattrails.device.ant": { "flat": true, "destination": "file", "level": "debug" },
     "__sweattrails.device.fitparse": { "flat": true, "destination": "file" },
     "sweattrails.qt.imports": { "destination": "stderr", "flat": true, "level": "debug" },
     "sweattrails": { "flat": true },
     "srtm": { "destination": "stderr", "flat": true },
-  
+
     "gripe": { "flat": true },
-    "gripe.db": { "flat": true, "level": "info" },
-    
+    "gripe.db": { "flat": true, "level": "debug" },
+
     "grudge": { "flat": true },
     "grit": { "flat": true },
     "grizzle": { "flat": true },

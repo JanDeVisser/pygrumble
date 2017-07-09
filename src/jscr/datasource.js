@@ -30,7 +30,7 @@ com.sweattrails.api.internal.DataSource = function(id) {
     this._submitparams = {};
     this.view = [];
     this._sort = [];
-    this._flags = [];
+    this._flags = {};
 };
 
 com.sweattrails.api.internal.DataSource.prototype.addView = function(v) {
@@ -58,6 +58,11 @@ com.sweattrails.api.internal.DataSource.prototype.flags = function() {
 com.sweattrails.api.internal.DataSource.prototype.parameter = function(param, value) {
     $$.log(this, "parameter(%s = %s [%s])", param, value, typeof(value));
     this._parameters[param] = value;
+};
+
+com.sweattrails.api.internal.DataSource.prototype.delParameter = function(param) {
+    $$.log(this, "delParameter(%s = %s)", param, this._parameters[param]);
+    delete this._parameters[param];
 };
 
 com.sweattrails.api.internal.DataSource.prototype.parameters = function() {
@@ -268,9 +273,10 @@ com.sweattrails.api.JSONDataSource.prototype.onJSONData = function(data) {
 
 com.sweattrails.api.JSONDataSource.prototype.execute = function() {
     $$.log(this, "JSONDataSource.execute()");
-    var submit = (arguments.length == 0) ? false : arguments[0];
+    var submit = (arguments.length === 0) ? false : arguments[0];
     var contenttype = (submit) ? this.contenttype : com.sweattrails.api.HttpContentType.plain;
     this.request = com.sweattrails.api.getRequest(contenttype, this.url);
+    this.method && (this.request.method = this.method);
     this.request.datasource = this;
     this.setParameters(submit);
     this.request.execute();
@@ -324,6 +330,9 @@ com.sweattrails.api.JSONDataSourceBuilder.prototype.build = function(elem) {
     var ds = new com.sweattrails.api.JSONDataSource(contenttype, url, elem.getAttribute("dsid"));
     if (elem.getAttribute("async")) {
     	ds.async = elem.getAttribute("async") === "true";
+    }
+    if (elem.getAttribute("method")) {
+        ds.method = elem.getAttribute("method");
     }
     ds.debug = false;
     if (elem.getAttribute("debug")) {

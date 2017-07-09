@@ -7,7 +7,11 @@ __date__ ="$17-Sep-2013 8:38:26 PM$"
 
 import base64
 import urllib
+
+import gripe
 import grumble.meta
+
+logger = gripe.get_logger(__name__)
 
 class Key(object):
     def __new__(cls, *args):
@@ -65,7 +69,11 @@ class Key(object):
         value = str(value)
         arr = value.split(":")
         if len(arr) == 1:
-            self._assign(base64.urlsafe_b64decode(value))
+            try:
+                self._assign(base64.urlsafe_b64decode(value))
+            except TypeError:
+                #logger.exception("Could not decode key '%s'", value)
+                raise
         else:
             self.id = base64.urlsafe_b64encode(value)
             self._kind = grumble.meta.Registry.get(arr[0]).kind()

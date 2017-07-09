@@ -3,7 +3,7 @@
     "version": "1.0",
     "usermanager": "grizzle.UserManager",
     "mounts": [
-        { "path": "/profile", "_app": "sweattrails.web.app", "roles": [ "user" ]},
+        { "path": "/profile", "app": "grizzle.app", "roles": [ "user" ]},
         { "path": "/users/?|/users/.+", "app": "grizzle.app", "roles": [ "admin" ]},
         { "path": "/weight", "_app": "sweattrails.web.app", "roles": [ "user" ]}
     ],

@@ -14,19 +14,14 @@ com.sweattrails.api.internal.format.float = function(value, col) {
 com.sweattrails.api.internal.format.time = function(value) { return prettytime(seconds_to_time(value)); };
 com.sweattrails.api.internal.format.date = format_date;
 com.sweattrails.api.internal.format.datetime = format_datetime;
-com.sweattrails.api.internal.format.distance = function(value) { return format_distance(value); };
-com.sweattrails.api.internal.format.weight = function(value) { return weight(value, native_unit, true); };
-com.sweattrails.api.internal.format.length = function(value) { return length(value, native_unit, true); };
 
 com.sweattrails.api.internal.build.icon = function(col, elem) {
     col.align = "center";
     col.icons = {};
     var icons = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "icon");
     for (var ix = 0; ix < icons.length; ix++) {
-	var i = icons[ix];
-        var value = i.getAttribute("value");
-        var icon = i.getAttribute("icon");
-	col.icons[value] = icon;
+	    var i = icons[ix];
+	    col.icons[i.getAttribute("value")] = i.getAttribute("icon");
     }
 };
 
@@ -204,8 +199,14 @@ com.sweattrails.api.Table.prototype.onData = function(data) {
     this.table.appendChild(this.headerrow);
     this.rowcolor = 'white';
 
+    var th;
+    if (this.counter) {
+        th = document.createElement("th");
+        th.innerHTML = "#";
+        this.headerrow.appendChild(th);
+    }
     for (var i = 0; i < this.columns.length; i++) {
-        var th = document.createElement("th");
+        th = document.createElement("th");
         var coldef = this.columns[i];
         if (coldef.width) {
             th.width = coldef.width;
@@ -213,6 +214,7 @@ com.sweattrails.api.Table.prototype.onData = function(data) {
         th.innerHTML = coldef.label;
         this.headerrow.appendChild(th);
     }
+    this.count = 0;
 };
 
 com.sweattrails.api.Table.prototype.noData = function() {
@@ -237,9 +239,17 @@ com.sweattrails.api.Table.prototype.renderData = function(obj) {
     } else {
         this.rowcolor = 'white';
     }
+    this.count++;
+    var td;
+    if (this.counter) {
+        td = document.createElement("td");
+        td.style.textAlign = "center";
+        td.innerHTML = "" + this.count + ".";
+        tr.appendChild(td);
+    }
     for (var i = 0; i < this.columns.length; i++) {
         var coldef = this.columns[i];
-        var td = document.createElement("td");
+        td = document.createElement("td");
         if (coldef.align) td.style.textAlign = coldef.align;
         var data = coldef.getValue(obj);
         if (!data) {
@@ -357,6 +367,7 @@ com.sweattrails.api.TableBuilder.prototype.process = function(t) {
         table.initForm(form_ds);
         _.formbuilder.buildForm(table.form, formelem);
     }
+    table.counter = t.getAttribute("counter") != null;
     var columns = getChildrenByTagNameNS(t, com.sweattrails.api.xmlns, "column");
     for (var j = 0; j < columns.length; j++) {
         var c = columns[j];

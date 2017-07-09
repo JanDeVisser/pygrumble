@@ -31,11 +31,24 @@ class SessionHandler(grit.handlers.PageHandler):
         q['"athlete" = '] = str(self.user.key())
         return q
 
+    def _get_run_context(self, ctx):
+        activity = ctx["object"]
+        q = sweattrails.session.RunPace.query(parent=activity.intervalpart, _sortorder="distance",
+                                              include_subclasses=False, keys_only=False)
+        ctx["paces"] = [p for p in filter(lambda obj: isinstance(obj, dict) or obj.can_read(), q)]
+
+    def _get_bike_context(self, ctx):
+        pass
+
+    def _get_swim_context(self, ctx):
+        pass
+
     def get_context(self, ctx):
         super(SessionHandler, self).get_context(ctx)
         activity = ctx["object"]
         if activity:
-            q = sweattrails.session.Interval.query(parent=activity)
+            q = sweattrails.session.Interval.query(parent=activity, _sortorder="timestamp",
+                                                   include_subclasses=False, keys_only=False)
             intervals = [o for o in filter(lambda obj: isinstance(obj, dict) or obj.can_read(), q)]
             if len(intervals):
                 ctx["intervals"] = intervals
@@ -43,6 +56,15 @@ class SessionHandler(grit.handlers.PageHandler):
             ctx["has_power"] = hasattr(activity.intervalpart, "max_power") and (activity.intervalpart.max_power > 0)
             ctx["has_cadence"] = hasattr(activity.intervalpart, "max_cadence") and \
                 (activity.intervalpart.max_cadence > 0)
+            if isinstance(activity.intervalpart, sweattrails.session.RunPart):
+                ctx["activitytype"] = "run"
+                self._get_run_context(ctx)
+            elif isinstance(activity.intervalpart, sweattrails.session.BikePart):
+                ctx["activitytype"] = "bike"
+                self._get_bike_context(ctx)
+            elif isinstance(activity.intervalpart, sweattrails.session.SwimPart):
+                ctx["activitytype"] = "swim"
+                self._get_swim_context(ctx)
         return ctx
 
 

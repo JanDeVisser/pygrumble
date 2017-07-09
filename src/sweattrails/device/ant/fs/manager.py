@@ -205,9 +205,9 @@ class Manager(object):
                 self._status_msg("Authenticating with {} ({})... Passkey... FAILED", self._peer_name, self._peer_serial)
                 raise
         else:
-            self.log("Authenticating with {} ({})... Pairing... ", self._peer_name, self._peer_serial)
+            self._status_msg("Authenticating with {} ({})... Pairing... ", self._peer_name, self._peer_serial)
             try:
-                passkey = self.authentication_pair(callback.get_ant_product_name())
+                passkey = self.authentication_pair(self._product_name)
                 callback.set_passkey(self, self._peer_serial, passkey)
                 self._status_msg("Authenticating with {} ({})... Pairing... OK.", self._peer_name, self._peer_serial)
             except sweattrails.device.ant.fs.manager.AntFSAuthenticationException:
@@ -278,7 +278,8 @@ class Manager(object):
         callback = callback or self._callback
         if callback and hasattr(callback, "on_stop"):
             callback.on_stop(self)
-        self._node.stop()
+        if hasattr(self, "_node"):
+            self._node.stop()
         if callback and hasattr(callback, "stopped"):
             callback.stopped(self)
     

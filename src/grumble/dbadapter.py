@@ -247,10 +247,6 @@ class ModelQueryRenderer(object):
                 if custom_condition:
                     sql += glue + custom_condition
             if query_type == QueryType.Columns and self.sortorder():
-                for cc in self.sortorder():
-                    print cc.colname, type(cc.colname), cc.order(), type(cc.order())
-                ss = [('"' + c.colname + '" ' + c.order()) for c in self.sortorder()]
-                print ss
                 sql += ' ORDER BY ' + ', '.join([('"' + c.colname + '" ' + c.order()) for c in self.sortorder()])
             if self.limit():
                 sql += ' LIMIT ' + self.limit()

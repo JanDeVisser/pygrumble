@@ -55,7 +55,6 @@ class Model():
         for (propname, propvalue) in kwargs.items():
             if propname in ret._allproperties:
                 setattr(ret, propname, propvalue)
-        logger.debug("%s.__new__: %s", ret.kind(), ret._values)
         return ret
 
     @classmethod
@@ -145,7 +144,6 @@ class Model():
             self._ancestors = "/"
 
     def _populate(self, values):
-        logger.debug("%s._populate(%s)", self.kind(), values)
         if values is not None:
             self._values = {}
             v = {}
@@ -159,13 +157,8 @@ class Model():
             for prop in [p for p in self._properties.values() if not p.transient]:
                 prop._update_fromsql(self, v)
             self._set_ancestors(ancestors, parent)
-            logger.debug("%s._populate: _key_name: %s", self.kind(), self._key_name)
-            logger.debug("%s._populate: hasattr(key_prop): %s", self.kind(), hasattr(self, "key_prop"))
             if (self._key_name is None) and hasattr(self, "key_prop"):
-                logger.debug("Assigning key from key property: %s", self.key_prop)
                 self._key_name = getattr(self, self.key_prop)
-            else:
-                logger.debug("No key prop. Using key_name %s", self._key_name)
             self._id = self.key().id
             self._exists = True
             if hasattr(self, "after_load") and callable(self.after_load):
@@ -185,7 +178,6 @@ class Model():
 
     def _store(self):
         self._load()
-        logger.info("Storing model %s.%s", self.kind(), self.keyname())
         if hasattr(self, "_brandnew"):
             for prop in self._properties.values():
                 prop._on_insert(self)
@@ -344,18 +336,14 @@ class Model():
             self._load()
             return self._exists
 
-    def _to_dict(self, d, **flags):
-        pass
-
     def to_dict(self, **flags):
         with gripe.LoopDetector.begin(self.id()) as detector:
             if detector.loop:
                 logger.info("to_dict: Loop detected. %s is already serialized", self)
                 return { "key": self.id() }
             p = self.parent_key()
-            ret = { "key": self.id(), 'parent': p.id if p else None }
+            ret = {"key": self.id(), 'parent': p.id if p else None}
             detector.add(self.id())
-            logger.debug("to_dict: Added %s to loop detector", self)
             for b in self.__class__.__bases__:
                 if hasattr(b, "_to_dict") and callable(b._to_dict):
                     b._to_dict(self, ret, **flags)
@@ -364,7 +352,7 @@ class Model():
                 if prop.private:
                     return ret
                 if hasattr(self, "to_dict_" + name) and callable(getattr(self, "to_dict_" + name)):
-                    return getattr(self, "to_dict_" + name)(ret)
+                    return getattr(self, "to_dict_" + name)(ret, **flags)
                 else:
                     try:
                         ret[name] = prop._to_json_value(self, getattr(self, name))
@@ -382,8 +370,6 @@ class Model():
 
     @classmethod
     def _deserialize(cls, descriptor):
-        logger.debug("""_deserialize: descriptor %s
-        props %s""", descriptor, cls._allproperties.keys())
         for name, prop in filter(lambda (name, prop): ((not prop.private) and (name in descriptor)), cls._allproperties.items()):
             value = descriptor[name]
             try:
@@ -395,7 +381,6 @@ class Model():
 
     def _update_deserialized(self, descriptor, **flags):
         self._load()
-        logger.info("Updating model %s.%s using descriptor %s", self.kind(), self.keyname(), descriptor)
         try:
             for b in self.__class__.__bases__:
                 if hasattr(b, "_update") and callable(b._update):
@@ -404,14 +389,11 @@ class Model():
                 name = prop.name
                 try:
                     value = descriptor[name]
-                    logger.debug("Updating %s.%s to %s", self.kind(), name, value)
                     if hasattr(self, "update_" + name) and callable(getattr(self, "update_" + name)):
-                        logger.debug("Using update hook update_%s", name)
                         getattr(self, "update_" + name)(descriptor)
                     else:
                         setattr(self, name, value)
                 except:
-                    logger.exception("Could not assign value '%s' to property '%s'", value, name)
                     raise
             self.put()
             if hasattr(self, "on_update") and callable(self.on_update):
@@ -428,8 +410,6 @@ class Model():
     def create(cls, descriptor = None, parent = None, **flags):
         if descriptor is None:
             descriptor = {}
-        logger.info("Creating new %s model from descriptor %s", cls.__name__, descriptor)
-        obj = None
         try:
             kwargs = { "parent": parent }
             descriptor = cls._deserialize(descriptor)
@@ -508,7 +488,6 @@ class Model():
     def add_property(cls, propname, propdef):
         if not isinstance(propdef, (grumble.property.ModelProperty, grumble.property.CompoundProperty)):
             return
-        logger.debug("'%s'.add_property('%s')", cls.__name__, propname)
         assert not cls._sealed, "Model %s is sealed. No more properties can be added" % cls.__name__
         if not hasattr(cls, propname):
             setattr(cls, propname, propdef)
@@ -651,12 +630,15 @@ class Model():
             elif k == "ownerid":
                 q.owner(v)
             elif k == "_sortorder":
-                order = kwargs["_sortorder"];
-                if isinstance(order, (list, tuple)):
-                    for s in kwargs["_sortorder"]:
-                        q.add_sort(s["column"], s.get("ascending", True))
-                else:
-                    q.add_sort(order["column"], order.get("ascending", True))
+                def _add_sortorder(q, order):
+                    if isinstance(order, (list, tuple)):
+                        for s in order:
+                            _add_sortorder(q, s)
+                    elif isinstance(order, dict):
+                        q.add_sort(order["column"], order.get("ascending", True))
+                    else:
+                        q.add_sort(str(order), True)
+                _add_sortorder(q, v)
             elif isinstance(v, (list, tuple)):
                 q.add_filter(k, *v)
             elif k in ("keys_only", "include_subclasses"):
@@ -736,13 +718,19 @@ class Model():
 
 def delete(model):
     ret = 0
-    if not hasattr(model, "_brandnew") and model.exists():
+    if model is not None and not hasattr(model, "_brandnew") and model.exists():
         if model._on_delete():
             logger.info("Deleting model %s.%s", model.kind(), model.key())
             ret = grumble.query.ModelQuery.delete_one(model.key())
         else:
             logger.info("on_delete trigger prevented deletion of model %s.%s", model.kind(), model.key())
     return ret
+
+
+def query(kind, *args, **kwargs):
+    kind = grumble.meta.Registry.get(kind)
+    q = kind.query(*args, **kwargs)
+    return q.fetchall()
 
 
 def abstract(cls):

@@ -24,7 +24,7 @@ import gripe
 import gripe.db
 import grumble.model
 import grumble.property
-import sweattrails.qt.imports
+import sweattrails.qt.async.job
 import sweattrails.userprofile
 
 logger = gripe.get_logger(__name__)
@@ -34,12 +34,14 @@ withings_public_key = "82435cd4a1ca8d8b"
 withings_host = "wbsapi.withings.net"
 withings_url = "/measure?action=getmeas&userid=%s&publickey=%s&category=1"
 
+
 class WithingsMeasurement(grumble.model.Model):
     timestamp = grumble.property.DateTimeProperty()
     type = grumble.property.IntegerProperty()
     value = grumble.property.FloatProperty()
 
-class WithingsJob(sweattrails.qt.imports.Job):
+
+class WithingsJob(sweattrails.qt.async.job.Job):
     def __init__(self):
         super(WithingsJob, self).__init__()
 

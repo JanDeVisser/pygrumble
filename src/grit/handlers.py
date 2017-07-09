@@ -223,7 +223,7 @@ class ImageHandler(PropertyBridgedHandler):
         logger.debug("ImageHandler.post(%s.%s, %s)", kind, prop, key)
         self._initialize_bridge(key, kind, prop)
         has_access = True
-        if hasattr(self, "allow_access") and callable(self.allow__access):
+        if hasattr(self, "allow_access") and callable(self.allow_access):
             has_access = self.allow_access()
         if has_access:
             if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
@@ -267,9 +267,10 @@ class JSONHandler(BridgedHandler):
         return self._query.get("parent")
 
     def update(self, d, **flags):
-        self.object() and self.can_update() and self.object().update(d, **flags)
+        return self.object() and self.can_update() and self.object().update(d, **flags)
 
     def create(self, descriptor, **flags):
+        self._obj = False
         if self.can_create():
             self._obj = self.kind().create(descriptor, self.get_parent(), **flags)
             self._key = self._obj and self._obj.id()
@@ -290,6 +291,11 @@ class JSONHandler(BridgedHandler):
 
     def initialize_bridge(self):
         data = self.request.body if self.request.method == "POST" else self.request.headers.get("ST-JSON-Request")
+        if not data:
+            params = {}
+            for n in self.request.params:
+                params[str(n)] = json.loads(str(self.request.params[n]))
+            data = json.dumps(params)
         if data and data != '':
             data = urllib.unquote_plus(data)
             if data.endswith("="):
@@ -322,20 +328,20 @@ class JSONHandler(BridgedHandler):
             for d in descriptors:
                 if "key" in d:
                     self.key(d["key"], True)
-                if "_invoke" in d and "name" in d["_method"]:
+                if "_invoke" in d and "name" in d["_invoke"]:
                     ret.append(self.invoke(d["_invoke"]))
                 else:
                     if self.key():
-                        self.update(d, **self._flags)
+                        ret.append(self.update(d, **self._flags))
                     else:
-                        self.create(d, **self._flags)
-                    if self.object():
-                        obj = self.object()
-                        ret.append(obj.to_dict(**self._flags)
-                                   if isinstance(obj, grumble.Model)
-                                   else obj)
-            ret = ret[0] if len(ret) == 1 else ret
+                        ret.append(self.create(d, **self._flags))
+            ret = [o.to_dict(**self._flags)
+                   if hasattr(o, "to_dict") and callable(o.to_dict)
+                   else o
+                   for o in ret]
             logger.info("JSONHandler.post => %s", ret)
+            ret = {"meta": {"schema": self.get_schema(), "count": len(ret)}, "data": ret}
+            logger.debug("JSONHandler(POST) returns\n%s", ret)
             self.json_dump(ret)
             return
         self.error(401)
@@ -351,13 +357,15 @@ class JSONHandler(BridgedHandler):
                 if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
                     self.initialize_bridge()
                 objs = self.get_objects()
-                data = [o.to_dict(**self._flags) if hasattr(o, "to_dict") else o
+                data = [o.to_dict(**self._flags)
+                        if hasattr(o, "to_dict") and callable(o.to_dict)
+                        else o
                         for o in objs] if objs else None
                 count = 0 if data is None else len(data)
                 data = data if data is None or len(data) > 1 else data[0]
                 meta = {"schema": self.get_schema(), "count": count}
                 ret = {"meta": meta, "data": data}
-                # logger.debug("JSONHandler returns\n%s", ret)
+                logger.debug("JSONHandler returns\n%s", ret)
                 self.json_dump(ret)
                 return
             self.error(401)
@@ -378,7 +386,10 @@ class JSONHandler(BridgedHandler):
             for o in objs:
                 self.object(o)
                 self.delete_obj()
-            self.status = "204 No Content"
+            if self.request.get("redirect"):
+                self.redirect(self.request.get("redirect"))
+            else:
+                self.status = "204 No Content"
         else:
             self.error(401)
 

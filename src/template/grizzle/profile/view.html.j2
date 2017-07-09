@@ -1,20 +1,16 @@
-{% extends "base.html.j2" %}
-
-{% block imports %}
-<!-- <script src="/js/users.js" type="text/javascript"></script> -->
-{% endblock %}
+{% extends "sweattrails/sweattrails.html.j2" %}
 
 {% block tabs %}
 
 <st:tab code="profile" label="Profile">
-    <st:form name="user" url="/json/user/{{key}}">
+    <st:form name="user" url="/json/user/{{user.key()}}">
         <st:flag name="include_parts"/>
         <st:field id="profile" type="title" text="User Profile"/>
         <st:field id="email" type="text" property="email" label="Email" readonly="true"/>
         <st:field id="display_name" type="text" property="display_name" label="Name" required="true"/>
         <st:field id="country" type="lookup" property="_userprofile.country" label="Country"
                   url="/json/country" text="countryname" key="countrycode"/>
-        <st:field id="location" type="geocode" property="_userprofile.location" label="Location"/>
+        <st:field id="location" type="text" property="_userprofile.location" label="Location"/>
         <st:field id="dob" type="date" property="_userprofile.dob" label="Birthdate"/>
         <st:field id="gender" type="lookup" property="_userprofile.gender" label="Gender" presentationtype="radio">
             <st:value text="Female" key="female"/>

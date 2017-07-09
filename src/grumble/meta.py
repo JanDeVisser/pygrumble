@@ -40,8 +40,8 @@ class ModelMetaClass(type):
             kind._audit = dct.get("_audit", True)
             acl = gripe.Config.model["model"][name]["acl"] \
                 if "model" in gripe.Config.model and \
-                    name in gripe.Config.model["model"] and \
-                    "acl" in gripe.Config.model["model"][name] \
+                   name in gripe.Config.model["model"] and \
+                   "acl" in gripe.Config.model["model"][name] \
                 else dct.get("acl", None)
             kind._acl = gripe.acl.ACL(acl)
             kind._properties = {}
@@ -93,7 +93,6 @@ class Registry(dict):
             hierarchy.append(name)
             fullname = ".".join(hierarchy)
         fullname = fullname.lower()
-        logger.debug("Registry.register(%s) => %s", fullname, modelclass)
         assert fullname not in cls._get_registry(), "Registry.register(%s): Already registered" % fullname
         reg[fullname] = modelclass
         modelclass._kind = fullname

@@ -42,6 +42,13 @@ if (typeof(String.prototype.startsWith) !== 'function') {
         return this.indexOf(prefix) === 0;
     };
 }
+if (typeof(String.prototype.toTitleCase) !== 'function') {
+    String.prototype.toTitleCase = function() {
+        return this.replace(/\w\S*/g, function(txt) {
+            return txt.charAt(0).toLocaleUpperCase() + txt.substr(1).toLocaleLowerCase();
+        });
+    };
+}
 
 
 if (typeof(com) !== 'object') {
@@ -97,6 +104,8 @@ com.sweattrails.api.dump = function(o) {
     }
     console.dir(o)
 };
+
+/* -- M A N A G E R ------------------------------------------------------ */
 
 com.sweattrails.api.Manager = function() {
     this.id = "APIManager";
@@ -205,6 +214,21 @@ com.sweattrails.api.Manager.prototype.dispatch = function(d) {
     }
 };
 
+com.sweattrails.api.internal.asyncHandler = function () {
+    for (var obj = $$.asyncQueue.pop(); obj; obj = $$.asyncQueue.pop()) {
+        obj.onASync && obj.onASync();
+    }
+};
+
+com.sweattrails.api.Manager.prototype.async = function(obj) {
+    if (typeof(this.asyncQueue) === "undefined") {
+        this.asyncQueue = [];
+        setInterval(com.sweattrails.api.internal.asyncHandler, 0);
+    }
+    this.asyncQueue.push(obj);
+};
+
+
 com.sweattrails.api.Manager.prototype.objectlabel = function(obj) {
     var o = "";
     if (obj) {
@@ -248,6 +272,8 @@ __ = com.sweattrails.api;
 ___ = com.sweattrails.api.internal;
 $$ = __.STManager;
 _ = $$.objects;
+
+/* -- T A B -------------------------------------------------------------- */
 
 com.sweattrails.api.BasicTab = function() {
     this.onSelect = null;
@@ -305,6 +331,8 @@ com.sweattrails.api.internal.Tab.prototype.unselect = function() {
     this.href.className = "greylink";
     this.page.hidden = true;
 };
+
+/* -- T A B M A N A G E R ------------------------------------------------ */
 
 com.sweattrails.api.TabManager = function() {
     if (com.sweattrails.api.tabManager) {
@@ -385,11 +413,10 @@ com.sweattrails.api.TabManager.prototype.drawTab = function(tab) {
     tabbox.appendChild(span);
     tab.header = span;
     tab.href = document.createElement("a");
-    tab.href.className = "whitelink";
+    tab.href.className = "greylink";
     tab.href.href = "#";
     tab.href.innerHTML = tab.label;
     tab.href.tab = tab;
-    tab.href.onclick = onclick;
     span.appendChild(tab.href);
 
     tab.page = document.getElementById("page_" + tab.code);
@@ -406,23 +433,26 @@ com.sweattrails.api.TabManager.prototype.drawTab = function(tab) {
 
 com.sweattrails.api.TabManager.prototype.selectTab = function(code) {
     $$.log(this, "selectTab(" + code + ")");
-    for (var tabcode in this.tabs) {
-        if (!this.tabs.hasOwnProperty(tabcode)) {
-            continue;
-        }
-        var tab = this.tabs[tabcode];
-        if (code === tabcode) {
-            if (tab.header.className !== "tab_selected") {
-                tab.select();
+    var newtab = this.tabs[code];
+    if (newtab) {
+        for (var tabcode in this.tabs) {
+            var tab = this.tabs[tabcode];
+            if (tab.header.className === "tab_selected") {
+                if (tabcode !== code) {
+                    tab.unselect();
+                } else {
+                    return true;
+                }
             }
-        } else if (tab.header.className === "tab_selected") {
-            tab.unselect();
         }
+        newtab.select();
     }
-    return true;
+    return typeof(newtab) !== 'undefined';
 };
 
 com.sweattrails.api.tabManager = new com.sweattrails.api.TabManager();
+
+/* ----------------------------------------------------------------------- */
 
 com.sweattrails.api.internal.DataBridge = function() {
     this.get = (arguments.length > 0) ? arguments[0] : null;
@@ -443,12 +473,17 @@ com.sweattrails.api.internal.DataBridge.prototype.setValue = function(object, va
     }
 };
 
-com.sweattrails.api.internal.DataBridge.prototype.getValue = function(object, context) {
+com.sweattrails.api.internal.DataBridge.prototype.getValue = function(object) {
     try {
+        var dbg = (arguments.length > 2) ? arguments[2] : false;
+        var context = (arguments.length > 1) ? arguments[1] : window;
         var ret = null;
         var g = this.get;
         if (g && (typeof(g) === "string") && g.endsWith("()")) {
-            g = __.getfunc(g.substring(0, g.length() - 2));
+            g = __.getfunc(g.substring(0, g.length - 2));
+        }
+        if (dbg) {
+            __.dump(object, "bridge.getValue(%s)", g);
         }
         if (typeof(g) === "function") {
             ret = g(object, context);
@@ -462,6 +497,19 @@ com.sweattrails.api.internal.DataBridge.prototype.getValue = function(object, co
         throw e;
     }
 };
+
+com.sweattrails.api.internal.DataBridge.prototype.clear = function(object) {
+    var s = this.set || this.get;
+    if (s && (typeof(s) === "string") && s.endsWith("()")) {
+        s = __.getfunc(s.substring(0, s.length() - 2));
+    }
+    if (typeof(s) === "function") {
+    	s(object, null);
+    } else if (s) {
+        __.clearvar(s, object);
+    }
+};
+
 /* ----------------------------------------------------------------------- */
 
 com.sweattrails.api.internal.walkname = function (name, ns) {
@@ -530,6 +578,7 @@ com.sweattrails.api.getfunc = function (func, ns, thisObj) {
     if (typeof(func) === "function") {
         f = func;
     } else {
+        ns = (arguments.length > 1) ? ns : null;
         var v = __.getvar(func, ns);
         f = (typeof(v) === "function") && v;
     }
@@ -549,6 +598,7 @@ com.sweattrails.api.BuilderFlags = {};
 com.sweattrails.api.BuilderFlags.Int = 1;
 com.sweattrails.api.BuilderFlags.Float = 2;
 com.sweattrails.api.BuilderFlags.Function = 4;
+com.sweattrails.api.BuilderFlags.Boolean = 8;
 
 com.sweattrails.api.Builder = function(tagname, objclass) {
     if (tagname) {
@@ -589,8 +639,11 @@ com.sweattrails.api.GritObject.set = function (elem, tag, property, flags) {
         if (!converted && (flags | com.sweattrails.api.BuilderFlags.Float)) {
             converted = parseFloat(val);
         }
-        if (!converted && (flags | com.sweattrails.api.BuilderFlags.Function)) {
-            converted = __.getfunc(val, null, this);
+        if (!converted && (flags | com.sweattrails.api.BuilderFlags.Function) && (val.endsWith("()"))) {
+            converted = __.getfunc(val.substring(0, val.length - 2));
+        }
+        if (!converted && (flags | com.sweattrails.api.BuilderFlags.Boolean)) {
+            converted = val === "true";
         }
     }
     if (!converted) {
@@ -768,26 +821,11 @@ function password_changed() {
  * MOVE ME MOVE ME
  */
 
-var units = [ "metric", "imperial "];
-var native_unit = "metric";
-
-function metric() { return (native_unit === "m"); }
-function imperial() { return (native_unit === "i"); }
-
 function rpad(num, width) {
     var n = num + "";
     while (n.length < 2) n = "0" + n;
     return n;
 }
-
-var units_table = {
-    distance: { m: 'km', i: 'mile',           factor_i: 0.621371192, factor_m: 1.0 },
-    speed:    { m: 'km/h', i: 'mph',          factor_i: 0.621371192, factor_m: 1.0 },
-    pace:     { m: 'min/km', i:	'min/mile' },
-    length:   { m: 'cm', i: 'in',             factor_i: 0.393700787, factor_m: 1.0 },
-    weight:   { m: 'kg', i: 'lbs',            factor_i: 2.20462262, factor_m: 1.0 },
-    height:   { m: 'm', i: 'ft/in' }
-};
 
 function obj_to_datetime(obj) {
     if (obj) {
@@ -851,36 +889,9 @@ function time_after_offset(t, offset) {
     return seconds_to_time(timeobj_to_seconds(t) - offset);
 }
 
-function format_distance(value, metric_imperial) {
-    if (!metric_imperial) metric_imperial = native_unit;
-    if (!value) value = 0;
-    var meters = parseInt(value);
-    if (metric_imperial.toLowerCase().substr(0,1) === "m") {
-        if (meters < 1000) {
-            return meters + " m";
-        } else {
-            var km = parseFloat(value) / 1000.0;
-            if (km < 10) {
-                return km.toFixed(3) + " km";
-            } else if (meters < 100) {
-                return km.toFixed(2) + " km";
-            } else {
-                return km.toFixed(1) + " km";
-            }
-        }
-    } else {
-        var miles = meters * 0.0006213712;
-        if (miles < 100) {
-            return miles.toFixed(3) + " mi";
-        } else {
-            return miles.toFixed(2) + " mi";
-        }
-    }
-}
-
 function format_date(d) {
     if (d && (d.year > 0) && (d.month > 0) && (d.day > 0)) {
-        return (metric())
+        return (true /* metric() */)
             ? rpad(d.day, 2) + "-" + rpad(d.month, 2) + "-" + d.year
             : rpad(d.month, 2) + "/" + rpad(d.day, 2) + "/" + d.year;
     } else {
@@ -889,7 +900,7 @@ function format_date(d) {
 }
 
 function format_time(d) {
-    if (imperial()) {
+    if (false /* imperial() */) {
         var ampm = ((d.hour < 12) && "am") || "pm";
         return rpad(((d.hour < 13) && d.hour) || (d.hour - 12), 2)  + ":" + rpad(d.minute, 2) + ampm;
     } else {
@@ -921,169 +932,6 @@ function prettytime(value) {
     }
     ret += value.second + "s";
     return ret;
-}
-
-function unit(which, metric_imperial) {
-    if (!metric_imperial) metric_imperial = native_unit;
-    return units_table[which][metric_imperial.toLowerCase().substr(0,1)];
-}
-
-function speed_ms_to_unit(spd, metric_imperial) {
-    if (!metric_imperial) metric_imperial = native_unit;
-    var kmh = spd * 3.6;
-    if (metric_imperial.toLowerCase().substr(0,1) === 'm') {
-	    return kmh;
-    } else {
-	    return kmh*0.6213712;
-    }
-}
-
-function speed(spd_ms, metric_imperial, include_unit) {
-    if (arguments.length < 3) {
-        include_unit = true;
-    }
-    if (!metric_imperial) {
-        metric_imperial = native_unit;
-    }
-    var spd = speed_ms_to_unit(spd_ms, metric_imperial);
-    var ret = spd.toFixed(2);
-    if (include_unit) {
-	    ret += " " + unit('speed', metric_imperial);
-    }
-    return ret;
-}
-
-function avgspeed(distance, t, metric_imperial, include_unit) {
-    if (arguments.length < 4) {
-        include_unit = true;
-    }
-    if (!metric_imperial) {
-        metric_imperial = native_unit;
-    }
-    var seconds = 3600*t.hour + 60*t.minute + t.second;
-    return speed(distance / seconds, metric_imperial, include_unit);
-}
-
-function pace_as_number(speed_ms, metric_imperial) {
-    if (!metric_imperial) {
-        metric_imperial = native_unit;
-    }
-    var spd = speed_ms_to_unit(speed_ms, metric_imperial, false);
-    var p = 60 / spd;
-    return p.toFixed(2);
-}
-
-function pace(speed_ms, metric_imperial, include_unit) {
-    if (arguments.length < 3) {
-        include_unit = true;
-    }
-    if (!metric_imperial) {
-        metric_imperial = native_unit;
-    }
-    var spd = speed_ms_to_unit(speed_ms, metric_imperial, false);
-    var p = 60 / spd;
-    var pmin = Math.floor(p);
-    var psec = Math.floor((p - pmin) * 60);
-    var ret = pmin + ":";
-    if (psec < 10) {
-	    ret += "0";
-    }
-    ret += psec;
-    if (include_unit) {
-	    ret += " " + unit("pace", metric_imperial);
-    }
-    return ret;
-}
-
-
-function avgpace(distance, t, metric_imperial, include_unit) {
-    if (arguments.length < 4) {
-        include_unit = true;
-    }
-    if (!metric_imperial) {
-        metric_imperial = native_unit;
-    }
-    var seconds = 3600*t.hour + 60*t.minute + t.second;
-    return pace(distance/seconds, metric_imperial, include_unit);
-}
-
-function convert(metric_value, what, units, include_unit, digits) {
-    if (arguments.length < 5) {
-        digits = 2;
-    }
-    if (arguments.length < 4) {
-        include_unit = true;
-    }
-    var factor = units_table[what]['factor_' + units.toLowerCase().substr(0,1)];
-    var ret = (metric_value * factor).toFixed(digits);
-    if (include_unit) {
-	    ret += " " + unit(what, units);
-    }
-    return ret;
-}
-
-function to_metric(value, what, units) {
-    if (!units) units = native_unit;
-    if (value) {
-	    var factor = 1.0 / units_table[what]['factor_' + units.toLowerCase().substr(0,1)];
-	    return parseFloat(value) * factor;
-    } else {
-	    return 0.0;
-    }
-}
-
-function length(len_in_cm, units, include_unit) {
-    if (arguments.length < 3) {
-        include_unit = true;
-    }
-    return convert(parseFloat(len_in_cm), 'length', units, include_unit, 0);
-}
-
-function weight(weight_in_kg, units, include_unit) {
-    if (arguments.length < 3) {
-        include_unit = true;
-    }
-    if (!units) {
-        units = native_unit;
-    }
-    return convert(parseFloat(weight_in_kg), 'weight', units, include_unit, 0);
-}
-
-function distance(distance_in_km, units, include_unit) {
-    if (arguments.length < 3) {
-        include_unit = true;
-    }
-    if (!units) {
-        units = native_unit;
-    }
-    return convert(parseFloat(distance_in_km), 'distance', units, include_unit, 2);
-}
-
-function height(height_in_cm, units, include_unit) {
-    if (arguments.length < 3) {
-        include_unit = true;
-    }
-    if (!units) {
-        units = native_unit;
-    }
-    height_in_cm = parseFloat(height_in_cm);
-    if (units.toLowerCase().substr(0,1) === 'm') {
-	    var h = (height_in_cm / 100).toFixed(2);
-	    if (include_unit) {
-	        h += ' ' + unit('height', units);
-	    }
-	    return h;
-    } else {
-	    var h_in = Math.round(height_in_cm * 0.393700787);
-	    var ft = Math.floor(h_in / 12);
-	    var inches = h_in % 12;
-	    var ret = '';
-	    if (ft > 0) {
-	        ret = ft + "' ";
-	    }
-	    ret += inches + '"';
-	    return ret;
-    }
 }
 
 function import_file(url, callback) {

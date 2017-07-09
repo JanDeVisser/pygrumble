@@ -17,13 +17,9 @@
 #
 
 import os.path
-import Queue
 import threading
-import traceback
 
 from PyQt5.QtCore import QCoreApplication
-from PyQt5.QtCore import QObject
-from PyQt5.QtCore import QThread
 from PyQt5.QtCore import pyqtSignal
 
 from PyQt5.QtWidgets import QCheckBox
@@ -41,99 +37,18 @@ import sweattrails.device
 import sweattrails.device.antfs
 import sweattrails.device.exceptions
 import sweattrails.device.parser
+import sweattrails.qt.async.bg
+import sweattrails.qt.async.job
 
 logger = gripe.get_logger(__name__)
 
-class LoggingThread(QThread):
-    statusMessage = pyqtSignal(str)
-    progressInit = pyqtSignal(str)
-    progressUpdate = pyqtSignal(int)
-    progressEnd = pyqtSignal()
-    
-    def __init__(self, *args):
-        super(LoggingThread, self).__init__(*args)
-        QCoreApplication.instance().aboutToQuit.connect(self.quit)
-        
-    def quit(self):
-        self.stop()
-        self.wait()
-        
-    def stop(self):
-        self._stopped = True
-        
-    def status_message(self, msg, *args):
-        self.statusMessage.emit(msg.format(*args))
-        
-    def progress_init(self, msg, *args):
-        self.progressInit.emit(msg.format(*args))
-        
-    def progress(self, percentage):
-        self.progressUpdate.emit(percentage)
-        
-    def progress_end(self):
-        self.progressEnd.emit()
-        
 
 class ImportedFITFile(grumble.model.Model):
-    filename = grumble.property.StringProperty(is_key = True)
-    status = grumble.property.BooleanProperty(default = False)
+    filename = grumble.property.StringProperty(is_key=True)
+    status = grumble.property.BooleanProperty(default=False)
 
 
-class Job(QObject):
-    jobStarted = pyqtSignal(QObject)
-    jobFinished = pyqtSignal(QObject)
-    jobError = pyqtSignal(QObject)
-    err = pyqtSignal(Exception)
-    
-    def __init__(self):
-        super(Job, self).__init__()
-        self.user = QCoreApplication.instance().user
-
-    def sync(self):
-        self._handle(None)
-
-    def _handle(self, thread):
-        self.jobStarted.emit(self)
-        self.thread = thread
-        logger.debug("Handling job %s", self)
-        try:
-            with gripe.db.Tx.begin():
-                self.handle()
-            self.jobFinished.emit(self)
-        except Exception as e:
-            traceback.print_exc()
-            self.jobError.emit(e)
-
-    def started(self, msg):
-        if self.thread:
-            self.thread.jobStarted.emit(msg)
-
-    def finished(self, msg):
-        if self.thread:
-            self.thread.jobFinished.emit(msg)
-
-    def error(self, msg, error):
-        if self.thread:
-            self.thread.jobError.emit("ERROR %s" % msg, error)
-
-    def status_message(self, msg, *args):
-        if self.thread:
-            self.thread.status_message(msg, *args)
-        
-    def progress_init(self, msg, *args):
-        if self.thread:
-            self.thread.progress_init(msg, *args)
-        
-    def progress(self, percentage):
-        if self.thread:
-            self.thread.progress(percentage)
-        
-    def progress_end(self):
-        if self.thread:
-            self.thread.progress_end()
-        
-
-class ImportFile(Job):
+class ImportFile(sweattrails.qt.async.job.Job):
     def __init__(self, filename):
         super(ImportFile, self).__init__()
         self.filename = filename
@@ -142,60 +57,47 @@ class ImportFile(Job):
         self.queue = os.path.join(userdir, "queue")
         self.done = os.path.join(userdir, "done")
 
+    def __str__(self):
+        return "Importing file %s" % self.filename
+
     def handle(self):
         logger.debug("ImportFile: Importing file %s", self.filename)
-        self.started("Importing file %s" % self.filename)
+        f = os.path.basename(self.filename)
+        parser = sweattrails.device.get_parser(self.filename)
+        if not parser:
+            logger.warning("No parser registered for %s", f)
+            return
+        parser.set_athlete(self.user)
+        parser.set_logger(self.thread)
+        q = ImportedFITFile.query('"filename" =', f, parent=self.user)
+        fitfile = q.get()
+        if not fitfile:
+            fitfile = ImportedFITFile(parent=self.user)
+            fitfile.filename = f
+            fitfile.status = False
+            fitfile.put()
         try:
-            f = os.path.basename(self.filename)
-            parser = sweattrails.device.get_parser(self.filename)
-            if not parser:
-                logger.warning("No parser registered for %s", f)
-                return
-            parser.set_athlete(self.user)
-            parser.set_logger(self.thread)
-            q = ImportedFITFile.query('"filename" =', f, parent = self.user)
-            fitfile = q.get()
-            if not fitfile:
-                fitfile = ImportedFITFile(parent = self.user)
-                fitfile.filename = f
-                fitfile.status = False
-                fitfile.put()
-            try:
-                parser.parse()
-            except sweattrails.device.exceptions.SessionExistsError:
-                # Ignore if the file was generated by the ANT download.
-                # Otherwise complain. 
-                if "-st-antfs" not in self.filename:
-                    raise
-                
-            # Move file to 'done' directory if it was in the queue before: 
-            if os.path.basename(os.path.dirname(self.filename)) == "queue":
-                gripe.rename(os.path.join(self.queue, f), os.path.join(self.done, f))
-                
-            # Set file to completed in the log:
-            with gripe.db.Tx.begin():
-                fitfile.status = True
-                fitfile.put()
-                
-            self.finished("File %s successfully imported" % self.filename)
-        except sweattrails.device.exceptions.FileImportError as ie:
-            logger.exception("Exception importing file")
-            self.error("Importing file %s" % self.filename, ie.message)
-            raise
+            parser.parse()
+        except sweattrails.device.exceptions.SessionExistsError:
+            # Ignore if the file was generated by the ANT download.
+            # Otherwise complain.
+            if "-st-antfs" not in self.filename:
+                raise
+
+        # Move file to 'done' directory if it was in the queue before:
+        if os.path.basename(os.path.dirname(self.filename)) == "queue":
+            print "rename: ", os.path.join(self.queue, f), os.path.join(self.done, f)
+            gripe.rename(os.path.join(self.queue, f), os.path.join(self.done, f))
+        else:
+            print "Not in queue: ", f
+
+        # Set file to completed in the log:
+        with gripe.db.Tx.begin():
+            fitfile.status = True
+            fitfile.put()
 
 
-class ThreadPlugin(object):
-    def __init__(self, thread):
-        self.thread = thread
-                               
-    def addjob(self, job):
-        self.thread.addjob(job)
-                               
-    def run(self):
-        pass
-
-
-class ScanInbox(ThreadPlugin):
+class ScanInbox(sweattrails.qt.async.bg.ThreadPlugin):
     def __init__(self, thread):
         super(ScanInbox, self).__init__(thread)
         self.user = None
@@ -217,10 +119,10 @@ class ScanInbox(ThreadPlugin):
             userdir = gripe.user_dir(user.uid())
             self.inbox = os.path.join(userdir, "inbox")
             gripe.mkdir(self.inbox)
-            self.queue =  os.path.join(userdir, "queue")
+            self.queue = os.path.join(userdir, "queue")
             gripe.mkdir(self.queue)
-            done =  os.path.join(userdir, "done")
-            gripe.mkdir(done)
+            self.done = os.path.join(userdir, "done")
+            gripe.mkdir(self.done)
             
     def run(self):
         # We set up the paths every time since the user could have switched
@@ -232,59 +134,6 @@ class ScanInbox(ThreadPlugin):
                 logger.debug("ScanInbox: Found file %s", f)
                 gripe.rename(os.path.join(self.inbox, f), os.path.join(self.queue, f))
                 self.addfile(os.path.join(gripe.root_dir(), self.queue, f))
-
-
-class BackgroundThread(LoggingThread):
-    jobStarted = pyqtSignal(str)
-    jobFinished = pyqtSignal(str)
-    jobError = pyqtSignal(str, str)
-    queueEmpty = pyqtSignal()
-    
-    _singleton = None
-    _plugins = []
-    
-    def __init__(self):
-        super(BackgroundThread, self).__init__()
-        self._queue = Queue.Queue()
-        if ("sweattrails" in gripe.Config.app and 
-            "background" in gripe.Config.app.sweattrails and
-            "plugins" in gripe.Config.app.sweattrails.background):
-            for plugin in gripe.Config.app.sweattrails.background.plugins:
-                logger.debug("Initializing backgroung plugin '%s'", plugin)
-                plugin = gripe.resolve(plugin)
-                self._plugins.append(plugin(self))
-        
-    def addjob(self, job):
-        job.thread = self
-        self._queue.put(job)
-            
-    def run(self):
-        self._stopped = False 
-        while not self._stopped:
-            for plugin in self._plugins:
-                plugin.run()
-            try:
-                while True:
-                    job = self._queue.get(True, 1)
-                    try:
-                        job._handle(self)
-                    except Exception:
-                        traceback.print_exc()
-                    self._queue.task_done()
-            except Queue.Empty:
-                self.queueEmpty.emit()
-        logger.debug("BackgroundThread finished")
-
-    @classmethod
-    def get_thread(cls):
-        if not cls._singleton:
-            cls._singleton = BackgroundThread()
-        return cls._singleton
-
-    @classmethod
-    def add_backgroundjob(cls, job):
-        t = cls.get_thread()
-        t.addjob(job)
 
 
 class SelectActivities(QDialog):
@@ -345,33 +194,28 @@ class SelectActivities(QDialog):
         self.lock.release()
 
 
-class DownloadJob(Job):
+class DownloadJob(sweattrails.qt.async.job.Job):
     def __init__(self, manager):
         super(DownloadJob, self).__init__()
         self.manager = manager
 
+    def __str__(self):
+        return "Garmin download"
+
     def handle(self):
         logger.debug("Garmin download")
-        self.started("Downloading from Garmin")
         with sweattrails.device.antfs.GarminBridge.acquire(self) as gb:
-            try:
-                gb.on_transport()
-                logger.debug("Garmin download finished")
-                self.finished("Garmin download finished")
-            except sweattrails.device.exceptions.FileImportError as ie:
-                logger.exception("Exception in download job")
-                self.error("Garmin download", ie.message)
-                raise
+            gb.on_transport()
 
-    #===========================================================================
+    # ========================================================================
     # C O N F I G  B R I D G E            
-    #===========================================================================
+    # ========================================================================
     
     def exists(self, antfile):
         if antfile.get_date().year < 2000:
             return True
         with gripe.db.Tx.begin():
-            q = ImportedFITFile.query(ancestor = self.user)
+            q = ImportedFITFile.query(ancestor=self.user)
             q.add_filter("filename", "=", self.get_filename(antfile))
             q.add_filter("status", "=", True)
             return q.get() is not None
@@ -391,16 +235,15 @@ class DownloadJob(Job):
             with open(path, "w") as fd:
                 data.tofile(fd)
             f = self.get_filename(antfile)
-            q = ImportedFITFile.query('"filename" =', f, parent = self.user)
+            q = ImportedFITFile.query('"filename" =', f, parent=self.user)
             fitfile = q.get()
             if not fitfile:
-                fitfile = ImportedFITFile(parent = self.user)
+                fitfile = ImportedFITFile(parent=self.user)
                 fitfile.filename = f
             fitfile.status = False
             fitfile.put()
 
     def get_filename(self, antfile):
         return str.format("{0}-{1:02x}-{2}-st-antfs.fit",
-                antfile.get_date().strftime("%Y-%m-%d_%H-%M-%S"),
-                antfile.get_type(), antfile.get_size())
-
+                          antfile.get_date().strftime("%Y-%m-%d_%H-%M-%S"),
+                          antfile.get_type(), antfile.get_size())

@@ -41,6 +41,8 @@ from PyQt5.QtWidgets import QWidget
 
 import gripe
 # import grizzle
+import sweattrails.qt.async.bg
+import sweattrails.qt.async.job
 import sweattrails.qt.fitnesstab
 import sweattrails.qt.profiletab
 import sweattrails.qt.sessiontab
@@ -48,6 +50,7 @@ import sweattrails.qt.imports
 import sweattrails.qt.usertab
 
 logger = gripe.get_logger(__name__)
+
 
 class SelectUser(QDialog):
     def __init__(self, window = None):
@@ -199,12 +202,18 @@ class STMainWindow(QMainWindow):
 
 
     def createActions(self):
-        self.switchUserAct = QAction("&Switch User", self, shortcut = "Ctrl+U", statusTip = "Switch User", triggered = self.switch_user)
-        self.importFileAct = QAction("&Import", self, shortcut = "Ctrl+I", statusTip = "Import Session", triggered = self.file_import)
+        self.switchUserAct = QAction("&Switch User", self,
+                                     shortcut="Ctrl+U",
+                                     statusTip="Switch User",
+                                     triggered=self.switch_user)
+        self.importFileAct = QAction("&Import", self,
+                                     shortcut="Ctrl+I",
+                                     statusTip="Import Session",
+                                     triggered=self.file_import)
         self.downloadAct = QAction("&Download", self, shortcut = "Ctrl+D",
                                    statusTip = "Download activities from device",
                                    triggered = QCoreApplication.instance().download)
-        self.downloadAct = QAction("&Withings", self,
+        self.withingsAct = QAction("&Withings", self,
                                    statusTip = "Download Withings data",
                                    triggered = QCoreApplication.instance().withings)
         self.exitAct = QAction("E&xit", self, shortcut = "Ctrl+Q", statusTip = "Exit SweatTrails", triggered = self.close)
@@ -219,6 +228,7 @@ class STMainWindow(QMainWindow):
         self.fileMenu.addSeparator()
         self.fileMenu.addAction(self.importFileAct)
         self.fileMenu.addAction(self.downloadAct)
+        self.fileMenu.addAction(self.withingsAct)
         self.fileMenu.addSeparator()
         self.fileMenu.addAction(self.exitAct)
 
@@ -232,10 +242,10 @@ class STMainWindow(QMainWindow):
     def show(self):
         super(QMainWindow, self).show()
         if self.select_user():
-            t = sweattrails.qt.imports.BackgroundThread.get_thread()
+            t = sweattrails.qt.async.bg.BackgroundThread.get_thread()
             t.jobStarted.connect(self.status_message)
             t.jobFinished.connect(self.status_message)
-            t.jobError.connect(self.status_message)
+            t.jobError.connect(self.error_message)
         else:
             self.close()
 
@@ -318,6 +328,13 @@ class STMainWindow(QMainWindow):
 
     def status_message(self, msg, *args):
         self.statusmessage.setText(msg.format(*args))
+
+    def error_message(self, msg, e):
+        if e:
+            msg = str(e) if not msg else "%s: %s" % (msg, str(e))
+        if not msg:
+            msg = "Unknown error"
+        QMessageBox.error(self, "Error", msg)
 
     def progress_init(self, msg, *args):
         self.progressbar.setValue(0)

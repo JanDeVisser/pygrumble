@@ -22,6 +22,7 @@ com.sweattrails.api.Map = function(container, id, ds) {
     this.type = "map";
     $$.register(this);
     this.mapdiv = null;
+    this.map = null;
     if (arguments.length > 2) {
         this.setDataSource(arguments[2]);
     }
@@ -43,27 +44,17 @@ com.sweattrails.api.Map.prototype.render = function() {
 };
 
 com.sweattrails.api.Map.prototype.onData = function(data) {
-    $$.log(this, "Table.onData");
+    $$.log(this, "onData");
     this.onrender && this.onrender(data);
-    if (this.mapdiv) {
-        this.container.removeChild(this.mapdiv);
-    }
-    this.mapdiv = document.createElement("div");
-    this.mapdiv.id = "map-" + this.id;
-    if (this.height) {
-        this.mapdiv.height = this.height;
-    }
-    $$.log(this, "container: " + typeof(this.container));
-    this.container.appendChild(this.mapdiv);
     this.latlngs = [];
     this.invalid = 0;
 };
 
 com.sweattrails.api.Map.prototype.noData = function() {
-    $$.log(this, "Table.noData");
+    $$.log(this, "noData");
     var emptyrow = document.createElement("tr");
     emptyrow.id = this.id + "-emptyrow";
-    this.table.appendChild(emptyrow);
+    this.container.appendChild(emptyrow);
     var td = document.createElement("td");
     td.style.bgcolor = "white";
     td.colSpan = this.columns.length;
@@ -83,17 +74,33 @@ com.sweattrails.api.Map.prototype.renderData = function(obj) {
 
 com.sweattrails.api.Map.prototype.onDataEnd = function() {
     $$.log(this, "Map.onDataEnd. %d valid coordinates, %d invalid", this.latlngs.length, this.invalid);
-    this.map = L.map("map-" + this.id);
-    $$.log(this, "Map object created");
-    L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}', {
-            attribution: 'Map data copyright OpenStreetMap contributors, CC-BY-SA, Imagery copyright Mapbox',
+    if (!this.mapdiv) {
+        this.mapdiv = document.createElement("div");
+        this.mapdiv.id = "map-" + this.id;
+        if (this.height) {
+            this.mapdiv.height = this.height;
+        }
+        this.container.appendChild(this.mapdiv);
+        this.map = L.map(this.mapdiv);
+        $$.log(this, "Map object created");
+        L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}', {
+            attribution: 'Map data &#169; OpenStreetMap contributors, CC-BY-SA, Imagery &#169; Mapbox',
             maxZoom: 18,
             id: 'mapbox.run-bike-hike',
             accessToken: 'pk.eyJ1IjoiamFuZGV2IiwiYSI6ImNpenBzbzFzNTAwcmgycnFnd3QycWFpbTgifQ.vIht_WItDuJwLuatY_S5xg'
         }).addTo(this.map);
-    this.polyline = L.polyline(this.latlngs, {color: 'red'}).addTo(this.map);
-    this.map.fitBounds(this.polyline.getBounds());
-    this.onrendered && this.onrendered();
+        this.polyline = L.polyline(this.latlngs, {color: 'red'}).addTo(this.map);
+        this.map.fitBounds(this.polyline.getBounds());
+        $$.async(this);
+    }
+};
+
+com.sweattrails.api.Map.prototype.onASync = function() {
+    if (this.map) {
+        this.map.invalidateSize();
+        this.map.fitBounds(this.polyline.getBounds());
+        this.onrendered && this.onrendered();
+    }
 };
 
 com.sweattrails.api.Map.prototype.setLatitudeProperty = function(prop) {

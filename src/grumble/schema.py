@@ -22,6 +22,7 @@ import gripe.db
 
 logger = gripe.get_logger(__name__)
 
+
 class ColumnDefinition(object):
     def __init__(self, name, data_type, required, defval, indexed):
         self.name = name
@@ -66,29 +67,24 @@ class ModelManager(object):
         self.tablename = self.tableprefix + '"' + tablename + '"'
 
     def _set_columns(self):
-        logger.debug("%s: set_columns(%s)", self, len(self._prep_columns))
         self.key_col = None
         for c in self._prep_columns:
             if c.is_key:
-                logger.debug("%s: _set_columns: found key_col: %s", self, c.name)
                 self.key_col = c
                 c.required = True
         self.columns = []
         if not self.key_col:
-            logger.debug("%s: _set_columns: Adding synthetic key_col", self)
             kc = ColumnDefinition("_key_name", "TEXT", True, None, False)
             kc.is_key = True
             kc.scoped = False
             self.key_col = kc
             self.columns.append(kc)
         if not self.flat:
-            logger.debug("%s: _set_columns: Adding _ancestors and _parent columns", self)
             self.columns += (ColumnDefinition("_ancestors", "TEXT", True, None, True), \
                              ColumnDefinition("_parent", "TEXT", False, None, True),
                              ColumnDefinition("_key", "TEXT", True, None, True))
         self.columns += self._prep_columns
         if self.audit:
-            logger.debug("%s: _set_columns: Adding audit columns", self)
             self.columns += (ColumnDefinition("_ownerid", "TEXT", False, None, True), \
                 ColumnDefinition("_acl", "TEXT", False, None, False), \
                 ColumnDefinition("_createdby", "TEXT", False, None, False), \
@@ -104,11 +100,9 @@ class ModelManager(object):
             for c in column:
                 self.add_column(c)
         else:
-            logger.debug("%s: add_column(%s)", self, column.name)
             self._prep_columns.append(column)
 
     def reconcile(self):
-        logger.info("%s: reconcile()", self)
         self._set_columns()
         self._recon = self.my_config.get("reconcile", self.def_recon_policy)
         if self._recon != "none":
@@ -188,7 +182,6 @@ class ModelManager(object):
             
         manager = cls.modelmanagers_byname.get(name)
         if not manager:
-            logger.debug("%s.for_name(%s) *not* found. Creating", cls.__name__, obj)
             manager = ModelManager(name)
             cls.modelmanagers_byname[name] = manager
             if set_mm:

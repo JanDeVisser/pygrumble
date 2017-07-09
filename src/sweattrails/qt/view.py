@@ -35,7 +35,7 @@ class TimestampColumn(TimebasedColumn, grumble.qt.model.TableColumn):
 
     def __call__(self, instance):
         value = getattr(instance, self.name)
-        return self._seconds_to_string(value.seconds)
+        return self._seconds_to_string(value.seconds if value else 0)
 
 
 class SecondsColumn(TimebasedColumn, grumble.qt.model.TableColumn):
@@ -113,6 +113,9 @@ class DistanceColumn(grumble.qt.model.TableColumn):
 #----------------------------------------------------------------------------
 
 class SessionTypeIcon(grumble.qt.bridge.DisplayConverter):
+    def __init__(self, bridge):
+        super(SessionTypeIcon, self).__init__(bridge)
+
     def to_display(self, sessiontype, interval):
         icon = sessiontype.icon
         logger.debug("SessionTypeIcon: sessiontype: %s icon %s", sessiontype.name, icon)
@@ -126,9 +129,9 @@ class SessionTypeIcon(grumble.qt.bridge.DisplayConverter):
 
 
 class PaceSpeed(grumble.qt.bridge.DisplayConverter):
-    def __init__(self, labelprefixes):
-        super(PaceSpeed, self).__init__()
-        self.labelprefixes = labelprefixes
+    def __init__(self, bridge):
+        super(PaceSpeed, self).__init__(bridge)
+        self.labelprefixes = bridge.config.get("labelprefixes")
         
     def label(self, instance):
         if not instance:
@@ -136,10 +139,9 @@ class PaceSpeed(grumble.qt.bridge.DisplayConverter):
         else:
             session = instance.get_session()
             what = session.sessiontype.speedPace
-            prefix = self.labelprefixes.get(what, 
-                                            self.labelprefixes.get(None, "")) \
-                     if isinstance(self.labelprefixes, dict) \
-                     else str(self.labelprefixes)
+            prefix = self.labelprefixes.get(what, self.labelprefixes.get(None, "")) \
+                if isinstance(self.labelprefixes, dict) \
+                else str(self.labelprefixes)
             return "{prefix} {what}".format(prefix=prefix, what=what)
 
     def suffix(self, instance):
@@ -173,8 +175,8 @@ class PaceSpeed(grumble.qt.bridge.DisplayConverter):
 
 
 class Distance(grumble.qt.bridge.DisplayConverter):
-    def __init__(self):
-        super(Distance, self).__init__()
+    def __init__(self, bridge):
+        super(Distance, self).__init__(bridge)
         
     def suffix(self, instance):
         if not instance:
@@ -207,9 +209,9 @@ class Distance(grumble.qt.bridge.DisplayConverter):
 
 
 class MeterFeet(grumble.qt.bridge.DisplayConverter):
-    def __init__(self):
-        super(MeterFeet, self).__init__()
-        
+    def __init__(self, bridge):
+        super(MeterFeet, self).__init__(bridge)
+
     def suffix(self, instance):
         if not instance:
             return True
@@ -224,5 +226,4 @@ class MeterFeet(grumble.qt.bridge.DisplayConverter):
         m = value if value else 0
         m = m if units == "metric" else gripe.conversions.m_to_ft(m)
         return int(round(m))
-    
-    
+

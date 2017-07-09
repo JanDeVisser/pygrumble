@@ -2,6 +2,7 @@
     "author": "Jan de Visser",
     "version": "1.0",
     "mounts": [
+        { "path": "/jscr/sweattrails/.+", "roles": [], "relpath": "/sweattrails/js" },
         { "path": "/st/.+",  "app": "sweattrails.web.handlers.app", "roles": [ "athlete" ]}
     ],
     "roles": {
@@ -34,6 +35,18 @@
             "criticalPace": {
                 "nodeClass": "sweattrails.config.CriticalPaceNode",
                 "refClass": "sweattrails.config.CriticalPace"
+            },
+            "paceZone": {
+                "nodeClass": "sweattrails.config.PaceZoneNode",
+                "refClass": "sweattrails.config.PaceZone"
+            },
+            "powerZone": {
+                "nodeClass": "sweattrails.config.PowerZoneNode",
+                "refClass": "sweattrails.config.PowerZone"
+            },
+            "heartrateZone": {
+                "nodeClass": "sweattrails.config.HeartrateZoneNode",
+                "refClass": "sweattrails.config.HeartrateZone"
             }
         },
         "background": {

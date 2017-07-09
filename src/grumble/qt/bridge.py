@@ -19,7 +19,6 @@
 
 import collections
 import datetime
-import math
 import traceback
 
 from PyQt5.QtCore import Qt
@@ -50,28 +49,25 @@ from PyQt5.QtWidgets import QVBoxLayout
 from PyQt5.QtWidgets import QWidget
 
 import gripe
+import gripe.conversions
 import gripe.db
 import grumble.model
 import grumble.property
 
 logger = gripe.get_logger(__name__)
 
+
 class DisplayConverter(object):
     _delegate = None
     _suffix = None
 
-    def __init__(self, delegate = None, **config):
-        self._delegate = delegate
-        self._suffix = config.get("suffix")
-        self._label = config.get("label",
-                        config.get("verbose_name"))
-
-    def setProperty(self, property):
-        self._property = property
+    def __init__(self, bridge):
+        self._delegate = bridge.converter if hasattr(bridge, "converter") else None
+        self._property = bridge.property
+        self._suffix = bridge.config.get("suffix")
+        self._label = bridge.config.get("label", bridge.config.get("verbose_name"))
         if not self._label:
-            self._label = property.verbose_name
-        if self._delegate:
-            self._delegate.setProperty(property)
+            self._label = self._property.verbose_name
 
     def label(self, instance):
         return self._delegate.label(instance) \
@@ -95,7 +91,7 @@ class DisplayConverter(object):
 
 
 class WidgetBridgeFactory(type):
-    _widgetbridgetypes = { }
+    _widgetbridgetypes = {}
 
     def __new__(cls, name, bases, dct):
         ret = type.__new__(cls, name, bases, dct)
@@ -105,30 +101,34 @@ class WidgetBridgeFactory(type):
         return ret
 
     @classmethod
+    def getWidgetBridgeType(cls, prop):
+        return cls._widgetbridgetypes.get(prop.__class__)
+
+    @classmethod
     def get(cls, parent, kind, propname, **kwargs):
-        property = getattr(kind, propname)
+        prop = getattr(kind, propname)
 
         # Allow for custom bridges. Note that if you configure
         # a custom bridge, you have to deal with read-onliness and
         # multiple-choiciness yourself.
-        bridge = kwargs.get("bridge", property.config.get("bridge"))
+        bridge = kwargs.get("bridge", prop.config.get("bridge"))
         if bridge:
             if not isinstance(bridge, WidgetBridgeFactory):
                 bridge = gripe.resolve(bridge)
             return bridge(parent, kind, propname, **kwargs)
 
         if "readonly" in kwargs or \
-                property.is_key or \
-                property.readonly:
+                prop.is_key or \
+                prop.readonly:
             return Label(parent, kind, propname, **kwargs)
-        if property.config.get("choices") or kwargs.get("choices"):
+        if prop.config.get("choices") or kwargs.get("choices"):
             if kwargs.get("style", "combo").lower() == "combo":
                 return ComboBox(parent, kind, propname, **kwargs)
             elif kwargs["style"].lower() == "radio":
                 return RadioButtons(parent, kind, propname, **kwargs)
             # else we fall down to default processing...
-        bridge = cls._widgetbridgetypes.get(property.__class__)
-        assert bridge, "I'm not ready to handle properties of type '%s'" % type(property)
+        bridge = cls.getWidgetBridgeType(prop)
+        assert bridge, "I'm not ready to handle properties of type '%s'" % type(prop)
         return bridge(parent, kind, propname, **kwargs)
 
 
@@ -142,15 +142,12 @@ class WidgetBridge(object):
         self.property = getattr(kind, propname)
         self.config = dict(self.property.config)
         self.config.update(kwargs)
-        self.converter = self.config.get("displayconverter")
-        if not self.converter:
-            self.converter = DisplayConverter(
-                                 suffix = self.config.get("suffix"),
-                                 label = self.config.get("verbose_name", propname)
-                             )
-        if hasattr(self, "getDisplayConverter"):
-            self.converter = self.getDisplayConverter(self.converter)
-        self.converter.setProperty(self.property)
+        self.converter = DisplayConverter(self)
+        if "displayconverter" in self.config and callable(self.config["displayconverter"]):
+            self.converter = self.config["displayconverter"](self)
+        cls = self.__class__
+        if hasattr(cls, "getDisplayConverter") and callable(cls.getDisplayConverter):
+            self.converter = cls.getDisplayConverter(self)
         self.choices = self.config.get("choices")
         self.hasLabel = self.config.get("has_label", True)
         self.assigned = None
@@ -212,11 +209,25 @@ class WidgetBridge(object):
 class Label(WidgetBridge):
     _qttype = QLabel
 
+    def __init__(self, parent, kind, path, **kwargs):
+        super(Label, self).__init__(parent, kind, path, **kwargs)
+        assert self.converter
+
+    @classmethod
+    def getDisplayConverter(cls, bridge_instance):
+        bridge = WidgetBridgeFactory.getWidgetBridgeType(bridge_instance.property)
+        return bridge.getDisplayConverter(bridge_instance) \
+            if bridge and hasattr(bridge, "getDisplayConverter") and callable(bridge.getDisplayConverter) \
+            else bridge_instance.converter
+
     def apply(self, value):
         fmt = self.config.get("format")
         if fmt:
-            fmt = "{:" + fmt + "}"
-            value = fmt.format(value) if value is not None else ''
+            if callable(fmt):
+                value = fmt(value)
+            else:
+                fmt = "{:" + str(fmt) + "}"
+                value = fmt.format(value) if value is not None else ''
         self.widget.setText(str(value))
 
     def retrieve(self):
@@ -235,7 +246,6 @@ class Image(Label):
         if self.width and not self.height:
             self.height = self.width
 
-
     def apply(self, value):
         if isinstance(value, basestring):
             value = QPixmap(value)
@@ -245,21 +255,20 @@ class Image(Label):
         self.widget.setPixmap(value)
 
 
-class TimeDeltaLabel(Label, DisplayConverter):
-    _grumbletypes = [ grumble.property.TimeDeltaProperty ]
-
-    def getDisplayConverter(self):
-        return self
+class TimeDeltaConverter(DisplayConverter):
+    def __init__(self, bridge):
+        super(TimeDeltaConverter, self).__init__(bridge)
 
     def to_display(self, value, instance):
-        h = int(math.floor(value.seconds / 3600))
-        r = value.seconds - (h * 3600)
-        m = int(math.floor(r / 60))
-        s = r % 60
-        if h > 0:
-            return "%dh %02d'%02d\"" % (h, m, s)
-        else:
-            return "%d'%02d\"" % (m, s)
+        return gripe.conversions.timedelta_to_string(value)
+
+
+class TimeDeltaLabel(Label):
+    _grumbletypes = [grumble.property.TimeDeltaProperty]
+
+    @classmethod
+    def getDisplayConverter(cls, bridge):
+        return TimeDeltaConverter(bridge)
 
 
 class LineEdit(WidgetBridge):
@@ -277,7 +286,7 @@ class LineEdit(WidgetBridge):
         if regexp:
             validator = QRegExpValidator(QRegExp(regexp), self.parent)
             if "casesensitive" in self.config:
-                cs = bool(self.config("casesensitive"))
+                cs = bool(self.config.get("casesensitive"))
                 validator.setCaseSensitivity(
                     Qt.CaseSensitive if cs else Qt.CaseInsensitive)
         maxlength = int(self.config.get("maxlength", 0))

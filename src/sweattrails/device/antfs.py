@@ -210,7 +210,6 @@ class GarminBridge(object):
         self._condition.release()
 
     def __enter__(self):
-        print "2"
         logger.debug("Connecting Garmin")
         self.start()
         self.connect()
@@ -261,21 +260,20 @@ if __name__ == "__main__":
             return False
 
         def select(self, antfiles):
-            time.sleep(15)
-            return antfiles[-1:]
+            return antfiles
 
         def process(self, antfile, data):
             print("Downloaded {0} / {1:02x} / {2}".format(
                 antfile.get_date().strftime("%Y %b %d %H:%M"),
                 antfile.get_type(), antfile.get_size()))
 
-
     def main():
-        try:    
+        try:
             bridge = TestBridge(keep_alive = True)
             try:
                 bridge.run()
             except (Exception, KeyboardInterrupt):
+                traceback.print_exc()
                 bridge.stop()
         except:
             traceback.print_exc()

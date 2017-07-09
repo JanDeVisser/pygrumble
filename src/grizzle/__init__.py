@@ -108,7 +108,8 @@ class UserPartToggle(grumble.property.BooleanProperty):
 
     def _init_parts(self, instance):
         if not hasattr(instance, "_parts"):
-            instance._parts = { grumble.Model.for_name(pn).basekind().lower(): None for pn in gripe.Config.app.grizzle.userparts }
+            instance._parts = {grumble.Model.for_name(pn).basekind().lower(): None
+                               for pn in gripe.Config.app.grizzle.userparts}
 
     def setvalue(self, instance, value):
         self._init_parts(instance)
@@ -120,8 +121,8 @@ class UserPartToggle(grumble.property.BooleanProperty):
                 p.put()
         elif (instance._parts[self.name.lower()] is None) and value and not hasattr(instance, "_brandnew"):
             p = None
-            for kennel in grumble.Query(UserPartKennel, keys_only = True, include_subclasses = True).set_parent(instance):
-                for p in grumble.Query(grumble.Model.for_name(self.partname), keys_only = True, include_subclasses = True).set_parent(kennel):
+            for kennel in grumble.Query(UserPartKennel, keys_only=True, include_subclasses=True).set_parent(instance):
+                for p in grumble.Query(grumble.Model.for_name(self.partname), keys_only=True, include_subclasses=True).set_parent(kennel):
                     p.set_parent(instance)
                     p.put()
             if p is None:
@@ -142,8 +143,7 @@ def customize_user_class(cls):
         if "urls" in partdef and partdef.urls:
             partcls._urls = gripe.url.UrlCollection(name, partdef.label, 9, partdef.urls)
         if partdef.configurable:
-            propdef = UserPartToggle(name, verbose_name = partdef.label,
-                default = partdef.default)
+            propdef = UserPartToggle(name, verbose_name=partdef.label, default=partdef.default)
             cls.add_property(name, propdef)
 
 
@@ -151,13 +151,13 @@ def customize_user_class(cls):
 class User(grumble.Model, gripe.auth.AbstractUser):
     _flat = True
     _customizer = staticmethod(customize_user_class)
-    email = grumble.property.TextProperty(is_key = True)
+    email = grumble.property.TextProperty(is_key=True)
     password = grumble.property.PasswordProperty()
-    status = grumble.property.TextProperty(choices = UserStatus, default = 'Unconfirmed', required = True)
-    display_name = grumble.property.TextProperty(is_label = True)
-    has_roles = grumble.property.ListProperty(verbose_name = "Roles",
-                                              choices = { r: role.get("label", r)
-                                                          for r, role in gripe.Config.app["roles"].items() })
+    status = grumble.property.TextProperty(choices=UserStatus, default='Unconfirmed', required=True)
+    display_name = grumble.property.TextProperty(is_label=True)
+    has_roles = grumble.property.ListProperty(verbose_name="Roles",
+                                              choices={r: role.get("label", r)
+                                                       for r, role in gripe.Config.app["roles"].items()})
 
     def uid(self):
         return self.email
@@ -194,11 +194,11 @@ class User(grumble.Model, gripe.auth.AbstractUser):
             self.put()
 
     def after_insert(self):
-        kennel = UserPartKennel(parent = self)
+        kennel = UserPartKennel(parent=self)
         kennel.put()
         for (partname, partdef) in gripe.Config.app.grizzle.userparts.items():
             if partdef.default:
-                part = grumble.Model.for_name(partname)(parent = self)
+                part = grumble.Model.for_name(partname)(parent=self)
                 part.put()
 
     def sub_to_dict(self, d, **flags):
@@ -227,13 +227,16 @@ class User(grumble.Model, gripe.auth.AbstractUser):
 
     def load_parts(self):
         if not hasattr(self, "_parts"):
-            self._parts = { grumble.Model.for_name(pn).basekind().lower(): None for pn in gripe.Config.app.grizzle.userparts }
-            for part in grumble.Query(UserPart, keys_only = False, include_subclasses = True).set_parent(self):
+            self._parts = {grumble.Model.for_name(pn).basekind().lower(): None
+                           for pn in gripe.Config.app.grizzle.userparts}
+            logger.debug("load_parts - _parts: %s", self._parts)
+            for part in grumble.Query(UserPart, keys_only=False, include_subclasses=True).set_parent(self):
                 k = part.basekind().lower()
                 self._parts[k] = part
                 setattr(self, "_" + k, part)
+                logger.debug("part %s : %s", k, getattr(self, "_" + k))
 
-    def urls(self, urls = None):
+    def urls(self, urls=None):
         if urls is not None:
             return super(User, self).urls(urls)
         else:
@@ -261,8 +264,8 @@ class User(grumble.Model, gripe.auth.AbstractUser):
 @grumble.model.flat
 class GroupsForUser(grumble.Model):
     _flat = True
-    user = grumble.reference.ReferenceProperty(reference_class = User)
-    group = grumble.reference.ReferenceProperty(reference_class = UserGroup)
+    user = grumble.reference.ReferenceProperty(reference_class=User)
+    group = grumble.reference.ReferenceProperty(reference_class=UserGroup)
 
 
 class UserManager(object):
@@ -286,25 +289,36 @@ class UserManager(object):
             return user
 
     def has_users(self):
-        return User.all(keys_only = True).count() > 0
+        return User.all(keys_only=True).count() > 0
 
 
 if True:
     import webapp2
 
     app = webapp2.WSGIApplication([
-            webapp2.Route(
+        webapp2.Route(
+                r'/profile',
+                handler="grizzle.profile.Profile",
+                name='profile',
+                defaults={
+                    "kind": User
+                }
+        ),
+
+        webapp2.Route(
                 r'/users/<key>',
-                handler = "grit.handlers.PageHandler", name = 'manage-user',
-                defaults = {
+                handler="grit.handlers.PageHandler",
+                name='manage-user',
+                defaults={
                     "kind": User
                 }
-            ),
-            webapp2.Route(
-                r'/users',
-                handler = "grit.handlers.PageHandler", name = 'manage-users',
-                defaults = {
-                    "kind": User
-                }
-            )  # ,
-        ], debug = True)
+        ),
+
+        webapp2.Route(
+            r'/users',
+            handler="grit.handlers.PageHandler", name='manage-users',
+            defaults={
+                "kind": User
+            }
+        )  # ,
+    ], debug=True)

@@ -16,19 +16,20 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-import grizzle
-import grumble.property
-import grumble.reference
+import webapp2
+
+import gripe
+import grit.handlers
+
+logger = gripe.get_logger(__name__)
 
 
-class Coach(grizzle.UserPart):
-    def get_athletes(self):
-        return [ap.get_user for ap in self.athleteparts]
+class Profile(grit.handlers.PageHandler):
+    def prepare_query(self, q):
+        return q
 
-class CoachedAthlete(grizzle.UserPart):
-    coachpart = grumble.reference.ReferenceProperty(
-        reference_class=Coach,
-        collection_name="athleteparts")
+    def get_context(self, ctx):
+        super(Profile, self).get_context(ctx)
+        return ctx
 
-    def get_coach(self):
-        return self.coachpart.get_user()
+    template = "grizzle/profile/view"

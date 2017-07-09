@@ -2,13 +2,17 @@
  * FormAction -
  */
 
-com.sweattrails.api.internal.EditAction = function() { 
+/* ----------------------------------------------------------------------- */
+
+com.sweattrails.api.internal.EditAction = function() {
     this.id = "edit";
 };
 
 com.sweattrails.api.internal.EditAction.prototype.onClick = function() {
     this.action.owner.render("edit");
 };
+
+/* ----------------------------------------------------------------------- */
 
 com.sweattrails.api.internal.NewAction = function() {
     this.id = "new";
@@ -21,6 +25,8 @@ com.sweattrails.api.internal.NewAction.prototype.onClick = function() {
         this.action.owner.render("new");
     }
 };
+
+/* ----------------------------------------------------------------------- */
 
 com.sweattrails.api.internal.SaveAction = function(elem) {
     if (elem.getAttribute("onsubmitted")) {
@@ -41,6 +47,8 @@ com.sweattrails.api.internal.SaveAction.prototype.onClick = function() {
     this.action.owner.submit();
 };
 
+/* ----------------------------------------------------------------------- */
+
 com.sweattrails.api.internal.CancelAction = function() {
     this.id = "cancel";
 };
@@ -48,6 +56,8 @@ com.sweattrails.api.internal.CancelAction = function() {
 com.sweattrails.api.internal.CancelAction.prototype.onClick = function() {
     this.action.owner.close();
 };
+
+/* ----------------------------------------------------------------------- */
 
 com.sweattrails.api.internal.SubmitAction = function(elem) {
     this.id = "submit";
@@ -57,15 +67,18 @@ com.sweattrails.api.internal.SubmitAction = function(elem) {
         this.onsubmitted = __.getfunc(elem.getAttribute("onsubmitted"));
     }
     if (elem.getAttribute("redirect")) {
-        var destination = elem.getAttribute("redirect");
-        console.log("SubmitAction.redirect: " + destination);
-        this.onredirect = function(href) { return destination; };
+        this.redirect = elem.getAttribute("redirect");
+        console.log("SubmitAction.redirect: " + self.redirect);
     }
 };
 
 com.sweattrails.api.internal.SubmitAction.prototype.onClick = function() {
     this.ds.submit();
+    this.onsubmitted || this.onsubmitted();
+    this.redirect && (document.location = this.redirect);
 };
+
+/* ----------------------------------------------------------------------- */
 
 com.sweattrails.api.internal.LinkAction = function(elem) {
     this.id = "link";
@@ -75,6 +88,8 @@ com.sweattrails.api.internal.LinkAction = function(elem) {
 com.sweattrails.api.internal.LinkAction.prototype.onClick = function() {
     document.location = this.href;
 };
+
+/* ----------------------------------------------------------------------- */
 
 com.sweattrails.api.internal.HTMLAction = function(elem) {
     this.id = "html";
@@ -90,6 +105,8 @@ com.sweattrails.api.internal.HTMLAction.prototype.render = function(parent) {
     };
 };
 
+/* ----------------------------------------------------------------------- */
+
 com.sweattrails.api.internal.FormAction = function(elem) {
     this.form = elem.getAttribute("form");
     this.mode = elem.getAttribute("mode") ? elem.getAttribute("mode") : null;
@@ -99,6 +116,8 @@ com.sweattrails.api.internal.FormAction = function(elem) {
 com.sweattrails.api.internal.FormAction.prototype.onClick = function() {
     com.sweattrails.api.show_form(this.form, this.mode);
 };
+
+/* ----------------------------------------------------------------------- */
 
 com.sweattrails.api.internal.CustomAction = function(name, action) {
     this.name = name || action;
@@ -110,6 +129,22 @@ com.sweattrails.api.internal.CustomAction.prototype.onClick = function() {
     this.onclick(this.action.owner, this.action);
 };
 
+/* ----------------------------------------------------------------------- */
+
+com.sweattrails.api.internal.DeleteAction = function(elem) {
+    this.id = "delete";
+    if (elem.getAttribute("ondeleted")) {
+        this.ondeleted = __.getfunc(elem.getAttribute("ondeleted"));
+    }
+};
+
+com.sweattrails.api.internal.DeleteAction.prototype.onClick = function() {
+    this.action.owner.delete();
+    this.ondeleted && this.ondeleted()
+};
+
+/* ----------------------------------------------------------------------- */
+
 com.sweattrails.api.internal.actions = {};
 com.sweattrails.api.internal.actions.edit = com.sweattrails.api.internal.EditAction;
 com.sweattrails.api.internal.actions.new = com.sweattrails.api.internal.NewAction;
@@ -119,6 +154,10 @@ com.sweattrails.api.internal.actions.submit = com.sweattrails.api.internal.Submi
 com.sweattrails.api.internal.actions.link = com.sweattrails.api.internal.LinkAction;
 com.sweattrails.api.internal.actions.html = com.sweattrails.api.internal.HTMLAction;
 com.sweattrails.api.internal.actions.form = com.sweattrails.api.internal.FormAction;
+com.sweattrails.api.internal.actions.custom = com.sweattrails.api.internal.CustomAction;
+com.sweattrails.api.internal.actions.delete = com.sweattrails.api.internal.DeleteAction;
+
+/* ----------------------------------------------------------------------- */
 
 com.sweattrails.api.ActionContainer = function(owner) {
     this.id = ((arguments.length > 1) && arguments[1]) || "actions";

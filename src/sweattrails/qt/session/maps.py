@@ -20,6 +20,7 @@
 #               2011 Mark Liversedge (liversedge@gmail.com)
 
 import os.path
+import sys
 
 from PyQt5.QtCore import QObject
 from PyQt5.QtCore import QUrl
@@ -43,16 +44,16 @@ class IntervalJsBridge(QObject):
         self.control = control
         self.interval = interval
         with gripe.db.Tx.begin():
-            q = sweattrails.session.Interval.query(parent = self.interval)
+            q = sweattrails.session.Interval.query(parent=self.interval)
             q.add_sort("timestamp")
             self._intervals = [i for i in q]
             self._wps = self.interval.waypoints()
             
-    @pyqtSlot(result = str)
+    @pyqtSlot(result=str)
     def getConfig(self):
         return gripe.Config.as_json()
 
-    @pyqtSlot(result = 'QVariantList')
+    @pyqtSlot(result='QVariantList')
     def getBoundingBox(self):
         box = self.interval.geodata.bounding_box
         ret = []
@@ -60,14 +61,14 @@ class IntervalJsBridge(QObject):
         ret.extend(box.ne().tuple())
         return ret
     
-    @pyqtSlot(result = int)
+    @pyqtSlot(result=int)
     def intervalCount(self):
         num = len(self._intervals)
         # If there is only one interval, that's the entire session, so
         # there is no separate object for that.
         return num if num else 1
     
-    @pyqtSlot(int, result = 'QVariantList')
+    @pyqtSlot(int, result='QVariantList')
     def getLatLons(self, intervalnum):
         if not intervalnum:
             i = self.interval
@@ -79,7 +80,7 @@ class IntervalJsBridge(QObject):
                 i = self._intervals[intervalnum - 1]
         ret = []
         for wp in (wp for wp in i.waypoints(self._wps) if wp.location):
-            ret.extend(wp.location.tuple())
+            ret.append(wp.location.tuple())
         return ret
     
     @pyqtSlot()
@@ -93,6 +94,7 @@ class IntervalJsBridge(QObject):
     
     @pyqtSlot(str)
     def log(self, msg):
+        print >> sys.stderr, "JS-Bridge:", msg
         logger.info("JS-Bridge: %s", msg)
 
 
@@ -131,7 +133,7 @@ class IntervalMap(QWebView):
         #         fgcolor = "#FFFFFF", 
         #         mapskey = gripe.Config.app["config"].google_api_key)
         #=======================================================================
-        self.setUrl(QUrl.fromLocalFile(os.path.join(gripe.root_dir(), "sweattrails/qt/maps.html")))
+        self.setUrl(QUrl.fromLocalFile(os.path.join(gripe.root_dir(), "sweattrails/qt/session/maps.html")))
 
     def drawShadedRoute(self):
         pass

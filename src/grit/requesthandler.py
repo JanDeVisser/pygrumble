@@ -17,13 +17,12 @@
 #
 
 
-import json
-
 import jinja2
 import webapp2
 
 import gripe
 import gripe.url
+import grumble.model
 
 logger = gripe.get_logger(__name__)
 
@@ -78,7 +77,7 @@ class ReqHandler(webapp2.RequestHandler):
     def add_error(self, error):
         self.errors.append(error)
 
-    def _get_context(self, ctx=None):
+    def _get_context(self, ctx=None, **kwargs):
         logger.debug("_get_context %s", ctx)
         if ctx is None:
             logger.debug("_get_context: ctx is None. Building new one")
@@ -91,6 +90,9 @@ class ReqHandler(webapp2.RequestHandler):
         ctx['response'] = self.response
         ctx['params'] = self.request.params
         ctx['errors'] = self.errors
+        ctx['query'] = grumble.model.query
+        for (attr, value) in kwargs.items():
+            ctx[attr] = value
         urls = ctx.get("urls")
         if urls is None:
             logger.debug("_get_context: urls is None. Building new collection")
@@ -150,8 +152,8 @@ class ReqHandler(webapp2.RequestHandler):
         else:
             self.status = "204 No Content"
 
-    def render(self):
-        ctx = self._get_context()
+    def render(self, **kwargs):
+        ctx = self._get_context(**kwargs)
         self.response.content_type = self._get_content_type()
         if hasattr(self, "get_headers") and callable(self.get_headers):
             headers = self.get_headers(ctx)
@@ -176,7 +178,7 @@ class ErrorPage(ReqHandler):
 
     def get(self):
         logger.info("main::ErrorPage_%s.get", self.status)
-        self.render({"request": self.request, "response": self.response})
+        self.render()
 
 
 def handle_404(request, response, exception):

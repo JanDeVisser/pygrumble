@@ -16,6 +16,7 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
+import collections
 import datetime
 
 from PyQt5.QtCore import QPointF
@@ -31,9 +32,10 @@ import gripe
 
 logger = gripe.get_logger(__name__)
 
+
 class DataSource(object):
     def __init__(self, **kwargs):
-        logger.debug("DataSource.__init__ %s", type(self));
+        logger.debug("DataSource.__init__ %s", type(self))
         self._records = kwargs.pop("records", None)
         super(DataSource, self).__init__(**kwargs)
 
@@ -63,8 +65,9 @@ class QueryDataSource(DataSource):
 
 
 class Axis(object):
+    _count = 0
+
     def __init__(self, **kwargs):
-        logger.debug("Axis.__init__ %s {%s}", type(self), kwargs);
         if "min" in kwargs:
             self._min = kwargs.pop("min")
         if "max" in kwargs:
@@ -75,8 +78,13 @@ class Axis(object):
             self._padding = kwargs.pop("padding")
         if "offset" in kwargs:
             self._offset = kwargs.pop("offset")
-        self.prop = kwargs.pop("property", None)
-        self._name = kwargs.pop("name", "anon")
+        self._prop = kwargs.pop("property", None)
+        self._name = kwargs.pop("name", None)
+        self._smooth = kwargs.pop("smooth", None)
+        if not self._name:
+            self._name = "anon-" + str(Axis._count)
+            Axis._count += 1
+        logger.debug("Axis.__init__ %s {%s}", type(self), kwargs);
         super(Axis, self).__init__(**kwargs)
 
     def __str__(self):
@@ -132,18 +140,27 @@ class Axis(object):
     def value(self, record):
         if hasattr(self, "_value"):
             expr = self._value
+        elif self._prop:
+            if not hasattr(record, self._prop):
+                raise Exception("Record has no property '%s'" % self._prop)
+            expr = getattr(record, self._prop)
         else:
-            expr = (getattr(record, self.prop)
-                    if self.prop and hasattr(record, self.prop)
-                    else record)
-        ret = expr if not callable(expr) else expr(record)
-        ret = ret if ret is not None else 0
+            expr = record
+        v = expr if not callable(expr) else expr(record)
+        v = v if v is not None else 0
+        if hasattr(self, "_smooth") and self._smooth:
+            self._running.append(v)
+            ret = sum(self._running) / len(self._running)
+        else:
+            ret = v
         return ret
 
     def __call__(self, record):
         return self.value(record)
 
     def __iter__(self):
+        if hasattr(self, "_smooth") and self._smooth:
+            self._running = collections.deque(maxlen=self._smooth)
         return (iter(self.graph().datasource())
                 if self.graph().datasource()
                 else iter([]))
@@ -167,15 +184,21 @@ class DateAxis(Axis):
 class Series(Axis):
     def __init__(self, **kwargs):
         logger.debug("Series.__init__ %s", type(self));
+        self._trendlines = []
+        self._polygon = None
         self._color = kwargs.pop("color", Qt.black)
         self._style = kwargs.pop("style", Qt.SolidLine)
         self._shade = kwargs.pop("shade", None)
-        self._graph = kwargs.pop("graph", None)
-        if self._graph:
-            self._graph._series.append(self)
-        self._trendlines = []
-        self._polygon = None
+        self._layer = kwargs.pop("layer", 1)
+        g = kwargs.pop("graph", None)
+        if g:
+            g.addSeries(self)
         super(Series, self).__init__(**kwargs)
+
+    def setGraph(self, graph):
+        super(Series, self).setGraph(graph)
+        for tl in self._trendlines:
+            tl.setGraph(graph)
 
     def xaxis(self):
         return self._graph.xaxis() if self._graph else None
@@ -194,6 +217,12 @@ class Series(Axis):
 
     def setStyle(self, style):
         self._style = style
+
+    def setLayer(self, layer):
+        self._layer = layer
+
+    def layer(self):
+        return self._layer;
 
     def shade(self):
         return self._shade
@@ -220,8 +249,7 @@ class Series(Axis):
             if yoffset != 0:
                 yoffset -= self.scale() * float(self.padding())
             logger.debug("%s.polygon() xoffset %s yoffset %s", self, xoffset, yoffset)
-            points = [ QPointF(self.x(obj) - xoffset, self.y(obj) - yoffset)
-                       for obj in self ]
+            points = [QPointF(self.x(obj) - xoffset, self.y(obj) - yoffset) for obj in self]
             if self.shade() is not None:
                 points.insert(0, QPointF(points[0].x(), 0))
                 points.append(QPointF(points[-1].x(), 0))
@@ -236,9 +264,7 @@ class Series(Axis):
         # Scale Y so that elevation diff maps to height() - 40. Y factor
         # is negative so y will actually grow "up".
         xscale = float(self.xaxis().scale()
-                       if self.xaxis() and
-                          hasattr(self.xaxis(), "scale") and
-                          callable(self.xaxis().scale)
+                       if self.xaxis() and hasattr(self.xaxis(), "scale") and callable(self.xaxis().scale)
                        else self._graph.width() - 40)
         yscale = (float(self.scale()) + 
                   (2 * self.padding() 
@@ -250,7 +276,7 @@ class Series(Axis):
               (self._graph.width() - 40) / xscale,
               - (self._graph.height() - 40) / yscale)
 
-            p = QPen(self.color())
+            p = QPen(QColor(self.color()))
             p.setStyle(self.style())
             self._graph.painter.setPen(p)
             if self.shade() is not None:
@@ -304,6 +330,7 @@ class Graph(QWidget):
         
     def addSeries(self, series):
         self._series.append(series)
+        self._series.sort(key=lambda s: s.layer())
         series.setGraph(self)
 
     def series(self):
@@ -342,17 +369,21 @@ if __name__ == "__main__":
             self.ix = ix
             self.hr = random.uniform(120, 180)
             generator.max_heartrate = max(self.hr, generator.max_heartrate)
+            self.power = random.uniform(80, 400)
+            generator.max_power = max(self.power, generator.max_power)
             self.elevation = random.uniform(generator.min_elev, generator.max_elev)
             self.corrected_elevation = self.elevation + random.uniform(-5, 5)
     
     class Generator(DataSource, Axis):
         def __init__(self, points):
-            super(Generator, self).__init__(property = "ix",
-                                            name = "Generator", offset = 0)
+            super(Generator, self).__init__(property="ix",
+                                            name="Generator",
+                                            offset=0)
             self.min_elev = 300
             self.max_elev = 400
             self.max_heartrate = None
-            self._points = [ Point(self, ix) for ix in range(0, points) ]
+            self.max_power = None
+            self._points = [Point(self, ix) for ix in range(0, points)]
             
         def fetch(self):
             return self._points
@@ -367,20 +398,29 @@ if __name__ == "__main__":
             generator = Generator(100)
             self.graphs = Graph(self, generator)
             self.graphs.addSeries(Series(
-                    max = generator.max_heartrate,
-                    name = "Heartrate",
-                    property = "hr",
-                    color = Qt.red))
+                    max=generator.max_heartrate,
+                    name="Heartrate",
+                    property="hr",
+                    color=Qt.red))
+            p = Series(
+                    graph=self.graphs,
+                    max=generator.max_power,
+                    name="Power",
+                    property="power",
+                    smooth=10,
+                    color=Qt.blue)
             self.graphs.addSeries(Series(
-                min = generator.min_elev,
-                max = generator.max_elev,
-                value = (lambda wp :
-                         wp.corrected_elevation
-                         if wp.corrected_elevation is not None
-                         else wp.elevation if wp.elevation else 0),
-                name = "elevation",
-                color = "peru",
-                shade = "sandybrown"))
+                min=generator.min_elev,
+                max=generator.max_elev,
+                value=(lambda wp:
+                       wp.corrected_elevation
+                       if wp.corrected_elevation is not None
+                       else wp.elevation if wp.elevation else 0),
+                name="elevation",
+                smooth=3,
+                layer=0,
+                color="peru",
+                shade="sandybrown"))
 
         def show_and_raise(self):
             self.show()
@@ -392,4 +432,3 @@ if __name__ == "__main__":
     demo.show_and_raise()
 
     sys.exit(app.exec_())
- 

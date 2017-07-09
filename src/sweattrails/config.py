@@ -83,6 +83,8 @@ class GearType(grumble.Model, ProfileReference):
     name = grumble.property.StringProperty(is_key=True, scoped=True)
     description = grumble.property.StringProperty()
     icon = grumble.image.ImageProperty()
+    partOf = grumble.SelfReferenceProperty(collection_verbose_name="Parts", verbose_name="Part of")
+    usedFor = grumble.ReferenceProperty(SessionType, verbose_name="Used for")
 
 
 class CriticalPowerInterval(grumble.Model, ProfileReference):
@@ -93,6 +95,28 @@ class CriticalPowerInterval(grumble.Model, ProfileReference):
 class CriticalPace(grumble.Model, ProfileReference):
     name = grumble.property.StringProperty(is_key=True, scoped=True)
     distance = grumble.property.IntegerProperty()  # In m
+
+
+class Zone(grumble.Model, ProfileReference):
+    name = grumble.property.StringProperty(is_key=True, scoped=True)
+
+
+class PaceZone(Zone):
+    sortorder = "minSpeed"
+    sortdirection = False
+    minSpeed = grumble.property.IntProperty()
+
+
+class PowerZone(Zone):
+    sortorder = "minPower"
+    sortdirection = False
+    minPower = grumble.property.IntProperty()
+
+
+class HeartrateZone(Zone):
+    sortorder = "minHeartrate"
+    sortdirection = False
+    minHeartrate = grumble.property.IntProperty()
 
 
 # ----------------------------------------------------------------------------
@@ -171,15 +195,17 @@ class NodeTypeDefinition(object):
         return ref
 
     def get_all_linked_references(self, profile):
-        q = self.node_class().query(ancestor = profile)
-        return [ getattr(node, self.name()) for node in q ]
+        q = self.node_class().query(ancestor=profile)
+        if hasattr(self.node_class(), "sortorder"):
+            q.add_sort(self.node_class().sortorder, getattr(self.node_class(), "sortdirection", True))
+        return [getattr(node, self.name()) for node in q]
 
-    def get_or_create_node(self, profile, descriptor, parent = None):
+    def get_or_create_node(self, profile, descriptor, parent=None):
         ref = self.ref_class().get(descriptor[self.name()]) \
             if self.name() in descriptor \
             else self.get_reference_by_name(profile, descriptor[self.name_property()])
         if not ref:
-            ref = self.ref_class()(parent = profile.parent())
+            ref = self.ref_class()(parent=profile.parent())
         assert ref, "No reference found for %s in %s" % (self.name(), descriptor)
         node = self.get_or_create_node_for_reference(profile, ref, parent)
         self.update_node(node, descriptor)
@@ -213,17 +239,17 @@ class NodeTypeDefinition(object):
             node.update(d)
         return node
 
-    def get_or_create_node_for_reference(self, profile, ref, parent = None):
+    def get_or_create_node_for_reference(self, profile, ref, parent=None):
         node = self.get_node_for_reference(profile, ref)
         if not node:
-            node = self.node_class()(parent = parent if parent else profile)
+            node = self.node_class()(parent=parent if parent else profile)
             setattr(node, self.name(), ref)
             node.put()
         assert node, "%s.get_or_create_node_for_reference(): No node" % self.name()
         return node
 
     def get_node_for_reference(self, profile, ref):
-        q = self.node_class().query(ancestor = profile)
+        q = self.node_class().query(ancestor=profile)
         q.add_filter(self.name(), "=", ref)
         return q.get()
 
@@ -307,8 +333,7 @@ class NodeBase(grumble.Model):
         return self._profile
 
     def sub_to_dict(self, d, **flags):
-        ref = self.get_reference()
-        r = ref.to_dict()
+        r = d.pop(self.get_node_definition().name())
         r["refkey"] = r["key"]
         del r["key"]
         d.update(r)
@@ -340,9 +365,9 @@ class TreeNodeBase(NodeBase):
     def get_all_subtypes(self):
         return self.get_subtypes(True)
 
-    def has_subtype(self, type, deep=True):
+    def has_subtype(self, typ, deep=True):
         q = self.children() if not deep else self.descendents()
-        q.add_filter(self.name(), '=', type)
+        q.add_filter(self.name(), '=', typ)
         return q.has()
 
     def on_delete(self):
@@ -358,7 +383,7 @@ class TreeNodeBase(NodeBase):
 # ----------------------------------------------------------------------------
 
 class SessionTypeNode(TreeNodeBase):
-    sessionType = grumble.ReferenceProperty(SessionType, serialize=False)
+    sessionType = grumble.ReferenceProperty(SessionType)
     defaultfor = grumble.StringProperty()
 
     def intervalpart(self):
@@ -366,7 +391,7 @@ class SessionTypeNode(TreeNodeBase):
 
 
 class GearTypeNode(TreeNodeBase):
-    gearType = grumble.ReferenceProperty(GearType, serialize=False)
+    gearType = grumble.ReferenceProperty(GearType)
     partOf = grumble.SelfReferenceProperty(collection_name="parts")
     usedFor = grumble.ReferenceProperty(SessionTypeNode)
 
@@ -376,17 +401,31 @@ class CriticalPowerIntervalNode(NodeBase):
 
 
 class CriticalPaceNode(NodeBase):
-    criticalPace = grumble.ReferenceProperty(CriticalPace, serialize=False)
+    criticalPace = grumble.ReferenceProperty(CriticalPace)
 
+
+class PaceZoneNode(NodeBase):
+    paceZone = grumble.ReferenceProperty(PaceZone)
+
+
+class PowerZoneNode(NodeBase):
+    powerZone = grumble.ReferenceProperty(PowerZone)
+
+
+class HeartrateZoneNode(NodeBase):
+    heartrateZone = grumble.ReferenceProperty(HeartrateZone)
 
 logger.debug("Config: %s", gripe.Config.app.sweattrails)
 
-for (part, partdef) in gripe.Config.app.sweattrails.activityprofileparts.items():
-    definition = NodeTypeDefinition(part, gripe.resolve(partdef.refClass), gripe.resolve(partdef.nodeClass))
+
+def setup_parts():
+    for (part, partdef) in gripe.Config.app.sweattrails.activityprofileparts.items():
+        NodeTypeDefinition(part, gripe.resolve(partdef.refClass), gripe.resolve(partdef.nodeClass))
+setup_parts()
 
 
 class ActivityProfile(grizzle.UserPart):
-    name = grumble.StringProperty(is_key = True)
+    name = grumble.StringProperty(is_key=True)
     description = grumble.StringProperty()
     isdefault = grumble.BooleanProperty()
     icon = grumble.image.ImageProperty()
@@ -415,7 +454,7 @@ class ActivityProfile(grizzle.UserPart):
 
     def after_insert(self):
         # Find the default profile:
-        profile = self.__class__.by("isdefault", True, parent = None)
+        profile = self.__class__.by("isdefault", True, parent=None)
         # If there is a default profile, import it into this profile:
         if profile:
             self.import_profile(profile)
@@ -440,9 +479,8 @@ class ActivityProfile(grizzle.UserPart):
         node_type = NodeTypeRegistry.get_by_name(ref_name)
         d = d if isinstance(d, list) else [d]
         for subdict in d:
-            node = None
-            isA = subdict["isA"] if "isA" in subdict else None
-            parent = node_type.get_or_create_node(self, isA) if isA else None
+            is_a = subdict["isA"] if "isA" in subdict else None
+            parent = node_type.get_or_create_node(self, is_a) if is_a else None
             if "key" in subdict:
                 # Code path for JSON updates
                 node = node_type.node_class().get(subdict["key"])
@@ -454,7 +492,7 @@ class ActivityProfile(grizzle.UserPart):
             else:
                 # Path for import or JSON creates:
                 # Find or create node, and update it.
-                node = node_type.get_or_create_node(self, subdict, parent)
+                node_type.get_or_create_node(self, subdict, parent)
 
     def on_delete(self):
         pass
@@ -474,13 +512,13 @@ class ActivityProfile(grizzle.UserPart):
 
     def import_profile(self, profile):
         if type(profile) == str:
-            profile = ActivityProfile.by("name", profile, parent = None)
+            profile = ActivityProfile.by("name", profile, parent=None)
         if not profile:
             return self
         if (profile.parent() == self.parent()) or not profile.parent():
             for node_type in NodeTypeRegistry.types():
-                for node in node_type.node_class().query(ancestor = profile):
-                    new_node = node_type.duplicate_node(node, self)
+                for node in node_type.node_class().query(ancestor=profile):
+                    node_type.duplicate_node(node, self)
         return self
 
     def scope(self):
@@ -489,8 +527,6 @@ class ActivityProfile(grizzle.UserPart):
         return self._scope
 
     def get_reference_from_descriptor(self, ref_class, d):
-        p = self.parent()
-        key = None
         name = None
         if type(d) == dict:
             key = d["key"] if "key" in d else None
@@ -519,7 +555,7 @@ class ActivityProfile(grizzle.UserPart):
         return node_type.get_node_by_reference_name(self, key_name)
 
     def get_default_SessionType(self, sport):
-        q = SessionTypeNode.query(ancestor = self)
+        q = SessionTypeNode.query(ancestor=self)
         q.add_filter("defaultfor", " = ", sport.lower())
         node = q.get()
         ret = node.sessionType if node else None
@@ -545,10 +581,10 @@ class Brand(grumble.Model):
     country = grumble.ReferenceProperty(Country)
     gearTypes = grumble.ListProperty()  # (grumble.Key) FIXME Make list items typesafe
 
-    def sub_to_dict(self, descriptor):
+    def sub_to_dict(self, descriptor, **flags):
         gts = []
         for gt in self.gearTypes:
-            gts.append(GearType.get(gt).to_dict())
+            gts.append(GearType.get(gt).to_dict(**flags))
         descriptor["gearTypes"] = gts
         return descriptor
 
@@ -560,5 +596,3 @@ class Product(grumble.Model):
     usedFor = grumble.ReferenceProperty(SessionType)
     partOf = grumble.SelfReferenceProperty(collection_name="parts_set")
     baseType = grumble.SelfReferenceProperty(collection_name="descendenttypes")
-
-

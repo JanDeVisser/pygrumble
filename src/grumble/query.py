@@ -201,6 +201,7 @@ class ModelQuery(object):
 
     def add_sort(self, colname, ascending=True):
         self._reset_state()
+        logger.debug("Adding sort order on %s", colname)
         self._sortorder.append(Sort(colname, ascending))
         return self
 

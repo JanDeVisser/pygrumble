@@ -1,16 +1,26 @@
-# To change this license header, choose License Headers in Project Properties.
-# To change this template file, choose Tools | Templates
-# and open the template in the editor.
-
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
 import hashlib
 import os.path
 
 import gripe
 import grit.requesthandler
-
-__author__="jan"
-__date__ ="$19-Sep-2013 4:47:28 PM$"
 
 logger = gripe.get_logger(__name__)
 
@@ -19,15 +29,32 @@ class StaticHandler(grit.requesthandler.ReqHandler):
     etags = {}
 
     def get(self, *args, **kwargs):
-        logger.info("StaticHandler.get(%s)", self.request.path)
-        path = ''
-        if "abspath" in kwargs:
-            path = kwargs["abspath"]
+        request = self.request
+        route = request.route
+        logger.info("StaticHandler.get(%s)", request.path)
+        reqpath = route.grit_params["alias"] if 'alias' in route.grit_params else request.path
+
+        if "abspath" in route.grit_params:
+            if reqpath[0] == '/' or reqpath[0] == '\\':
+                reqpath = reqpath[1:]
+            path = os.path.join(kwargs["abspath"], reqpath)
+            logger.debug("Retrieving %s using absolute path %s", path, route.grit_params["abspath"])
+        elif "relpath" in route.grit_params:
+            prefix = os.path.commonprefix([route.grit_params["path"], reqpath])
+            relative = os.path.relpath(reqpath, prefix)
+            if relative[0] == '/' or relative[0] == '\\':
+                relative = relative[1:]
+            relpath = route.grit_params["relpath"]
+            if relpath[0] == '/' or relpath[0] == '\\':
+                relpath = relpath[1:]
+            path = os.path.join(gripe.root_dir(), relpath, relative)
+            logger.debug("Mapping '%s' to '%s' using relative path '%s'", reqpath, path, route.grit_params["relpath"])
         else:
-            path = gripe.root_dir()
-            if "relpath" in kwargs:
-                path = os.path.join(path, kwargs["relpath"])
-        path += self.request.path if not kwargs.get('alias') else kwargs.get("alias")
+            if reqpath[0] == '/' or reqpath[0] == '\\':
+                reqpath = reqpath[1:]
+            path = os.path.join(gripe.root_dir(), reqpath)
+            logger.debug("Joining %s with root_dir %s gives %s", reqpath, gripe.root_dir(), path)
+
         if not os.path.exists(path):
             logger.info("Static file %s does not exist", path)
             self.request.response.status = "404 Not Found"

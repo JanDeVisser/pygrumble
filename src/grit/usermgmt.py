@@ -1,14 +1,27 @@
-'''
-Created on 2013-03-12
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
-@author: jan
-'''
 
 import json
-import sys
 import webapp2
 
 import gripe
+import gripe.auth
 import grumble
 import grudge
 import grit.requesthandler
@@ -45,7 +58,7 @@ class Login(grit.requesthandler.ReqHandler):
         else:
             url = str(self.request.get("redirecturl", "/"))
         assert self.session is not None, "Session missing from request handler"
-        if self.session.login(userid, password = password, remember_me = remember_me):
+        if self.session.login(userid, password=password, remember_me=remember_me):
             logger.debug("Login OK")
             logger.debug("Sending redirect to %s", url)
             if not json_request:
@@ -59,6 +72,36 @@ class Login(grit.requesthandler.ReqHandler):
 
 
 class Logout(grit.requesthandler.ReqHandler):
+    def get_template(self):
+        if gripe.Config.app and gripe.Config.app.logout and gripe.Config.app.logout.template:
+            return gripe.Config.app.logout.template
+        else:
+            return None
+
+    def get_context(self, ctx):
+        return ctx
+
+    def get_urls(self, urls):
+        urls.append("login", "Login", None, 10)
+        urls.append("reset-password", "Reset Password", None, 20)
+        urls.append("signup", "Sign up", None, 30)
+        return urls
+
+    def get(self):
+        logger.debug("main::logout.get")
+        assert hasattr(self, "session") and self.session is not None, "Logout request handler has no session"
+        self.session.logout()
+        if gripe.Config.app and gripe.Config.app.logout and gripe.Config.app.logout.redirect:
+            logger.debug("Logout: redirect to %s", gripe.Config.app.logout.redirect)
+            self.redirect(gripe.Config.app.logout.redirect)
+        else:
+            self.render()
+
+    def post(self):
+        self.get()
+
+
+class Profile(grit.requesthandler.ReqHandler):
     def get_template(self):
         if gripe.Config.app and gripe.Config.app.logout and gripe.Config.app.logout.template:
             return gripe.Config.app.logout.template
@@ -113,7 +156,7 @@ class ChangePwd(grit.requesthandler.ReqHandler):
             if self.user.authenticate(**{"password": oldpassword}):
                 self.user.changepwd(oldpassword, newpassword)
                 if json_request:
-                    self.json_dump({ "status": "OK" })
+                    self.json_dump({"status": "OK"})
                 else:
                     self.render()
             else:
@@ -128,9 +171,10 @@ class ChangePwd(grit.requesthandler.ReqHandler):
 
 @grudge.OnStarted("create_user")
 @grudge.OnAdd("user_exists", grudge.Stop())
-@grudge.OnAdd("user_created", grudge.SendMail(recipients = "@.:userid",
-    subject = "Confirm your registration with %s" % gripe.Config.app.about.application_name,
-    text = "&signup_confirmation", status = "mail_sent", context = ".:prepare_message"))
+@grudge.OnAdd("user_created",
+              grudge.SendMail(recipients="@.:userid",
+                              subject="Confirm your registration with %s" % gripe.Config.app.about.application_name,
+                              text="&signup_confirmation", status="mail_sent", context=".:prepare_message"))
 @grudge.OnAdd("confirmed", "activate_user")
 @grudge.OnAdd("user_activated", grudge.Stop())
 @grudge.Process()
@@ -151,7 +195,7 @@ class UserSignup(grumble.Model):
             um.add(self.userid, **{"password": self.password, "label": self.display_name})
             logger.debug("Create User OK")
             return self.user_created
-        except gripe.auth.UserExists as e:
+        except gripe.auth.UserExists:
             return self.user_exists
         except gripe.Error as e:
             logger.debug("Create user Error: %s" % e)
@@ -181,11 +225,13 @@ class UserSignup(grumble.Model):
 # ==========================================================================
 #
 
+
 @grudge.OnStarted("create_user")
 @grudge.OnAdd("user_exists", grudge.Stop())
-@grudge.OnAdd("user_created", grudge.SendMail(recipients = "@.:userid",
-    subject = "Confirm your registration with %s" % gripe.Config.app.about.application_name,
-    text = "&confirm_creation", status = "mail_sent", context = ".:prepare_message"))
+@grudge.OnAdd("user_created",
+              grudge.SendMail(recipients="@.:userid",
+                              subject="Confirm your registration with %s" % gripe.Config.app.about.application_name,
+                              text="&confirm_creation", status="mail_sent", context=".:prepare_message"))
 @grudge.OnAdd("confirmed", "activate_user")
 @grudge.OnAdd("user_activated", grudge.Stop())
 @grudge.Process()
@@ -208,7 +254,7 @@ class UserCreate(grumble.Model):
             self.put()
             logger.debug("Create User OK")
             return self.user_created
-        except gripe.auth.UserExists as e:
+        except gripe.auth.UserExists:
             return self.user_exists
         except gripe.Error as e:
             logger.debug("Create user Error: %s" % e)
@@ -238,11 +284,13 @@ class UserCreate(grumble.Model):
 # ==========================================================================
 #
 
+
 @grudge.OnStarted("generate_password")
 @grudge.OnAdd("user_doesnt_exists", grudge.Stop())
-@grudge.OnAdd("password_generated", grudge.SendMail(recipients = "@.:userid",
-    subject = "New password request for %s" % gripe.Config.app.about.application_name,
-    text = "&password_reset", status = "mail_sent", context = ".:prepare_message"))
+@grudge.OnAdd("password_generated",
+              grudge.SendMail(recipients="@.:userid",
+                              subject="New password request for %s" % gripe.Config.app.about.application_name,
+                              text="&password_reset", status="mail_sent", context=".:prepare_message"))
 @grudge.OnAdd("confirmed", "reset_password")
 @grudge.OnAdd("password_reset", grudge.Stop())
 @grudge.Process()
@@ -268,7 +316,7 @@ class PasswordReset(grumble.Model):
             self.password = um.gen_password()
             self.put()
             return self.password_generated
-        except gripe.auth.UserExists as e:
+        except gripe.auth.UserExists:
             return self.user_exists
         except gripe.Error as e:
             logger.debug("Create user Error: %s" % e)
@@ -296,14 +344,14 @@ class PasswordReset(grumble.Model):
             raise
 
 app = webapp2.WSGIApplication([
-        webapp2.Route(r'/login', handler = Login, name = 'login'),
-        webapp2.Route(r'/logout', handler = Logout, name = 'logout'),
-        webapp2.Route(r'/um/changepwd', handler = ChangePwd, name = 'changepwd'),
+        webapp2.Route(r'/login', handler=Login, name='login'),
+        webapp2.Route(r'/logout', handler=Logout, name='logout'),
+        webapp2.Route(r'/um/changepwd', handler=ChangePwd, name='changepwd'),
 
         webapp2.Route(
             r'/um/signup',
-            handler = "grudge.control.Startup", name = 'signup',
-            defaults = {
+            handler="grudge.control.Startup", name='signup',
+            defaults={
                 "process": gripe.Config.app.workflows.signup,
                 "mapping": ["userid", "password", "display_name"]
             }
@@ -311,16 +359,16 @@ app = webapp2.WSGIApplication([
 
         webapp2.Route(
             r'/um/confirm/<code>',
-            handler = "grudge.control.AddStatus", name = 'confirm-signup',
-            defaults = {
+            handler="grudge.control.AddStatus", name='confirm-signup',
+            defaults={
                 "status": "confirmed"
             }
         ),
 
         webapp2.Route(
             r'/um/create',
-            handler = "grudge.control.Startup", name = 'signup',
-            defaults = {
+            handler="grudge.control.Startup", name='signup',
+            defaults={
                 "process": gripe.Config.app.workflows.usercreate,
                 "mapping": ["userid", "display_name"]
             }
@@ -328,26 +376,26 @@ app = webapp2.WSGIApplication([
 
         webapp2.Route(
             r'/um/confirmcreate/<code>',
-            handler = "grudge.control.AddStatus", name = 'confirm-create',
-            defaults = {
+            handler="grudge.control.AddStatus", name='confirm-create',
+            defaults={
                 "status": "confirmed"
             }
         ),
 
         webapp2.Route(
             r'/um/reset',
-            handler = "grudge.control.Startup", name = 'reset',
-            defaults = {
+            handler="grudge.control.Startup", name='reset',
+            defaults={
                 "process": gripe.Config.app.workflows.pwdreset,
                 "mapping": ["userid"]
             }
         ),
+
         webapp2.Route(
             r'/um/confirmreset/<code>',
-            handler = "grudge.control.AddStatus", name = 'confirm-reset',
-            defaults = {
+            handler="grudge.control.AddStatus", name='confirm-reset',
+            defaults={
                 "status": "confirmed"
             }
         ),
-    ], debug = True)
-
+    ], debug=True)

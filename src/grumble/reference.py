@@ -115,6 +115,8 @@ class ReferenceProperty(grumble.property.ModelProperty):
             value = clazz.get(value) if clazz else grumble.model.Model.get(value)
         elif isinstance(value, dict) and ("key" in value):
             value = clazz.get(value["key"])
+        elif isinstance(value, dict) and clazz.keyproperty() is not None and (clazz.keyproperty().name in value):
+            value = clazz.by(clazz.keyproperty().name, value[clazz.keyproperty().name])
         elif not isinstance(value, clazz):
             assert 0, "Cannot update ReferenceProperty to %s (wrong type %s)" % (value, str(type(value)))
         return value
