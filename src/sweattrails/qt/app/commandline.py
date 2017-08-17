@@ -29,9 +29,12 @@ import sweattrails.withings
 logger = gripe.get_logger(__name__)
 
 
-class SweatTrailsCmdLine(QCoreApplication, sweattrails.qt.app.core.SweatTrailsCore):
+class SweatTrailsCmdLine(QCoreApplication,
+                         sweattrails.qt.app.core.SweatTrailsCore,
+                         sweattrails.qt.imports.DownloadManager):
     def __init__(self, argv):
         super(SweatTrailsCmdLine, self).__init__(argv)
+        self.after_download.connect(self._after_download)
 
     def start(self, args):
         super(SweatTrailsCmdLine, self).start(args)
@@ -45,11 +48,11 @@ class SweatTrailsCmdLine(QCoreApplication, sweattrails.qt.app.core.SweatTrailsCo
         t = sweattrails.qt.imports.BackgroundThread.get_thread()
         t.queueEmpty.connect(self.quit)
 
-    def after_download(self):
+    def _after_download(self, job):
         self.quit()
 
     def status_message(self, msg, *args):
-        print msg.format(*args)
+        print str(msg).format(*args)
 
     def progress_init(self, msg, *args):
         self.curr_progress = 0

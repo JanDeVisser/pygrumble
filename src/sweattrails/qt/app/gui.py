@@ -82,5 +82,5 @@ class SweatTrails(QApplication, sweattrails.qt.app.core.SweatTrailsCore):
 
     def getDownloadManager(self):
         if not hasattr(self, "_downloadManager"):
-            self._downloadManager = sweattrails.qt.imports.SelectActivities()
+            self._downloadManager = sweattrails.qt.imports.SelectActivities(self)
         return self._downloadManager

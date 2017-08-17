@@ -80,17 +80,17 @@ class ModelManager(object):
             self.key_col = kc
             self.columns.append(kc)
         if not self.flat:
-            self.columns += (ColumnDefinition("_ancestors", "TEXT", True, None, True), \
+            self.columns += (ColumnDefinition("_ancestors", "TEXT", True, None, True),
                              ColumnDefinition("_parent", "TEXT", False, None, True),
                              ColumnDefinition("_key", "TEXT", True, None, True))
         self.columns += self._prep_columns
         if self.audit:
-            self.columns += (ColumnDefinition("_ownerid", "TEXT", False, None, True), \
-                ColumnDefinition("_acl", "TEXT", False, None, False), \
-                ColumnDefinition("_createdby", "TEXT", False, None, False), \
-                ColumnDefinition("_created", "TIMESTAMP", False, None, False), \
-                ColumnDefinition("_updatedby", "TEXT", False, None, False), \
-                ColumnDefinition("_updated", "TIMESTAMP", False, None, False))
+            self.columns += (ColumnDefinition("_ownerid", "TEXT", False, None, True),
+                             ColumnDefinition("_acl", "TEXT", False, None, False),
+                             ColumnDefinition("_createdby", "TEXT", False, None, False),
+                             ColumnDefinition("_created", "TIMESTAMP", False, None, False),
+                             ColumnDefinition("_updatedby", "TEXT", False, None, False),
+                             ColumnDefinition("_updated", "TIMESTAMP", False, None, False))
         self.column_names = [c.name for c in self.columns]
 
     def add_column(self, column):

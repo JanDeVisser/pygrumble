@@ -19,7 +19,9 @@
 
 from PyQt5.QtCore import QCoreApplication
 from PyQt5.QtCore import Qt
-
+from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QValidator
 from PyQt5.QtWidgets import QAction
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtWidgets import QCheckBox
@@ -27,15 +29,12 @@ from PyQt5.QtWidgets import QDialog
 from PyQt5.QtWidgets import QDialogButtonBox
 from PyQt5.QtWidgets import QFileDialog
 from PyQt5.QtWidgets import QFormLayout
-from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QLabel
 from PyQt5.QtWidgets import QLineEdit
 from PyQt5.QtWidgets import QMainWindow
 from PyQt5.QtWidgets import QMessageBox
-from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QProgressBar
 from PyQt5.QtWidgets import QTabWidget
-from PyQt5.QtGui import QValidator
 from PyQt5.QtWidgets import QVBoxLayout
 from PyQt5.QtWidgets import QWidget
 
@@ -44,9 +43,9 @@ import gripe
 import sweattrails.qt.async.bg
 import sweattrails.qt.async.job
 import sweattrails.qt.fitnesstab
-import sweattrails.qt.profiletab
-import sweattrails.qt.sessiontab
 import sweattrails.qt.imports
+import sweattrails.qt.profiletab
+import sweattrails.qt.session.tab
 import sweattrails.qt.usertab
 
 logger = gripe.get_logger(__name__)
@@ -173,12 +172,10 @@ class STMainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.setTabPosition(QTabWidget.West)
         self.tabs.currentChanged[int].connect(self.tabChanged)
-        self.sessiontab = sweattrails.qt.sessiontab.SessionTab(self)
+        self.sessiontab = sweattrails.qt.session.tab.SessionTab(self)
         self.tabs.addTab(self.sessiontab, "Sessions")
-        self.tabs.addTab(sweattrails.qt.fitnesstab.FitnessTab(self),
-                         "Fitness")
-        self.tabs.addTab(sweattrails.qt.profiletab.ProfileTab(self),
-                         "Profile")
+        self.tabs.addTab(sweattrails.qt.fitnesstab.FitnessTab(self), "Fitness")
+        self.tabs.addTab(sweattrails.qt.profiletab.ProfileTab(self), "Profile")
         self.usertab = sweattrails.qt.usertab.UserTab(self)
         self.tabs.addTab(self.usertab, "Users")
         self.usertab.hide()
@@ -200,7 +197,6 @@ class STMainWindow(QMainWindow):
         self.setWindowIcon(QIcon(icon))
         QCoreApplication.instance().refresh.connect(self.userSet)
 
-
     def createActions(self):
         self.switchUserAct = QAction("&Switch User", self,
                                      shortcut="Ctrl+U",
@@ -216,21 +212,26 @@ class STMainWindow(QMainWindow):
         self.withingsAct = QAction("&Withings", self,
                                    statusTip = "Download Withings data",
                                    triggered = QCoreApplication.instance().withings)
+        self.reanalyzeAllAct = QAction("&Reanalyze All", self,
+                                       statusTip="Re-analyze all activities",
+                                       triggered=QCoreApplication.instance().reanalyze)
         self.exitAct = QAction("E&xit", self, shortcut = "Ctrl+Q", statusTip = "Exit SweatTrails", triggered = self.close)
 
         self.aboutAct = QAction("&About", self, triggered = self.about)
         self.aboutQtAct = QAction("About &Qt", self, triggered = QApplication.aboutQt)
-
 
     def createMenus(self):
         self.fileMenu = self.menuBar().addMenu(self.tr("&File"))
         self.fileMenu.addAction(self.switchUserAct)
         self.fileMenu.addSeparator()
         self.fileMenu.addAction(self.importFileAct)
-        self.fileMenu.addAction(self.downloadAct)
-        self.fileMenu.addAction(self.withingsAct)
         self.fileMenu.addSeparator()
         self.fileMenu.addAction(self.exitAct)
+
+        self.toolsMenu = self.menuBar().addMenu(self.tr("&Tools"))
+        self.toolsMenu.addAction(self.downloadAct)
+        self.toolsMenu.addAction(self.withingsAct)
+        self.toolsMenu.addAction(self.reanalyzeAllAct)
 
         self.menuBar().addSeparator()
 
@@ -238,14 +239,10 @@ class STMainWindow(QMainWindow):
         self.helpMenu.addAction(self.aboutAct)
         self.helpMenu.addAction(self.aboutQtAct)
 
-
     def show(self):
         super(QMainWindow, self).show()
         if self.select_user():
-            t = sweattrails.qt.async.bg.BackgroundThread.get_thread()
-            t.jobStarted.connect(self.status_message)
-            t.jobFinished.connect(self.status_message)
-            t.jobError.connect(self.error_message)
+            pass
         else:
             self.close()
 
@@ -253,7 +250,6 @@ class STMainWindow(QMainWindow):
         pass
 
     def select_user(self):
-        ret = False
         if QCoreApplication.instance().user:
             return True
         elif QCoreApplication.instance().has_users():
@@ -327,7 +323,7 @@ class STMainWindow(QMainWindow):
             self.usertab.show()
 
     def status_message(self, msg, *args):
-        self.statusmessage.setText(msg.format(*args))
+        self.statusmessage.setText(str(msg).format(*args))
 
     def error_message(self, msg, e):
         if e:

@@ -33,7 +33,7 @@ class LoggedCursor(object):
         self._columns = columns
         self._key_index = key_index
 
-    def execute(self, sql, args = [], **kwargs):
+    def execute(self, sql, args=[], **kwargs):
         if "columns" in kwargs:
             self._columns = kwargs["columns"]
         if "key_index" in kwargs:
@@ -146,9 +146,7 @@ class Tx(object):
 
     @classmethod
     def begin(cls, role = "user", database = None, autocommit = False):
-        return cls._tl.tx \
-            if hasattr(cls._tl, "tx") \
-            else Tx(role, database, autocommit)
+        return cls._tl.tx if hasattr(cls._tl, "tx") else Tx(role, database, autocommit)
 
     @classmethod
     def get(cls):
@@ -168,13 +166,12 @@ class Tx(object):
     def __exit__(self, exception_type, exception_value, trace):
         self.count -= 1
         if exception_type:
-            logger.error("Exception in Tx block",
-                exc_info = (exception_type, exception_value, trace))
+            logger.error("Exception in Tx block", exc_info=(exception_type, exception_value, trace))
         if not self.count:
             try:
                 self._end_tx(exception_type)
             except Exception as exc:
-                logger.error("Exception committing Tx", exc_info = True)
+                logger.error("Exception committing Tx", exc_info=True)
         return False
 
     def get_cursor(self):
@@ -186,7 +183,7 @@ class Tx(object):
         self.cursors.remove(cur)
         cur._close()
 
-    def _end_tx(self,  rollback = False):
+    def _end_tx(self,  rollback=False):
         try:
             try:
                 for c in self.cursors:
@@ -224,9 +221,13 @@ class Tx(object):
 logger.info("Initialized module %s", __name__)
 
 if __name__ == "__main__":
-    with Tx.begin() as tx:
-        cur = tx.get_cursor()
-        cur.execute("CREATE TABLE grumble.a (foo TEXT)")
-        cur.execute("INSERT INTO grumble.a (foo) VALUES ('jan')")
-        cur.execute("SELECT * FROM grumble.a")
-        print cur.singleton()
+
+    def tx_test():
+        with Tx.begin() as tx:
+            cur = tx.get_cursor()
+            cur.execute("CREATE TABLE grumble.a (foo TEXT)")
+            cur.execute("INSERT INTO grumble.a (foo) VALUES ('jan')")
+            cur.execute("SELECT * FROM grumble.a")
+            print cur.singleton()
+
+    tx_test()

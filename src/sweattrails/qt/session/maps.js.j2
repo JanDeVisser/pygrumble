@@ -1,0 +1,165 @@
+/**
+ * Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 2 of the License, or (at your option)
+ * any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
+var osm_attr = 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>';
+
+var tile_sources = {
+    OSMMapnik: {
+        url: 'http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attributes: {
+            attribution: osm_attr
+        }
+    },
+    OpenCycleMap: {
+        url: 'http://{s}.tile.opencyclemap.org/cycle/{z}/{x}/{y}.png',
+        attributes: {
+            attribution: '&copy; OpenCycleMap, ' + osm_attr
+        }
+    },
+    MapQuest: {
+        url: 'http://otile{s}.mqcdn.com/tiles/1.0.0/osm/{z}/{x}/{y}.png',
+        attributes: {
+            attribution: osm_attr + ' Tiles &169; <a href="http://www.mapquest.com/" target="_blank">MapQuest</a> <img src="http://developer.mapquest.com/content/osm/mq_logo.png" />'
+        }
+    },
+    Mapbox: {
+        url:             'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}',
+        attributes: {
+            attribution: 'Map data &#169; OpenStreetMap contributors, CC-BY-SA, Imagery &#169; Mapbox',
+            id:          'mapbox.run-bike-hike',
+            accessToken: 'pk.eyJ1IjoiamFuZGV2IiwiYSI6ImNpenBzbzFzNTAwcmgycnFnd3QycWFpbTgifQ.vIht_WItDuJwLuatY_S5xg'
+        }
+    }
+};
+
+var source = 'Mapbox';
+
+var bridge = null;
+var map = null;
+var waypoints = null;
+var route = null;
+var segment = null;
+
+function setupMap() {
+    try {
+        if (!map) {
+            route = null;
+            segment = null;
+            map = L.map('map-canvas');
+            var src = tile_sources[source];
+            L.tileLayer(src.url, src.attributes).addTo(map);
+        }
+    } catch (e) {
+        console.log("initialize(): " + e);
+        throw e;
+    }
+}
+
+function drawInterval(points, color) {
+    var options = {
+        color: color,
+        fill:  false
+    };
+    var path = [];
+
+    try {
+        for (var ix = 0; ix < points.length; ix++) {
+            path.push(L.latLng(points[ix].location.lat, points[ix].location.lon));
+        }
+        var line = L.polyline(path, options);
+        line.addTo(map);
+        return line;
+    } catch (e) {
+        console.log("drawInterval(): " + e);
+    }
+}
+
+function eraseSegment() {
+    if (segment) {
+        map.removeLayer(segment);
+        segment = null;
+    }
+}
+
+/* ----------------------------------------------------------------------- */
+
+function setRoute(wps) {
+    setupMap();
+    waypoints = wps;
+
+    if (route) {
+        map.removeLayer(route);
+        route = null;
+    }
+    route = drawInterval(waypoints, 'red');
+    map.fitBounds(route.getBounds());
+}
+
+function highlight(ts, duration) {
+    var wps = [];
+
+    setupMap();
+    eraseSegment();
+    for (var ix = 0; ix < waypoints.length; ix++) {
+        var wp = waypoints[ix];
+        if ((wp.timestamp >= ts) && (wp.timestamp <= (ts + duration))) {
+            wps.push(wp)
+        }
+    }
+    if (wps.length) {
+        segment = drawInterval(wps, 'blue');
+    }
+}
+
+/* ----------------------------------------------------------------------- */
+
+{% if usewebchannel %}
+    (function () {
+        var baseUrl;
+
+        if (location.search !== "")
+            baseUrl = (/[?&]webChannelBaseUrl=([A-Za-z0-9\-:/\.]+)/.exec(location.search)[1]);
+        else
+            baseUrl = "ws://localhost:12345";
+
+        console.log("Connecting to WebSocket server at " + baseUrl + ".");
+        var socket = new WebSocket(baseUrl);
+
+        socket.onclose = function () {
+            console.error("web channel closed");
+        };
+
+        socket.onerror = function (error) {
+            console.error("web channel error: " + error);
+        };
+
+        socket.onopen = function () {
+            console.log("WebSocket connected, setting up QWebChannel.");
+            new QWebChannel(socket, function (channel) {
+                bridge = channel.objects.bridge;
+                bridge.sendRoute.connect(function (wps) {
+                    setRoute(wps);
+                });
+                bridge.highlight.connect(function (ts, duration) {
+                    highlight(ts, duration);
+                });
+                console.log("Connected to WebChannel, ready to send/receive messages!");
+            });
+        }
+    })();
+{% endif %}

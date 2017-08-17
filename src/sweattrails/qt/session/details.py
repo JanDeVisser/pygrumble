@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+# Copyright (c) 2017 Jan de Visser (jan@sweattrails.com)
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -16,11 +16,9 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-
 from PyQt5.QtCore import QCoreApplication
 from PyQt5.QtCore import Qt
-
-from PyQt5.QtWidgets import QSplitter
+from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtWidgets import QTabWidget
 from PyQt5.QtWidgets import QVBoxLayout
 from PyQt5.QtWidgets import QWidget
@@ -30,8 +28,11 @@ import gripe.conversions
 import grumble.qt.bridge
 import grumble.qt.model
 import grumble.qt.view
+import sweattrails.qt.async.job
 import sweattrails.qt.graphs
+import sweattrails.qt.session.bike
 import sweattrails.qt.session.maps
+import sweattrails.qt.session.run
 import sweattrails.qt.view
 import sweattrails.session
 
@@ -81,155 +82,12 @@ class MiscDataPage(grumble.qt.bridge.FormPage):
         self.row += 1
 
 
-class CriticalPowerList(grumble.qt.view.TableView):
-    def __init__(self, parent=None, interval=None):
-        super(CriticalPowerList, self).__init__(parent=parent)
-        self.interval = interval
-
-        query = sweattrails.session.CriticalPower.query(keys_only=False)
-        self.setQueryAndColumns(query,
-                                grumble.qt.model.TableColumn("cpdef.name", header="Duration"),
-                                grumble.qt.model.TableColumn("power", format="d", header="Power"),
-                                sweattrails.qt.view.TimestampColumn("timestamp", header="Starting on"))
-
-    def resetQuery(self):
-        self.query().set_parent(self.interval.intervalpart)
-
-
-class PowerPage(grumble.qt.bridge.FormPage):
-    def __init__(self, parent):
-        super(PowerPage, self).__init__(parent)
-        logger.debug("Initializing power tab")
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.max_power", 0, 0,
-                         readonly=True)
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.average_power", 1, 0,
-                         readonly=True)
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.normalized_power", 2, 0,
-                         readonly=True)
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.vi", 3, 0,
-                         readonly=True)
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.tss", 3, 2,
-                         readonly=True)
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.intensity_factor", 4, 0,
-                         readonly=True)
-
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.max_cadence", 0, 2,
-                         readonly=True)
-        self.addProperty(sweattrails.session.BikePart, "intervalpart.average_cadence", 1, 2,
-                         readonly=True)
-        self.cplist = CriticalPowerList(parent, parent.instance())
-        self.addWidget(self.cplist, 6, 0, 1, 4)
-
-    def selected(self):
-        self.cplist.refresh()
-
-
-class BikePlugin(object):
-    def __init__(self, page, instance):
-        self.page = page
-
-    def handle(self, instance):
-        logger.debug("Running Bike Plugin")
-        part = instance.intervalpart
-        if part.max_power:
-            self.page.addTab(PowerPage(self.page), "Power")
-
-    def addGraphs(self, graph, interval):
-        part = interval.intervalpart
-        graph.addSeries(
-            sweattrails.qt.graphs.Series(property="speed",
-                                         name="Speed",
-                                         max=interval.max_speed,
-                                         color=Qt.magenta))
-        if part.max_power:
-            series = sweattrails.qt.graphs.Series(property="power",
-                                                  name="Power",
-                                                  graph=graph,
-                                                  smooth=3,
-                                                  max=part.max_power,
-                                                  color=Qt.blue)
-            series.addTrendLine(lambda x : float(part.average_power))
-            series.addTrendLine(lambda x : float(part.normalized_power),
-                                style=Qt.DashDotLine)
-        if part.max_cadence:
-            graph.addSeries(sweattrails.qt.graphs.Series(property="cadence",
-                                                         name="Cadence",
-                                                         max=part.max_cadence,
-                                                         color=Qt.darkCyan))
-
-
-class CriticalPaceList(grumble.qt.view.TableView):
-    def __init__(self, parent=None, interval=None):
-        super(CriticalPaceList, self).__init__(parent=parent)
-        self.interval=interval
-
-        query = sweattrails.session.RunPace.query(keys_only=False)
-        self.setQueryAndColumns(query,
-                                grumble.qt.model.TableColumn("cpdef.name", header="Distance"),
-                                sweattrails.qt.view.SecondsColumn("duration", header="Duration"),
-                                sweattrails.qt.view.PaceSpeedColumn(interval=interval),
-                                sweattrails.qt.view.DistanceColumn("atdistance", header="At distance"),
-                                sweattrails.qt.view.TimestampColumn(header="Starting on"))
-
-    def resetQuery(self):
-        self.query().set_parent(self.interval.intervalpart)
-
-
-class PacesPage(QWidget):
-    def __init__(self, parent):
-        super(PacesPage, self).__init__(parent)
-        self.cplist = CriticalPaceList(self, parent.instance())
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.cplist)
-
-    def selected(self):
-        self.cplist.refresh()
-
-
-class RunPlugin(object):
-    def __init__(self, page, instance):
-        self.page = page
-
-    def handle(self, instance):
-        logger.debug("Running Run Plugin")
-        self.page.addTab(PacesPage(self.page), "Paces")
-
-    def addGraphs(self, graph, interval):
-        part = interval.intervalpart
-        logger.debug("Pace graph")
-        if interval.max_speed:
-            graph.addSeries(sweattrails.qt.graphs.Series(property="speed",
-                                                         name="Speed",
-                                                         max=interval.max_speed,
-                                                         smooth=3,
-                                                         color=Qt.magenta))
-        if part.max_cadence:
-            logger.debug("Cadence graph")
-            graph.addSeries(sweattrails.qt.graphs.Series(property="cadence",
-                                                         name="Cadence",
-                                                         max=part.max_cadence,
-                                                         smooth=3,
-                                                         color=Qt.darkCyan))
-
-    def addMiscData(self, page, interval):
-        part = interval.intervalpart
-        if part.max_cadence:
-            page.addProperty(sweattrails.session.RunPart,
-                             "intervalpart.max_cadence",
-                             page.row, 0,
-                             readonly=True)
-            page.addProperty(sweattrails.session.RunPart,
-                             "intervalpart.average_cadence",
-                             page.row + 1, 0,
-                             readonly=True)
-            page.row += 2
-
-
 class Waypoints(sweattrails.qt.graphs.DataSource, sweattrails.qt.graphs.Axis):
     def __init__(self, interval):
         logger.debug("Waypoints.__init__ %s", type(self));
         super(Waypoints, self).__init__(property="distance",
-                                        name="Waypoints", offset=0)
+                                        name="Waypoints",
+                                        offset=0)
         self.interval = interval
 
     def fetch(self):
@@ -243,16 +101,14 @@ class GraphPage(QWidget):
         self.graphs = sweattrails.qt.graphs.Graph(
             self, Waypoints(instance))
         if instance.max_heartrate:
-            logger.debug("HR graph")
             self.graphs.addSeries(
                 sweattrails.qt.graphs.Series(
                     max=instance.max_heartrate,
                     name="Heartrate",
                     property="heartrate",
-                    smooth=3,
+                    smooth=0,
                     color=Qt.red))
         if instance.geodata:
-            logger.debug("ElevationGraph")
             self.graphs.addSeries(sweattrails.qt.graphs.Series(
                 min=instance.geodata.min_elev,
                 max=instance.geodata.max_elev,
@@ -261,10 +117,10 @@ class GraphPage(QWidget):
                        if wp.corrected_elevation is not None
                        else wp.elevation if wp.elevation else 0),
                 name="elevation",
-                smooth=10,
+                smooth=0,
                 color="peru",
                 shade="sandybrown"))
-        if parent.plugin and hasattr(parent.plugin, "addGraphs"):
+        if parent.plugin and hasattr(parent.plugin, "addGraphs") and callable(parent.plugin.addGraphs):
             parent.plugin.addGraphs(self.graphs, instance)
         layout = QVBoxLayout(self)
         layout.addWidget(self.graphs)
@@ -274,11 +130,12 @@ class MapPage(QWidget):
     def __init__(self, parent, instance):
         super(MapPage, self).__init__(parent)
         layout = QVBoxLayout(self)
-        self.map = sweattrails.qt.session.maps.IntervalMap(self, instance)
+        self.map = sweattrails.qt.session.maps.IntervalMap(self)
+        self.interval = instance
         layout.addWidget(self.map)
 
     def selected(self):
-        self.map.drawMap()
+        self.map.drawMap(self.interval)
 
 
 class IntervalList(grumble.qt.view.TableView):
@@ -286,17 +143,28 @@ class IntervalList(grumble.qt.view.TableView):
         super(IntervalList, self).__init__(parent=parent)
         self.interval = interval
 
-        query = sweattrails.session.Interval.query(
-                   parent=self.interval, keys_only=False)
+        query = sweattrails.session.Interval.query(parent=self.interval, keys_only=False)
+        query.add_sort("k.timestamp")
         self.setQueryAndColumns(query,
-                sweattrails.qt.view.TimestampColumn(header="Start Time"),
-                sweattrails.qt.view.TimestampColumn("duration", header="Time"),
-                sweattrails.qt.view.DistanceColumn("distance", header="Distance"),
-                sweattrails.qt.view.PaceSpeedColumn("average_speed", interval=interval),
-        )
+                                sweattrails.qt.view.TimestampColumn(header="Start Time"),
+                                sweattrails.qt.view.TimestampColumn("duration", header="Time"),
+                                sweattrails.qt.view.DistanceColumn("distance", header="Distance"),
+                                sweattrails.qt.view.PaceSpeedColumn("average_speed", interval=interval))
+        self.clicked.connect(self.onClick)
+
 
     def resetQuery(self):
         self.query().set_parent(self.interval)
+
+    def onClick(self, ix):
+        key = self.model().data(ix, Qt.UserRole)
+        if key:
+            interval = key()
+            p = self.parent()
+            while p is not None and not isinstance(p, sweattrails.qt.session.tab.SessionTab):
+                p = p.parent()
+            if p is not None:
+                p.map.drawSegment(interval.timestamp, interval.duration)
 
 
 class IntervalListPage(QWidget):
@@ -318,17 +186,17 @@ class RawDataList(grumble.qt.view.TableView):
                                                    keys_only=False)
         query.add_sort("timestamp")
         self.setQueryAndColumns(query,
-                grumble.qt.model.TableColumn("timestamp", header="Timestamp"),
-                grumble.qt.model.TableColumn("location"),
-                grumble.qt.model.TableColumn("elevation"),
-                grumble.qt.model.TableColumn("corrected_elevation", header="Corrected"),
-                grumble.qt.model.TableColumn("speed"),
-                grumble.qt.model.TableColumn("distance"),
-                grumble.qt.model.TableColumn("cadence"),
-                grumble.qt.model.TableColumn("heartrate"),
-                grumble.qt.model.TableColumn("power"),
-                grumble.qt.model.TableColumn("torque"),
-                grumble.qt.model.TableColumn("temperature"))
+                                grumble.qt.model.TableColumn("timestamp", header="Timestamp"),
+                                grumble.qt.model.TableColumn("location"),
+                                grumble.qt.model.TableColumn("elevation"),
+                                grumble.qt.model.TableColumn("corrected_elevation", header="Corrected"),
+                                grumble.qt.model.TableColumn("speed"),
+                                grumble.qt.model.TableColumn("distance"),
+                                grumble.qt.model.TableColumn("cadence"),
+                                grumble.qt.model.TableColumn("heartrate"),
+                                grumble.qt.model.TableColumn("power"),
+                                grumble.qt.model.TableColumn("torque"),
+                                grumble.qt.model.TableColumn("temperature"))
         QCoreApplication.instance().refresh.connect(self.refresh)
 
 
@@ -343,16 +211,28 @@ class RawDataPage(QWidget):
         self.list.refresh()
 
 
+class ReanalyzeJob(sweattrails.qt.async.job.Job):
+    def __init__(self, interval):
+        super(ReanalyzeJob, self).__init__()
+        self.interval = interval
+
+    def handle(self):
+        self.interval.reanalyze(self)
+
+    def __str__(self):
+        return "Re-analyzing %s" % self.interval.interval_id
+
+
 class IntervalPage(grumble.qt.bridge.FormWidget):
     def __init__(self, interval, parent=None):
         super(IntervalPage, self).__init__(parent,
                                            grumble.qt.bridge.FormButtons.AllButtons
-                                               if interval.basekind() == "session"
-                                               else grumble.qt.bridge.FormButtons.EditButtons)
+                                           if interval.basekind() == "session"
+                                           else grumble.qt.bridge.FormButtons.EditButtons)
         with gripe.db.Tx.begin():
-            interval=interval()
+            interval = interval()
             self.interval = interval
-            if isinstance(interval, sweattrails.session.Session):
+            if interval.basekind() == "session":
                 self.addProperty(sweattrails.session.Session, "sessiontype", 0, 0,
                                  readonly=True, has_label=False, rowspan=3,
                                  bridge=grumble.qt.bridge.Image, height=64,
@@ -361,19 +241,22 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
                 self.addProperty(sweattrails.session.Session, "description", 1, 1, colspan=3)
                 col = 1
                 row = 2
+                self.analyzebutton = QPushButton("Re-Analyze", self)
+                self.analyzebutton.clicked.connect(self.analyze)
+                self.addWidgetToButtonBox(self.analyzebutton)
             else:
                 self.addProperty(sweattrails.session.Interval, "timestamp", 0, 0, colspan=3,
                                  readonly=True)
                 col = 0
                 row = 1
             self.addProperty(sweattrails.session.Interval, "elapsed_time", row, col,
-                             #format=gripe.conversions.timedelta_to_string,
                              readonly=True)
             self.addProperty(sweattrails.session.Interval, "duration", row, col + 2,
                              readonly=True)
             row += 1
             self.addProperty(sweattrails.session.Interval, "distance", row, col,
-                             readonly=True, displayconverter=sweattrails.qt.view.Distance)
+                             readonly=True,
+                             displayconverter=sweattrails.qt.view.Distance)
             row += 1
             self.addProperty(sweattrails.session.Interval, "average_speed", row, col,
                              readonly=True,
@@ -392,7 +275,7 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
                 page.list.objectSelected.connect(parent.addInterval)
             self.partSpecificContent(interval)
             self.addTab(GraphPage(self, interval), "Graphs")
-            self.addTab(MapPage(self, interval), "Map")
+            # self.addTab(MapPage(self, interval), "Map")
             self.addTab(MiscDataPage(self, interval), "Other Data")
             if interval.basekind() == "session":
                 self.addTab(RawDataPage(self), "Raw Data")
@@ -402,6 +285,10 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
             self.instanceSaved.connect(QCoreApplication.instance().status_message)
             self.instanceDeleted.connect(QCoreApplication.instance().status_message)
             self.setInstance(interval)
+
+    def analyze(self):
+        job = ReanalyzeJob(self.interval)
+        job.submit()
 
     def partSpecificContent(self, instance):
         self.plugin = None
@@ -415,8 +302,8 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
             self.plugin.handle(instance)
 
     _plugins = {
-        sweattrails.session.BikePart: BikePlugin,
-        sweattrails.session.RunPart: RunPlugin
+        sweattrails.session.BikePart: sweattrails.qt.session.bike.BikePlugin,
+        sweattrails.session.RunPart: sweattrails.qt.session.run.RunPlugin
     }
 
     @classmethod
@@ -436,7 +323,7 @@ class IntervalPage(grumble.qt.bridge.FormWidget):
 
 
 class SessionDetails(QWidget):
-    def __init__(self, parent = None):
+    def __init__(self, parent=None):
         super(SessionDetails, self).__init__(parent)
         self.tabs = QTabWidget(self)
         layout = QVBoxLayout(self)
@@ -446,6 +333,10 @@ class SessionDetails(QWidget):
     def setSession(self, session):
         self.tabs.clear()
         self.tabs.addTab(IntervalPage(session, self), str(session.start_time))
+        if session.waypoints:
+            self.parent().map.drawMap(session)
+        else:
+            self.parent().map.hide()
 
     def setTab(self, tab):
         t = self.tabs.currentWidget()
@@ -455,56 +346,3 @@ class SessionDetails(QWidget):
         self.tabs.addTab(IntervalPage(interval, self), str(interval.timestamp))
 
 
-class DescriptionColumn(grumble.qt.model.TableColumn):
-    def __init__(self):
-        super(DescriptionColumn, self).__init__("description")
-
-    def __call__(self, session):
-        if not session.description:
-            sessiontype = session.sessiontype
-            ret = sessiontype.name
-        else:
-            ret = session.description
-        return ret
-
-
-class SessionList(grumble.qt.view.TableView):
-    def __init__(self, user = None, parent=None):
-        super(SessionList, self).__init__(parent=parent)
-
-        if not user:
-            user=QCoreApplication.instance().user
-        query = sweattrails.session.Session.query(keys_only=False)
-        query.add_filter("athlete", "=", user)
-        query.add_sort("start_time")
-        self.setQueryAndColumns(query,
-                grumble.qt.model.TableColumn("start_time", format="%A", header="Day"),
-                grumble.qt.model.TableColumn("start_time",
-                                             format="%d %B",
-                                             header="Date"),
-                grumble.qt.model.TableColumn("start_time", format="%H:%M", header="Time"),
-                DescriptionColumn())
-        QCoreApplication.instance().refresh.connect(self.refresh)
-
-    def resetQuery(self):
-        user = QCoreApplication.instance().user
-        self.query().clear_filters()
-        self.query().add_filter("athlete", "=", user)
-
-
-class SessionTab(QSplitter):
-    def __init__(self, parent=None):
-        super(SessionTab, self).__init__(parent)
-        self.sessions = SessionList(parent=self)
-        self.addWidget(self.sessions)
-        self.details = SessionDetails(self)
-        self.addWidget(self.details)
-        self.sessions.objectSelected.connect(self.details.setSession)
-
-    def setSession(self, session_id):
-        session = sweattrails.session.Session.get_by_key(session_id)
-        if session:
-            self.details.setSession(session)
-
-    def setTab(self, tab):
-        self.details.setTab(tab)

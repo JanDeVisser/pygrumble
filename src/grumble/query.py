@@ -16,6 +16,7 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
+import sys
 
 import gripe
 import gripe.db
@@ -25,17 +26,104 @@ import grumble.dbadapter
 logger = gripe.get_logger(__name__)
 
 
+def quotify(colname):
+    if '.' in colname:
+        alias, name = colname.split('.', 1)
+        alias = alias.strip()
+    else:
+        alias = None
+        name = colname
+    name = name.strip()
+    return alias, ('"%s"' if name[0] != '"' else '%s') % name
+
+
 class Sort(object):
     def __init__(self, colname, ascending=True):
-        self.colname = colname
+        self._alias, self.colname = quotify(colname)
         self.ascending = ascending
 
     def order(self):
         return "ASC" if self.ascending else "DESC"
 
+    def alias(self, fallback):
+        return self._alias if self._alias is not None else fallback
+
+    def to_sql(self, fallback_alias="k"):
+        return "%s.%s %s" % (self.alias(fallback_alias), self.colname, self.order())
+
+    def __str__(self):
+        return self.to_sql()
+
+
+class Condition(object):
+    def __init__(self, sql, values):
+        self.sql = sql
+        self.values = values
+
+    def to_sql(self, vals=None, alias="k"):
+        if vals is not None:
+            if isinstance(self.values, (list, tuple)):
+                vals.extend(self.values)
+            elif self.values is not None:
+                vals.append(self.values)
+        return "(" + self.sql + ")"
+
+
+class Filter(object):
+    def __init__(self, *args):
+        if len(args) == 2:
+            split = args[0].rsplit(None, 1)
+            self.colname = split[0]
+            self.op = split[1] if len(split) > 1 else "="
+            self._alias, self.colname = quotify(self.colname)
+            self.value = args[1]
+        elif len(args) == 3:
+            self._alias, self.colname = quotify(str(args[0]))
+            self.op = args[1]
+            self.value = args[2]
+        else:
+            assert 0, "Could not interpret %s arguments to add_filter" % len(args)
+        if self.op:
+            self.op = self.op.strip().upper()
+        if hasattr(self.value, "key") and callable(self.value.key):
+            self.value = str(self.value.key())
+
+    def alias(self, fallback):
+        return self._alias if self._alias is not None else fallback
+
+    def to_sql(self, vals=None, alias="k"):
+        if self.value is None:
+            if self.op == "!=":
+                n = " IS NOT NULL"
+            else:
+                n = " IS NULL"
+            return '(%s.%s%s)' % (self.alias(alias), self.colname, n)
+        elif self.op and self.op.endswith("IN"):
+            try:
+                vals.extend(self.value)
+                l = len(self.value)
+            except TypeError:
+                vs = str(self.value).split(",")
+                if vals is not None:
+                    vals.extend(vs)
+                l = len(vs)
+            if l > 1:
+                return ' (%s.%s %s (' % (self.alias(alias), self.colname, self.op) + \
+                       ', '.join(["%%s" for i in range(l)]) + ')'
+            elif l == 1:
+                return '(%s.%s %s %%s)' % \
+                       (self.alias(alias), self.colname, "=" if self.op == "IN" else "!=")
+        else:
+            if vals is not None:
+                vals.append(self.value)
+            return '(%s.%s %s %%s)' % (self.alias(alias), self.colname, self.op)
+
+    def __str__(self):
+        return self.to_sql()
+
 
 class Join(object):
-    def __init__(self, kind, prop):
+    def __init__(self, ix, kind, prop, alias=None, join_with="k"):
         if isinstance(kind.__class__, grumble.ModelMetaClass):
             self._kind = kind.__class__
         elif isinstance(kind, grumble.ModelMetaClass):
@@ -43,9 +131,12 @@ class Join(object):
         else:
             self._kind = grumble.Model.for_name(str(kind))
         self._property = prop
+        self._alias = alias
+        self._join_with = join_with
+        self._ix = ix
 
     def tablename(self):
-        return self._kind.modelmanager.tablename()
+        return self._kind.modelmanager.tablename
 
     def columns(self):
         return self._kind.modelmanager.columns
@@ -56,12 +147,35 @@ class Join(object):
     def key_column_name(self):
         return self.key_column().name
 
+    def property(self):
+        return self._property
+
+    def alias(self):
+        return self._alias if self._alias else "j" + str(self._ix)
+
+    def join_sql(self):
+        return ' INNER JOIN %s %s ON (%s."_key" = %s."%s")' % \
+               (self.tablename(), self.alias(), self.alias(), self._join_with, self.property())
+
+    def column_sql(self, query_columns):
+        join_cols = [self.alias() + '."' + c.name + '"' for c in self.columns()]
+        query_columns.extend(['+' + c for c in join_cols])
+        return ', ' + ', '.join(join_cols)
+
+    def key_column_sql(self, query_columns):
+        query_columns.append(self.alias() + "." + self.key_column().name)
+        return ', %s."%s"' % (self.alias(), self.key_column().name)
+
+    def __str__(self):
+        return self.join_sql()
+
 
 class ModelQuery(object):
     def __init__(self):
         self._owner = None
         self._limit = None
         self._filters = []
+        self._conditions = []
         self._sortorder = []
         self._joins = []
 
@@ -165,36 +279,37 @@ class ModelQuery(object):
         return self._owner
 
     def clear_filters(self):
-        self._filters = []
+        self.clear_conditions()
 
     def add_filter(self, *args):
         self._reset_state()
-        if len(args) == 2:
-            expr = args[0]
-            value = args[1]
-        elif len(args) == 3:
-            prop = args[0]
-            assert isinstance(prop, basestring)
-            prop = prop.strip()
-            assert len(prop)
-            prop = '"' + prop + '"' if prop[0] != '"' or prop[-1:] != '"' else prop
-            expr = "%s %s" % (prop, args[1])
-            value = args[2]
-        else:
-            assert 0, "Could not interpret %s arguments to add_filter" % len(args)
-        if hasattr(value, "key") and callable(value.key):
-            value = str(value.key())
-        self._filters.append((expr, value))
+        self._conditions.append(Filter(*args))
         return self
 
-    def add_join(self, kind, prop):
-        self._joins.append(Join(kind, prop))
+    def filters(self):
+        return self._conditions
+
+    def clear_conditions(self):
+        self._conditions = []
+
+    def add_condition(self, cond, values):
+        self._reset_state()
+        self._conditions.append(Condition(cond, values))
+
+    def conditions(self):
+        return self._conditions
+
+    def clear_joins(self):
+        self._joins = []
+
+    def add_join(self, kind, prop, alias=None, join_with="k"):
+        self._joins.append(Join(len(self._joins), kind, prop, alias, join_with))
 
     def joins(self):
         return self._joins
 
-    def filters(self):
-        return self._filters
+    def add_parent_join(self, parent_kind, alias="p"):
+        self.add_join(parent_kind, "_parent", alias)
 
     def clear_sort(self):
         self._sortorder = []

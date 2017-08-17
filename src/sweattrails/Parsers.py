@@ -1,24 +1,21 @@
+import logging
 from datetime import datetime
 from datetime import time
 
-import logging
-
+import Util
 from Athlete import CriticalPowerDef
-from Session import CriticalPower
-from Session import Session
+from Model.Config import SessionType
+from Session import GeoData
 from Session import Interval
 from Session import SessionFile
 from Session import Waypoint
-from Session import GeoData
-from Model.Config import SessionType
 from xml_processor import XMLProcessor
-import Util
 
 import gripe
 import grumble.geopt
 import sweattrails.session
 
-logger = gripe.get_logger("sweattrails.session")
+logger = gripe.get_logger("sweattrails.model.session")
 
 class Policy():
     DONT_UPDATE, UPDATE_WITH_OFFSET, UPDATE_ABSOLUTE = range(3)

@@ -92,7 +92,7 @@ class ModelQueryRenderer(object):
         return self._query.owner()
 
     def filters(self):
-        return self._query.filters()
+        return self.conditions()
 
     def joins(self):
         return self._query.joins()
@@ -103,9 +103,8 @@ class ModelQueryRenderer(object):
     def limit(self):
         return self._query.limit()
 
-    def _custom_condition(self, values):
-        if hasattr(self._query, "condition"):
-            return self._query.condition(values)
+    def conditions(self):
+        return self._query.conditions()
 
     def _update_audit_info(self, new_values, insert):
         # Set update audit info:
@@ -138,10 +137,12 @@ class ModelQueryRenderer(object):
             cols = ()
             vals = []
             if query_type == QueryType.Delete:
-                sql = "DELETE FROM %s" % self.tablename()
+                sql = "DELETE FROM %s k" % self.tablename()
             elif query_type == QueryType.Count:
-                sql = "SELECT COUNT(*) AS COUNT FROM %s" % self.tablename()
+                sql = "SELECT COUNT(*) AS COUNT FROM %s k" % self.tablename()
                 cols = ('COUNT',)
+                for j in self.joins():
+                    sql += j.join_sql()
             elif query_type in (QueryType.Update, QueryType.Insert):
                 assert new_values, "ModelQuery.execute: QueryType %s requires new values" % QueryType[query_type]
                 if self.audit():
@@ -149,7 +150,7 @@ class ModelQueryRenderer(object):
                 else:
                     self._scrub_audit_info(new_values)
                 if query_type == QueryType.Update:
-                    sql = 'UPDATE %s SET %s ' % (self.tablename(), ", ".join(['"%s" = %%s' % c for c in new_values]))
+                    sql = 'UPDATE %s k SET %s ' % (self.tablename(), ", ".join(['"%s" = %%s' % c for c in new_values]))
                 else:  # Insert
                     sql = 'INSERT INTO %s ( "%s" ) VALUES ( %s )' % \
                             (self.tablename(), '", "'.join(new_values), ', '.join(['%s'] * len(new_values)))
@@ -160,49 +161,43 @@ class ModelQueryRenderer(object):
                     collist = 'k."' + '", k."'.join(cols) + '"'
                     key_name = self.key_column().name
                     key_ix = cols.index(key_name)
-                    jix = 0
+
                     for j in self.joins():
-                        jixstr = 'j' + str(jix) + '."'
-                        join_cols = [c.name for c in j.columns()]
-                        collist += ' ' + jixstr + ('", ' + jixstr).join(join_cols) + '"'
-                        jix += 1
-                        cols.extend(join_cols)
+                        collist += j.column_sql(cols)
                 else:
                     assert query_type == QueryType.KeyName
                     key_name = self.key_column().name
                     cols = [key_name]
-                    collist = 'k."%s"' % cols[0]
+                    collist = 'k."%s"' % key_name
                     key_ix = 0
-                    jix = 0
-                    for j in self.joins():
-                        collist += ' j%s."%s"' % (str(jix), j.key_column().name)
-                        jix += 1
-                        cols.append(j.key_column().name)
-                sql = 'SELECT %s FROM %s k ' % (collist, self.tablename())
 
-                jix = 0
+                    for j in self.joins():
+                        collist += j.key_column_sql(cols)
+
+                sql = "SELECT %s \n\t\tFROM %s k " % (collist, self.tablename())
                 for j in self.joins():
-                    sql += ' INNER JOIN %s j%s ON (j%s."%s" = k."_key")' % \
-                           (j.tablename(), str(jix), str(jix), j.key_name())
-                    jix += 1
+                    sql += "\n\t\t" + j.join_sql()
             else:
                 assert 0, "Huh? Unrecognized query query_type %s in query for table '%s'" % (query_type, self.name())
 
             if query_type != QueryType.Insert:
-                glue = ' WHERE '
+                glue = '\n\t\tWHERE '
+                and_glue = '\n\t\t\tAND '
                 if self.has_key():
-                    glue = ' AND '
-                    sql += ' WHERE ("%s" = %%s)' % self.key_column().name
+                    sql += glue
+                    glue = and_glue
+                    sql += '(k."%s" = %%s)' % self.key_column().name
                     vals.append(str(self.key().name))
                 if self.has_ancestor() and self.ancestor():
                     assert not self.flat(), "Cannot perform ancestor queries on flat table '%s'" % self.name()
-                    glue = ' AND '
-                    sql += ' WHERE ("_ancestors" LIKE %s)'
+                    sql += glue
+                    glue = and_glue
+                    sql += '(k."_ancestors" LIKE %s)'
                     vals.append(str(self.ancestor().get().path()) + "%")
                 if self.has_parent():
                     assert not self.flat(), "Cannot perform parent queries on flat table '%s'" % self.name()
-                    sql += glue + '("_parent" '
-                    glue = ' AND '
+                    sql += glue + '(k."_parent" '
+                    glue = and_glue
                     p = self.parent()
                     if p:
                         sql += " = %s"
@@ -211,46 +206,21 @@ class ModelQueryRenderer(object):
                         sql += " IS NULL"
                     sql += ")"
                 if self.owner():
-                    sql += glue + '("_ownerid" = %s)'
-                    glue = ' AND '
+                    sql += glue + '(k."_ownerid" = %s)'
+                    glue = and_glue
                     vals.append(self.owner())
-                for (e, v) in self.filters():
-                    oldlen = len(sql)
-                    e = e.strip()
-                    if v is None:
-                        if e.endswith("!="):
-                            e = e[:-2]
-                            n = " IS NOT NULL"
-                        elif v is None and e.endswith("="):
-                            e = e[:-1]
-                            n = " IS NULL"
-                        else:
-                            n = ""
-                        sql += glue + '(%s%s)' % (e, n)
-                    elif e[-3:].upper().endswith(" IN"):
-                        try:
-                            vals.extend(v)
-                            l = len(v)
-                        except TypeError:
-                            vs = str(v).split(",")
-                            vals.extend(vs)
-                            l = len(vs)
-                        if l > 1:
-                            sql += (glue + ' (%s (' + ', '.join(["%%s" for i in range(l)]) + ')') % e
-                        elif l == 1:
-                            sql += glue + '(%s = %%s)' % e[:-3]
-                    else:
-                        sql += glue + '(%s %%s)' % e
-                        vals.append(v)
-                    glue = ' AND ' if len(sql) > oldlen else glue
-                custom_condition = self._custom_condition(vals)
-                if custom_condition:
-                    sql += glue + custom_condition
+                for f in self.conditions():
+                    s = f.to_sql(vals)
+                    if s:
+                        sql += glue + s
+                        glue = and_glue
             if query_type == QueryType.Columns and self.sortorder():
-                sql += ' ORDER BY ' + ', '.join([('"' + c.colname + '" ' + c.order()) for c in self.sortorder()])
+                sql += '\n\t\tORDER BY ' + \
+                       ', '.join([so.to_sql() for so in self.sortorder()])
             if self.limit():
-                sql += ' LIMIT ' + self.limit()
+                sql += '\n\t\tLIMIT ' + self.limit()
             logger.debug("Rendered query: %s [%s]", sql, vals)
             cur = tx.get_cursor()
+            self._query.sql = sql
             cur.execute(sql, vals, columns=cols, key_index=key_ix)
             return cur

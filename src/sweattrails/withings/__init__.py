@@ -20,7 +20,6 @@ import datetime
 import httplib
 import json
 
-import gripe
 import gripe.db
 import grumble.model
 import grumble.property
@@ -45,22 +44,29 @@ class WithingsJob(sweattrails.qt.async.job.Job):
     def __init__(self):
         super(WithingsJob, self).__init__()
 
+    def __str__(self):
+        return "Downloading Withings data"
+
     def handle(self):
-        self.started("Downloading Withings data")
         part = self.user.get_part("WeightMgmt")
         if not part:
             self.error("downloading Withings data", "No WeightMgmt part found.")
             return
-        auth = sweattrails.userprofile.WithingsAuth.query(parent = part).get()
-        if not auth:
-            self.error("downloading Withings data", "No WithingsAuth data found.")
-            return
+        auth = sweattrails.userprofile.WithingsAuth.query(parent=part).get()
+        if auth:
+            user_id = auth.user_id
+            public_key = auth.public_key
+        else:
+            user_id = withings_user_id
+            public_key = withings_public_key
+            # self.error("downloading Withings data", Exception("No WithingsAuth data found."))
+            # return
         conn = httplib.HTTPConnection(withings_host)
-        conn.request("GET", withings_url % (auth.userid,  auth.public_key))
+        conn.request("GET", withings_url % (user_id,  public_key))
         response = conn.getresponse()
         if response.status == 200:
             if self._parse_results(part, response):
-                self.finished("Withings data downloaded")
+                pass
         else:
             logger.error("Error downloading Withings data: %s", response.status)
             self.error("downloading Withing data", response.status)
@@ -79,10 +85,10 @@ class WithingsJob(sweattrails.qt.async.job.Job):
         logger.debug("Download result OK. %s measurements",  len(results["body"]["measuregrps"]))
         for measuregrp in results["body"]["measuregrps"]:
             ts = datetime.datetime.fromtimestamp(measuregrp["date"])
-            wms = { wm for wm in WithingsMeasurement.query("timestamp = ", ts, parent = part) }
+            wms = {wm for wm in WithingsMeasurement.query("timestamp = ", ts, parent=part)}
             for measure in measuregrp["measures"]:
-                if not filter(lambda wm : wm.timestamp == ts and wm.type == measure["type"], wms):
-                    wm = WithingsMeasurement(parent = part, timestamp = ts)
+                if not filter(lambda wm: wm.timestamp == ts and wm.type == measure["type"], wms):
+                    wm = WithingsMeasurement(parent=part, timestamp=ts)
                     wm.type = measure["type"]
                     wm.value = measure["value"] * pow(10, measure["unit"])
                     wm.put()
@@ -94,18 +100,18 @@ class WithingsJob(sweattrails.qt.async.job.Job):
         for wm in wms:
             part = wm.parent()
             if wm.type in [1, 6]:
-                h = sweattrails.userprofile.WeightHistory.query("snapshotdate = ", wm.timestamp, parent = part)
+                h = sweattrails.userprofile.WeightHistory.query("snapshotdate = ", wm.timestamp, parent=part)
                 if not h:
-                    h = sweattrails.userprofile.WeightHistory(snapshotdate = wm.timestamp, parent = part)
+                    h = sweattrails.userprofile.WeightHistory(snapshotdate=wm.timestamp, parent=part)
                 if wm.type == 1:
                     h.weight = wm.value
                 else:
                     h.bfPercentage = wm.value
                 h.put()
             elif wm.type in [9, 10, 11]:
-                h = sweattrails.userprofile.CardioVascularHistory.query("snapshotdate = ", wm.timestamp, parent = part)
+                h = sweattrails.userprofile.CardioVascularHistory.query("snapshotdate = ", wm.timestamp, parent=part)
                 if not h:
-                    h = sweattrails.userprofile.CardioVascularHistory(snapshotdate = wm.timestamp, parent = part)
+                    h = sweattrails.userprofile.CardioVascularHistory(snapshotdate=wm.timestamp, parent=part)
                 if wm.type == 9:
                     h.bpLow = wm.value
                 elif wm.type == 10:

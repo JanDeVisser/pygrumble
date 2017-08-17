@@ -38,6 +38,9 @@ class ModelMetaClass(type):
             kind._abstract = dct.get("_abstract", False)
             kind._flat = dct.get("_flat", False)
             kind._audit = dct.get("_audit", True)
+            if dct.get("_cached", False):
+                kind._cache = {}
+            kind._sealed = False
             acl = gripe.Config.model["model"][name]["acl"] \
                 if "model" in gripe.Config.model and \
                    name in gripe.Config.model["model"] and \

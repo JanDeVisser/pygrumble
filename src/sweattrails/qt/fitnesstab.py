@@ -28,25 +28,26 @@ from PyQt5.QtWidgets import QWidget
 
 import gripe
 import grumble.qt.bridge
+import grumble.qt.model
 import grumble.qt.view
 import sweattrails.config
+import sweattrails.qt.async.bg
 import sweattrails.qt.graphs
 import sweattrails.qt.stackedpage
 import sweattrails.qt.view
+import sweattrails.session
 
 logger = gripe.get_logger(__name__)
 
 
 class BestPaceList(grumble.qt.view.TableView):
-    def __init__(self, parent, cpdef):
-        super(BestPaceList, self).__init__(parent = parent)
+    def __init__(self, parent, cpdef, user=None):
+        super(BestPaceList, self).__init__(parent=parent)
         self.cpdef = cpdef
-        query = sweattrails.session.BestRunPace.query(keys_only = False,
-                    parent = self.cpdef).add_sort("snapshotdate")
-        self.setQueryAndColumns(query,
-                grumble.qt.model.TableColumn("snapshotdate", format = "%A %B %d", header = "Date"),
-                grumble.qt.model.TableColumn("cpdef.name", header = "Distance"),
-                sweattrails.qt.view.PaceSpeedColumn(what = "Pace"))
+        self.setQueryAndColumns(parent.query,
+                                grumble.qt.model.TableColumn('+session."start_time"', format="%A %B %d", header="Date"),
+                                sweattrails.qt.view.DistanceColumn("atdistance", header="At distance"),
+                                sweattrails.qt.view.PaceSpeedColumn(what="Pace"))
         self.setMinimumHeight(150)
         QCoreApplication.instance().refresh.connect(self.refresh)
 
@@ -54,13 +55,27 @@ class BestPaceList(grumble.qt.view.TableView):
         self.query().set_parent(self.cpdef)
 
 
+class RunProgressionAxis(sweattrails.qt.graphs.QueryDataSource, sweattrails.qt.graphs.DateAxis):
+    def __init__(self, tab):
+        super(RunProgressionAxis, self).__init__(query=tab.query,
+                                                 value=lambda runpace: runpace.joined_value('session."start_time"'))
+
+
 class CriticalPaceTab(QWidget):
-    def __init__(self, parent, cpdef):
+    def __init__(self, parent, cpdef, user=None):
         super(CriticalPaceTab, self).__init__(parent)
         self.cpdef = cpdef
+        if not user:
+            user = QCoreApplication.instance().user
+        self.query = sweattrails.session.RunPace.get_progression(cpdef, user)
         layout = QVBoxLayout(self)
+        progression = RunProgressionAxis(self)
+        self.graphs = sweattrails.qt.graphs.Graph(self, progression)
+        sweattrails.qt.graphs.Series(property="speed", color=Qt.red, graph=self.graphs)
+        layout.addWidget(self.graphs)
         self.list = BestPaceList(self, cpdef)
         layout.addWidget(self.list)
+
 
 class RunFitnessPage(QWidget):
     def __init__(self, parent = None):
@@ -76,9 +91,45 @@ class RunFitnessPage(QWidget):
         self.setMinimumSize(800, 600)
 
 
+class BestPowerList(grumble.qt.view.TableView):
+    def __init__(self, parent, cpdef, user=None):
+        super(BestPowerList, self).__init__(parent=parent)
+        self.cpdef = cpdef
+        if not user:
+            user = QCoreApplication.instance().user
+        query = sweattrails.session.CriticalPower.get_progression(cpdef, user)
+        self.setQueryAndColumns(query,
+                                grumble.qt.model.TableColumn('+session."start_time"', format="%A %B %d", header="Date"),
+                                grumble.qt.model.TableColumn('+cpdef."name"', header="Duration"),
+                                grumble.qt.model.TableColumn("power", header="Power"))
+        self.setMinimumHeight(150)
+        QCoreApplication.instance().refresh.connect(self.refresh)
+
+    def resetQuery(self):
+        self.query().set_parent(self.cpdef)
+
+
+class CriticalPowerTab(QWidget):
+    def __init__(self, parent, cpdef):
+        super(CriticalPowerTab, self).__init__(parent)
+        self.cpdef = cpdef
+        layout = QVBoxLayout(self)
+        self.list = BestPowerList(self, cpdef)
+        layout.addWidget(self.list)
+
+
 class BikeFitnessPage(QWidget):
     def __init__(self, parent = None):
         super(BikeFitnessPage, self).__init__(parent)
+        layout = QHBoxLayout(self)
+        self.tabs = QTabWidget(self)
+        layout.addWidget(self.tabs)
+        user = QCoreApplication.instance().user
+        if user:
+            profile = sweattrails.config.ActivityProfile.get_profile(user)
+            for cpdef in profile.get_all_linked_references(sweattrails.config.CriticalPowerInterval):
+                self.tabs.addTab(CriticalPowerTab(self, cpdef), cpdef.name)
+        self.setMinimumSize(800, 600)
 
     def activate(self):
         pass
@@ -104,15 +155,12 @@ class WeightList(grumble.qt.view.TableView):
         self.query().set_parent(part)
         
 
-class WithingsPoints(sweattrails.qt.graphs.QueryDataSource, sweattrails.qt.graphs.Axis):
+class WeightAxis(sweattrails.qt.graphs.QueryDataSource, sweattrails.qt.graphs.DateAxis):
     def __init__(self):
         user = QCoreApplication.instance().user
         part = user.get_part("WeightMgmt")
-        query = sweattrails.userprofile.WeightHistory.query(
-            keys_only = False,
-            parent = part).add_sort("snapshotdate")
-        super(WithingsPoints, self).__init__(query = query,
-                                            property = "snapshotdate")
+        query = sweattrails.userprofile.WeightHistory.query(keys_only=False, parent=part).add_sort("snapshotdate")
+        super(WeightAxis, self).__init__(query=query, property="snapshotdate")
 
 
 class WeightPage(QWidget):
@@ -121,12 +169,20 @@ class WeightPage(QWidget):
         self.setMinimumSize(800, 600)
         layout = QVBoxLayout(self)
         self.graphs = None
-        
-        self.graphs = sweattrails.qt.graphs.Graph(
-            self, None)
-        self.graphs.addSeries(
-            sweattrails.qt.graphs.Series(property = "weight",
-                                         color = Qt.red))
+
+        weightAxis = WeightAxis()
+        self.graphs = sweattrails.qt.graphs.Graph(self, weightAxis)
+        sweattrails.qt.graphs.Series(property="weight", color=Qt.red, graph=self.graphs)
+        bmi = sweattrails.qt.graphs.Series(property="bmi", color=Qt.blue, graph=self.graphs, min=10, max=30)
+        bmi.addTrendLine(25)
+        bmi.addTrendLine(15)
+        # bf = sweattrails.qt.graphs.Series(property="bfPercentage", color=Qt.magenta, graph=self.graphs)
+        # if bf.max() == 0.0:
+        #     bf.hide()
+        # waist = sweattrails.qt.graphs.Series(property="waist", color=Qt.darkGreen, graph=self.graphs)
+        # if waist.max() == 0.0:
+        #     waist.hide()
+
         layout.addWidget(self.graphs)
 
         self.list = WeightList(self)
@@ -142,14 +198,12 @@ class WeightPage(QWidget):
         layout.addWidget(buttonWidget)
 
     def activate(self):
-        if not self.graphs.datasource():
-            self.graphs.setDatasource(WithingsPoints())
-        
+        pass
+
     def withingsDownload(self):
         job = sweattrails.withings.WithingsJob()
-        #job.sync()
         job.jobFinished.connect(self.list.refresh)
-        sweattrails.qt.imports.BackgroundThread.add_backgroundjob(job)
+        sweattrails.qt.async.bg.BackgroundThread.add_backgroundjob(job)
         
     def addWeightEntry(self):
         pass
@@ -158,6 +212,8 @@ class WeightPage(QWidget):
 class FitnessTab(sweattrails.qt.stackedpage.StackedPage):
     def __init__(self, parent = None):
         super(FitnessTab, self).__init__(parent)
+
+    def activate(self, ix):
         self.addPage("Run Fitness", RunFitnessPage(self))
         self.addPage("Bike Fitness", BikeFitnessPage(self))
         self.addPage("Weight", WeightPage(self))

@@ -25,7 +25,11 @@ import gripe.db
 import grizzle
 import grumble.property
 import sweattrails.qt.async.bg
+import sweattrails.qt.async.job
+import sweattrails.qt.imports
 import sweattrails.qt.mainwindow
+import sweattrails.qt.session.details
+import sweattrails.session
 import sweattrails.withings
 
 logger = gripe.get_logger(__name__)
@@ -75,10 +79,23 @@ class SweatTrailsCore(object):
         t.progressInit.connect(self.progress_init)
         t.progressUpdate.connect(self.progress)
         t.progressEnd.connect(self.progress_done)
-        t.jobStarted.connect(self.status_message)
-        t.jobFinished.connect(self.status_message)
-        t.jobError.connect(self.status_message)
+        t.jobStarted.connect(self.job_started)
+        t.jobFinished.connect(self.job_finished)
+        t.jobError.connect(self.job_error)
         t.start()
+
+    def status_message(self, msg, *args):
+        print msg.format(*args)
+
+    def job_started(self, job):
+        self.status_message("{0} started", job)
+
+    def job_finished(self, job):
+        self.status_message("{0} finished", job)
+
+    def job_error(self, job, msg, ex):
+        args = [str(job), str(ex) if not msg else "%s: %s" % (msg, str(ex))]
+        self.status_message("Error executing {0}: {1}", *args)
 
     def user_manager(self):
         if not hasattr(self, "_user_manager"):
@@ -124,7 +141,7 @@ class SweatTrailsCore(object):
         return self.user is not None
 
     def import_files(self, *filenames):
-        t = sweattrails.qt.imports.BackgroundThread.get_thread()
+        t = sweattrails.qt.async.bg.BackgroundThread.get_thread()
         for f in filenames:
             job = sweattrails.qt.imports.ImportFile(f)
             job.jobFinished.connect(self._refresh)
@@ -137,11 +154,16 @@ class SweatTrailsCore(object):
         job = sweattrails.qt.imports.DownloadJob(self.getDownloadManager())
         job.jobFinished.connect(self._refresh)
         job.jobError.connect(self.status_message)
-        # sweattrails.qt.imports.BackgroundThread.add_backgroundjob(job)
         job.sync()
 
     def withings(self):
-        t = sweattrails.qt.imports.BackgroundThread.get_thread()
         job = sweattrails.withings.WithingsJob()
         job.jobFinished.connect(self._refresh)
-        t.addjob(job)
+        job.submit(self)
+
+    def reanalyze(self):
+        with gripe.db.Tx.begin():
+            q = sweattrails.session.Session.query(athlete=QCoreApplication.instance().user)
+            for session in q:
+                job = sweattrails.qt.session.details.ReanalyzeJob(session)
+                job.submit()

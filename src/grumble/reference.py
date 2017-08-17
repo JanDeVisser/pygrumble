@@ -1,9 +1,20 @@
-# To change this license header, choose License Headers in Project Properties.
-# To change this template file, choose Tools | Templates
-# and open the template in the editor.
-
-__author__="jan"
-__date__ ="$17-Sep-2013 4:20:49 PM$"
+#
+# Copyright (c) 2014 Jan de Visser (jan@sweattrails.com)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc., 51
+# Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+#
 
 import gripe
 import grumble.converter
@@ -11,9 +22,10 @@ import grumble.model
 
 logger = gripe.get_logger(__name__)
 
+
 class ReferenceConverter(grumble.converter.PropertyConverter):
-    def __init__(self, property):
-        super(ReferenceConverter, self).__init__(None, property)
+    def __init__(self, prop):
+        super(ReferenceConverter, self).__init__(None, prop)
 
     def convert(self, value):
         return grumble.model.Model.get(value)
@@ -30,8 +42,9 @@ class ReferenceConverter(grumble.converter.PropertyConverter):
     def from_sqlvalue(self, sqlvalue):
         return grumble.model.Model.get(grumble.key.Key(sqlvalue)) if sqlvalue else None
 
+
 class QueryProperty(object):
-    def __init__(self, name, foreign_kind, foreign_key, private = True, serialize = False, verbose_name = None):
+    def __init__(self, name, foreign_kind, foreign_key, private=True, serialize=False, verbose_name=None):
         self.name = name
         self.fk_kind = foreign_kind \
             if isinstance(foreign_kind, grumble.meta.ModelMetaClass) \
@@ -63,12 +76,13 @@ class QueryProperty(object):
     def _to_json_value(self, instance, value):
         return [obj.to_dict() if self.serialize else obj.id() for obj in self._get_query(instance)]
 
+
 class ReferenceProperty(grumble.property.ModelProperty):
     datatype = grumble.model.Model
     sqltype = "TEXT"
 
     def __init__(self, *args, **kwargs):
-        super(ReferenceProperty, self).__init__(args, kwargs)
+        super(ReferenceProperty, self).__init__(*args, **kwargs)
         if args and isinstance(args[0], ReferenceProperty):
             prop = args[0]
             self.reference_class = prop.reference_class
@@ -120,6 +134,7 @@ class ReferenceProperty(grumble.property.ModelProperty):
         elif not isinstance(value, clazz):
             assert 0, "Cannot update ReferenceProperty to %s (wrong type %s)" % (value, str(type(value)))
         return value
+
 
 class SelfReferenceProperty(ReferenceProperty):
     def set_kind(self, kind):

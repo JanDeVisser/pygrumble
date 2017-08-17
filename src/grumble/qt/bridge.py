@@ -652,6 +652,7 @@ class FormButtons(object):
     DeleteButton = 4
     AllButtons = 7
 
+
 class FormWidget(FormPage):
     instanceAssigned = pyqtSignal(str)
     instanceDeleted = pyqtSignal(str)

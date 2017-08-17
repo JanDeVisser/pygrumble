@@ -22,30 +22,32 @@ from PyQt5.QtCore import QAbstractTableModel
 from PyQt5.QtCore import QModelIndex
 from PyQt5.QtCore import Qt
 
-
+import traceback
 import gripe
 import gripe.db
 
 logger = gripe.get_logger(__name__)
 
+
 class TableColumn(object):
     def __init__(self, name, **kwargs):
         self.name = name
-        self.path = self.name.split(".")
-        self.propname = self.path[0]
-        self.endprop = self.path[-1]
-        for (n,v) in kwargs.items():
+        self.path = self.name.split(".") if name[0] != '+' else None
+        self.propname = self.path[0] if self.path else None
+        for (n, v) in kwargs.items():
             setattr(self, n, v)
             
     def _set_kind(self, kind):
-        self.prop = getattr(kind, self.propname)
+        self.prop = getattr(kind, self.propname) if self.propname else None
         self.kind = kind
             
     def get_header(self):
         if hasattr(self, "header"):
             return self.header(self) if callable(self.header) else self.header
-        else:
+        elif self.prop:
             return self.prop.verbose_name
+        else:
+            return self.name
     
     def get_format(self, value):
         if hasattr(self, "format"):
@@ -67,11 +69,10 @@ class TableColumn(object):
         return fmt.format(val) if val is not None else ''
     
     def _get_value(self, instance):
-        v = reduce(lambda v, n : getattr(v, n),
-                   self.path,
-                   instance)
-        return v
-    
+        return reduce(lambda v, n: getattr(v, n), self.path, instance) \
+            if self.path \
+            else instance.joined_value(self.name)
+
     def value(self, instance):
         return self._get_value(instance)
 
@@ -83,6 +84,7 @@ class TableModel(QAbstractTableModel):
         self._kind = query.get_kind()
         self._columns = self._get_column_defs(args)
         self._data = None
+        self._count = None
         
     def _get_column_defs(self, *args):
         ret = []
@@ -101,13 +103,14 @@ class TableModel(QAbstractTableModel):
     def add_columns(self, *args):
         self._columns.extend(self._get_column_defs(args))
         
-    def rowCount(self, parent = QModelIndex()):
-        ret = len(self._data) if self._data is not None else self._query.count()
+    def rowCount(self, parent=QModelIndex()):
+        if self._count is None:
+            self._count = len(self._data) if self._data is not None else self._query.count()
         #logger.debug("TableModel.rowCount() = %s (%squeried)", ret,
         #             "not " if self._data is not None else "")
-        return ret
+        return self._count
 
-    def columnCount(self, parent = QModelIndex()):
+    def columnCount(self, parent=QModelIndex()):
         #logger.debug("TableModel.columnCount()")
         return len(self._columns)
 
@@ -124,7 +127,7 @@ class TableModel(QAbstractTableModel):
                 self._data = [o for o in self._query]
         return self._data[ix]
 
-    def data(self, index, role = Qt.DisplayRole):
+    def data(self, index, role=Qt.DisplayRole):
         if role == Qt.DisplayRole:
             instance = self._get_data(index.row())
             col = self._columns[index.column()]
@@ -142,6 +145,7 @@ class TableModel(QAbstractTableModel):
         self.beginResetModel()
         self.layoutAboutToBeChanged.emit()
         self._data = None
+        self._count = None
         self.layoutChanged.emit()
         self.endResetModel()
 
@@ -152,6 +156,7 @@ class TableModel(QAbstractTableModel):
         #logger.debug("TableModel.sort(%s)", colnum)
         self.layoutAboutToBeChanged.emit()
         self._data = None
+        self._count = None
         self._query.clear_sort()
         self._query.add_sort(self._columns[colnum].name, order == Qt.AscendingOrder)
         self.layoutChanged.emit()
@@ -180,14 +185,14 @@ class ListModel(QAbstractListModel):
         if not self._data:
             self._data = []
             with gripe.db.Tx.begin():
-                self._data = [ o for o in self._query ]
+                self._data = [o for o in self._query]
         return self._data[ix]
 
     def data(self, index, role = Qt.DisplayRole):
         if (role == Qt.DisplayRole) and (index.column() == 0):
             r = self._get_data(index.row())
             return getattr(r, self._column_name)
-        elif (role == Qt.UserRole):
+        elif role == Qt.UserRole:
             r = self._get_data(index.row())
             return r.key()
         else:

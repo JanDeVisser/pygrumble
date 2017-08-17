@@ -23,6 +23,7 @@ from PyQt5.QtCore import QObject
 from PyQt5.QtCore import pyqtSignal
 
 import gripe
+import sweattrails.qt.async.bg
 
 logger = gripe.get_logger(__name__)
 
@@ -43,7 +44,6 @@ class Job(QObject):
         self._handle(None)
 
     def _handle(self, thread):
-        self.started()
         self.thread = thread
         logger.debug("Handling job %s", self)
         try:
@@ -58,33 +58,36 @@ class Job(QObject):
     def started(self):
         logger.debug("Job '%s' started", str(self))
         self.jobStarted.emit(self)
-        if self.thread:
+        if self.thread is not None:
             self.thread.jobStarted.emit(self)
 
-    def finished(self, msg):
+    def finished(self,):
         logger.debug("Job '%s' finished", str(self))
         self.jobFinished.emit(self)
-        if self.thread:
+        if self.thread is not None:
             self.thread.jobFinished.emit(self)
 
     def error(self, msg, error):
         logger.debug("Error handling job '%s': %s [%s]", str(self), msg, str(error))
         self.jobError.emit(self, msg, error)
-        if self.thread:
+        if self.thread is not None:
             self.thread.jobError.emit(self, msg, error)
 
     def status_message(self, msg, *args):
-        if self.thread:
+        if self.thread is not None:
             self.thread.status_message(msg, *args)
 
     def progress_init(self, msg, *args):
-        if self.thread:
+        if self.thread is not None:
             self.thread.progress_init(msg, *args)
 
     def progress(self, percentage):
-        if self.thread:
+        if self.thread is not None:
             self.thread.progress(percentage)
 
     def progress_end(self):
-        if self.thread:
+        if self.thread is not None:
             self.thread.progress_end()
+
+    def submit(self):
+        sweattrails.qt.async.bg.BackgroundThread.add_backgroundjob(self)

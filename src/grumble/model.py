@@ -16,7 +16,7 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-
+import sys
 import uuid
 
 import gripe.acl
@@ -32,7 +32,7 @@ import grumble.schema
 logger = gripe.get_logger(__name__)
 
 
-class Model():
+class Model(object):
     __metaclass__ = grumble.meta.ModelMetaClass
     classes = {}
     acl = {"admin": "RUDQC", "owner": "RUDQ"}
@@ -44,9 +44,7 @@ class Model():
         ret._set_ancestors_from_parent(kwargs["parent"] if "parent" in kwargs else None)
         ret._key_name = kwargs["key_name"] \
             if "key_name" in kwargs \
-            else cls.get_new_key(kwargs) \
-                 if hasattr(cls, "get_new_key") and callable(cls.get_new_key) \
-                 else None
+            else cls.get_new_key(kwargs) if hasattr(cls, "get_new_key") and callable(cls.get_new_key) else None
         ret._acl = gripe.acl.ACL(kwargs["acl"] if "acl" in kwargs else None)
         ret._id = None
         ret._values = {}
@@ -66,7 +64,7 @@ class Model():
 
     @classmethod
     def seal(cls):
-        if not cls._sealed and not hasattr(cls, "_sealing"):
+        if not hasattr(cls, "_sealed") or not (cls._sealed or hasattr(cls, "_sealing")):
             logger.info("Sealing class %s", cls.kind())
             setattr(cls, "_sealing", True)
             if cls.customizer:
@@ -146,9 +144,8 @@ class Model():
     def _populate(self, values):
         if values is not None:
             self._values = {}
-            v = {}
-            for (name, value) in values:
-                v[name] = value
+            self._joins = {}
+            v = {k: v for (k, v) in values}
             parent = v.get("_parent")
             ancestors = v.get("_ancestors")
             self._key_name = v.get("_key_name")
@@ -165,6 +162,20 @@ class Model():
                 self.after_load()
         else:
             self._exists = False
+
+    def _populate_joins(self, values):
+        logger.debug("_populate_joins for %s: %s", self.key(), values)
+        if values is not None:
+            self._joins = {k[1:]: v for (k, v) in values if k[0] == '+'}
+        logger.debug("self._joins for %s: %s", self.key(), self._joins)
+
+    def joined_value(self, join):
+        if join[0] == '+':
+            join = join[1:]
+        logger.debug("%s.joined_value(%s) %s %s", self.key(), join,
+                     join in self._joins if hasattr(self, "_joins") else "??",
+                     self._joins.get(join, "???") if hasattr(self, "_joins") else "??")
+        return self._joins.get(join) if hasattr(self, "_joins") else None
 
     def _load(self):
         # logger.debug("_load -> kind: %s, key: %s", self.kind(), str(self.key()))
@@ -553,12 +564,17 @@ class Model():
         return grumble.meta.Registry.subclasses(cls)
 
     @classmethod
-    def get(cls, id, values = None):
-        k = grumble.key.Key(id)
+    def get(cls, ident, values=None):
+        k = grumble.key.Key(ident)
         if cls != Model:
             with gripe.db.Tx.begin():
                 cls.seal()
-                ret = gripe.db.Tx.get_from_cache(k)
+                ret = None
+                if hasattr(cls, "_cache") and k in cls._cache:
+                    ret = cls._cache.get(k)
+                    return ret
+                if not ret:
+                    ret = gripe.db.Tx.get_from_cache(k)
                 if not ret:
                     ret = super(Model, cls).__new__(cls)
                     assert (cls.kind().endswith(k.kind())) or not k.kind(), \
@@ -567,56 +583,46 @@ class Model():
                     ret._key_name = k.name
                     if ret._key_scoped:
                         ret._set_ancestors_from_parent(k.scope())
-                    if values:
-                        ret._populate(values)
-                else:
-                    # print "%s.get - Cache hit" % cls.__name__
-                    pass
+                    gripe.db.Tx.put_in_cache(ret)
+                    if hasattr(cls, "_cache"):
+                        cls._cache[ret.key()] = ret
+                if values:
+                    ret._populate(values)
+                    ret._populate_joins(values)
         else:
             return k.modelclass().get(k, values)
         return ret
 
     @classmethod
     def get_by_key(cls, key):
-        cls.seal()
         assert cls != Model, "Cannot use get_by_key on unconstrained Models"
-        k = grumble.key.Key(cls, key)
-        ret = gripe.db.Tx.get_from_cache(k)
-        if not ret:
-            ret = super(Model, cls).__new__(cls)
-            assert (cls.kind().endswith(k.kind())) or not k.kind(), \
-                "%s.get_by_key(%s:%s) -> wrong key kind" % (cls.kind(), k.kind(), k.name)
-            ret._id = k.id
-            ret._key_name = k.name
-            if ret._key_scoped:
-                ret._set_ancestors_from_parent(k.scope())
-        return ret
+        return cls.get(grumble.key.Key(cls, key))
 
     @classmethod
     def get_by_key_and_parent(cls, key, parent):
         cls.seal()
         assert cls != Model, "Cannot use get_by_key_and_parent on unconstrained Models"
         assert cls.key_prop, "Cannot use get_by_key_and_parent Models without explicit keys"
-        q = cls.query(parent = parent)
+        q = cls.query(parent=parent)
         q.add_filter(cls.key_prop, "=", key)
         return q.get()
 
     @classmethod
-    def by(cls, property, value, **kwargs):
+    def by(cls, prop, value, **kwargs):
         cls.seal()
         assert cls != Model, "Cannot use by() on unconstrained Models"
         kwargs["keys_only"] = False
-        q = cls.query('"%s" = ' % property, value, **kwargs)
+        q = cls.query('"%s" = ' % prop, value, **kwargs)
         return q.get()
 
     def children(self, cls = None):
         cls = cls or self
-        q = cls.query(parent = self)
+        q = cls.query(parent=self)
         return q
 
     def descendents(self, cls = None):
         cls = cls or self
-        q = cls.query(ancestor = self)
+        q = cls.query(ancestor=self)
         return q
 
     @classmethod
@@ -745,6 +751,11 @@ def flat(cls):
 
 def unaudited(cls):
     cls._audit = False
+    return cls
+
+
+def cached(cls):
+    cls._cache = {}
     return cls
 
 

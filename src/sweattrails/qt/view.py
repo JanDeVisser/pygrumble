@@ -15,6 +15,7 @@ import sweattrails.config
 
 logger = gripe.get_logger(__name__)
 
+
 class TimebasedColumn(object):
     
     @classmethod
@@ -47,15 +48,14 @@ class SecondsColumn(TimebasedColumn, grumble.qt.model.TableColumn):
 
 
 class PaceSpeedColumn(grumble.qt.model.TableColumn):
-    def __init__(self, property = "speed", **kwargs):
-        super(PaceSpeedColumn, self).__init__(property, **kwargs)
+    def __init__(self, prop="speed", **kwargs):
+        super(PaceSpeedColumn, self).__init__(prop, **kwargs)
         self.what = kwargs.get("what")
         if not self.what:
             interval = kwargs.get("interval")
             session = interval.get_session()
             self.what = session.sessiontype.speedPace
-        self.units = kwargs.get("units",
-            QCoreApplication.instance().user.get_part("userprofile").units)
+        self.units = kwargs.get("units", QCoreApplication.instance().user.get_part("userprofile").units)
         
     def get_header(self):
         header = super(PaceSpeedColumn, self).get_header()

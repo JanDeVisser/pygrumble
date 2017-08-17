@@ -56,6 +56,12 @@ from grumble.model import Model
 from grumble.model import Query
 from grumble.model import delete
 from grumble.model import abstract
+from grumble.model import cached
+from grumble.model import flat
+from grumble.model import unaudited
+
+# Can't import this because it clashes with the module of the same name
+# from grumble.model import query
 
 from grumble.reference import QueryProperty
 from grumble.reference import ReferenceProperty

@@ -19,18 +19,26 @@
 # Copyright (c) 2009 Greg Lonnon (greg.lonnon@gmail.com)
 #               2011 Mark Liversedge (liversedge@gmail.com)
 
+import json
 import os.path
 import sys
 
-from PyQt5.QtCore import QObject
-from PyQt5.QtCore import QUrl
+import jinja2
+
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtCore import pyqtSlot
-
+from PyQt5.QtCore import qFatal
+from PyQt5.QtCore import qWarning
+from PyQt5.QtCore import QJsonDocument
+from PyQt5.QtCore import QJsonParseError
+from PyQt5.QtCore import QObject
+from PyQt5.QtNetwork import QHostAddress
+from PyQt5.QtWebChannel import QWebChannel
+from PyQt5.QtWebChannel import QWebChannelAbstractTransport
+from PyQt5.QtWebEngineWidgets import QWebEnginePage
+from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtWebSockets import QWebSocketServer
 from PyQt5.QtWidgets import QSizePolicy
-
-from PyQt5.QtWebKitWidgets import QWebPage
-from PyQt5.QtWebKit import QWebSettings
-from PyQt5.QtWebKitWidgets import QWebView
 
 import gripe
 import sweattrails.session
@@ -38,102 +46,132 @@ import sweattrails.session
 logger = gripe.get_logger(__name__)
 
 
-class IntervalJsBridge(QObject):
-    def __init__(self, control, interval):
-        super(IntervalJsBridge, self).__init__()
-        self.control = control
-        self.interval = interval
-        with gripe.db.Tx.begin():
-            q = sweattrails.session.Interval.query(parent=self.interval)
-            q.add_sort("timestamp")
-            self._intervals = [i for i in q]
-            self._wps = self.interval.waypoints()
-            
-    @pyqtSlot(result=str)
-    def getConfig(self):
-        return gripe.Config.as_json()
+class WebSocketTransport(QWebChannelAbstractTransport):
+    def __init__(self, socket):
+        super(WebSocketTransport, self).__init__(socket)
+        self._socket = socket
+        self._socket.textMessageReceived.connect(self.textMessageReceived)
+        self._socket.disconnected.connect(self.deleteLater)
 
-    @pyqtSlot(result='QVariantList')
-    def getBoundingBox(self):
-        box = self.interval.geodata.bounding_box
-        ret = []
-        ret.extend(box.sw().tuple())
-        ret.extend(box.ne().tuple())
-        return ret
-    
-    @pyqtSlot(result=int)
-    def intervalCount(self):
-        num = len(self._intervals)
-        # If there is only one interval, that's the entire session, so
-        # there is no separate object for that.
-        return num if num else 1
-    
-    @pyqtSlot(int, result='QVariantList')
-    def getLatLons(self, intervalnum):
-        if not intervalnum:
-            i = self.interval
-        else:
-            if not self._intervals and intervalnum == 1:
-                i = self.interval
-            else:
-                assert intervalnum <= len(self._intervals)
-                i = self._intervals[intervalnum - 1]
-        ret = []
-        for wp in (wp for wp in i.waypoints(self._wps) if wp.location):
-            ret.append(wp.location.tuple())
-        return ret
-    
-    @pyqtSlot()
-    def drawOverlays(self):
-        self.control.drawShadedRoute()
-        pass
-    
-    @pyqtSlot(int)
-    def toggleInterval(self, intervalnum):
-        pass
-    
+    def sendMessage(self, message):
+        doc = QJsonDocument(message);
+        self._socket.sendTextMessage(doc.toJson(QJsonDocument.Compact))
+
+    def textMessageReceived(self, messageData):
+        error = QJsonParseError()
+        message = QJsonDocument.fromJson(bytes(messageData))
+        if error.error:
+            qWarning("Error parsing text message '%s' to JSON object: %s"  %
+                     (messageData, error.errorString()))
+            return
+        elif not message.isObject():
+            qWarning("Received JSON message that is not an object: %s", messageData)
+            return
+        print >> sys.stderr, "message:", message, "object:", message.object(), "type: ", type(message.object())
+        self.messageReceived.emit(message.object(), self)
+
+
+class WebSocketClientWrapper(QObject):
+    clientConnected = pyqtSignal(WebSocketTransport)
+
+    def __init__(self, server, parent = None):
+        super(WebSocketClientWrapper, self).__init__(parent)
+        self._server = server
+        self._server.newConnection.connect(self.handleNewConnection)
+
+    def handleNewConnection(self):
+        self.clientConnected.emit(WebSocketTransport(self._server.nextPendingConnection()))
+
+
+class WebChannelServer(object):
+    def setupWebChannel(self, bridge=None, bridgename="bridge", port=12345):
+        # setup the QWebSocketServer
+        self._server = QWebSocketServer("Grumble webchannel", QWebSocketServer.NonSecureMode)
+        if not self._server.listen(QHostAddress.LocalHost, port):
+            qFatal("Failed to open web socket server.")
+            return False
+
+        # wrap WebSocket clients in QWebChannelAbstractTransport objects
+        self._clientWrapper = WebSocketClientWrapper(self._server, self)
+
+        # setup the channel
+        self._channel = QWebChannel()
+        self._clientWrapper.clientConnected.connect(self._channel.connectTo)
+
+        # Publish the bridge object to the QWebChannel
+        self._bridge = bridge
+        if bridge is not None:
+            self._channel.registerObject(bridgename, bridge);
+
+
+class JsBridge(QObject):
+    sendRoute = pyqtSignal(list)
+    highlight = pyqtSignal(int, int)
+
     @pyqtSlot(str)
     def log(self, msg):
-        print >> sys.stderr, "JS-Bridge:", msg
         logger.info("JS-Bridge: %s", msg)
 
 
-class ConsoleLoggerWebPage(QWebPage):
-    def javaScriptConsoleMessage(self, message, lineNumber, sourceID):
-        logger.debug("JS-Console (%s/%d): %s", sourceID, lineNumber, message)
+class ConsoleLoggerWebPage(QWebEnginePage):
+    def javaScriptConsoleMessage(self, level, message, lineNumber, sourceID):
+        logger.debug("JS-Console [%s] (%s/%d): %s", level, sourceID, lineNumber, message)
 
 
-class IntervalMap(QWebView):
-    def __init__(self, parent, interval):
+class IntervalMap(QWebEngineView, WebChannelServer):
+    usewebchannel = False
+
+    def __init__(self, parent):
         super(IntervalMap, self).__init__(parent)
-        #assert interval.geodata, "IntervalMap only works with an interval with geodata"
-        self.interval = interval
+        # assert interval.geodata, "IntervalMap only works with an interval with geodata"
         self.setContentsMargins(0, 0, 0, 0)
         self.setPage(ConsoleLoggerWebPage())
-        QWebSettings.globalSettings().setAttribute(QWebSettings.DeveloperExtrasEnabled, True)
-        self.page().view().setContentsMargins(0, 0, 0, 0)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setAcceptDrops(False)
-
-        self.page().mainFrame().javaScriptWindowObjectCleared.connect(self.updateFrame)
-
-    @pyqtSlot()
-    def updateFrame(self):
-        self._bridge = IntervalJsBridge(self, self.interval)
-        self.page().mainFrame().addToJavaScriptWindowObject("bridge", self._bridge);
+        self.interval = None
+        self._bridge = None
 
     @pyqtSlot()
-    def drawMap(self):
-        #=======================================================================
-        # with open("sweattrails/qt/maps.html") as fd:
-        #     html = fd.read()
-        #     templ = string.Template(html)
-        #     html = templ.substitute(
-        #         bgcolor = "#343434", 
-        #         fgcolor = "#FFFFFF", 
-        #         mapskey = gripe.Config.app["config"].google_api_key)
-        #=======================================================================
-        self.setUrl(QUrl.fromLocalFile(os.path.join(gripe.root_dir(), "sweattrails/qt/session/maps.html")))
+    def drawMap(self, interval):
+        self.setVisible(True)
+        must_init = self.interval is None
+        self.interval = interval
+        if must_init:
+            if self.usewebchannel:
+                self.setupWebChannel(JSBridge())
+            self.loadFinished.connect(self.loadScript)
+            self.env = jinja2.Environment(loader=jinja2.PackageLoader('sweattrails.qt', 'session'))
+            template = self.env.get_template("maps.html")
+            self.setHtml(template.render(usewebchannel=self.usewebchannel))
+        else:
+            self.sendRoute()
 
-    def drawShadedRoute(self):
-        pass
+    @pyqtSlot(bool)
+    def loadScript(self, ok):
+        if ok:
+            template = self.env.get_template("maps.js.j2")
+            src = template.render(usewebchannel=self.usewebchannel)
+            self.page().runJavaScript(src)
+            self.sendRoute()
+        else:
+            qFatal("Could not load maps.html")
+
+    def sendRoute(self):
+        with gripe.db.Tx.begin():
+            q = sweattrails.session.Interval.query(parent=self.interval)
+            q.add_sort("timestamp")
+            waypoints = [wp.to_dict() for wp in self.interval.waypoints()]
+            if self.usewebchannel:
+                self._bridge.sendRoute.emit(waypoints)
+            else:
+                self.page().runJavaScript("setRoute({0:s});".format(json.dumps(waypoints)))
+
+    def drawSegment(self, ts, duration):
+        if hasattr(ts, "total_seconds"):
+            ts = int(ts.total_seconds())
+        if hasattr(duration, "total_seconds"):
+            duration = int(duration.total_seconds())
+        if self.usewebchannel:
+            self._bridge.highlight.emit(ts, duration)
+        else:
+            self.page().runJavaScript("highlight({0:d}, {1:d});".format(int(ts), int(duration)))

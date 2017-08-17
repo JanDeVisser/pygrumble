@@ -262,7 +262,7 @@ class ModelProperty(object):
         instance._load()
         return instance._values[self.name] if self.name in instance._values else None
 
-    def __get__(self, instance, owner = None):
+    def __get__(self, instance, owner=None):
         try:
             if not instance:
                 return self

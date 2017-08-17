@@ -17,15 +17,14 @@
 #
 
 import exceptions
-import StringIO
 import traceback
 
 import gripe
 import grit.upload
 import grizzle
+import grudge
 import grumble
 import grumble.model
-import grudge
 import sweattrails.device
 import sweattrails.device.exceptions
 import sweattrails.session

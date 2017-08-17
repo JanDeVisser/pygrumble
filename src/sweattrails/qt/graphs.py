@@ -97,41 +97,60 @@ class Axis(object):
         self._graph = graph
 
     def padding(self):
+        if hasattr(self, "_axis"):
+            return self._axis.padding()
         if not hasattr(self, "_padding"):
             self._padding = 0.1
             logger.debug("%s.padding(): %s", self, self._padding)
         return self._padding if not callable(self._padding) else self._padding()
 
     def scale(self):
+        if hasattr(self, "_axis"):
+            return self._axis.scale()
         if not hasattr(self, "_scale"):
             self._scale = self.max() - self.offset()
             logger.debug("%s.scale(): %s", self, self._scale)
         return self._scale() if callable(self._scale) else self._scale
 
     def offset(self):
+        if hasattr(self, "_axis"):
+            return self._axis.offset()
         if not hasattr(self, "_offset"):
             self._offset = self.min()
             logger.debug("%s.offset(): %s", self, self._offset)
         return self._offset() if callable(self._offset) else self._offset
 
+    def ordinal(self, value):
+        return value
+
+    def fromordinal(self, value):
+        return value
+
     def min(self):
+        if hasattr(self, "_axis"):
+            return self._axis.min()
         if not hasattr(self, "_min"):
             self._min = None
             ix = 0
             for r in self:
-                val = self.value(r)
-                self._min = min(val, self._min) if self._min is not None else val
+                val = self.ordinal(self.value(r))
+                if val is not None:
+                    self._min = min(val, self._min) if self._min is not None else val
                 ix += 1
             self._min = self._min or 0
             logger.debug("%s.min(): %s #=%s", self, self._min, ix)
         return self._min if not callable(self._min) else self._min()
 
     def max(self):
+        if hasattr(self, "_axis"):
+            return self._axis.max()
         if not hasattr(self, "_max"):
             self._max = None
             ix = 0
             for r in self:
-                self._max = max(self.value(r), self._max)
+                val = self.ordinal(self.value(r))
+                if val is not None:
+                    self._max = max(val, self._max) if self._max is not None else val
                 ix += 1
             self._max = self._max or 0
             logger.debug("%s.max(): %s #=%s", self, self._max, ix)
@@ -156,29 +175,23 @@ class Axis(object):
         return ret
 
     def __call__(self, record):
-        return self.value(record)
+        return self.ordinal(self.value(record))
 
     def __iter__(self):
         if hasattr(self, "_smooth") and self._smooth:
             self._running = collections.deque(maxlen=self._smooth)
-        return (iter(self.graph().datasource())
-                if self.graph().datasource()
-                else iter([]))
+        return iter(self.graph().datasource()) if self.graph().datasource() else iter([])
 
 
 class DateAxis(Axis):
-    def min(self):
-        return self.todate(super(DateAxis, self).min())
+    def __init__(self, **kwargs):
+        super(DateAxis, self).__init__(**kwargs)
 
-    def max(self):
-        return self.todate(super(DateAxis, self).max())
+    def ordinal(self, value):
+        return value.toordinal() if isinstance(value, (datetime.date, datetime.datetime)) else None
 
-    def __call__(self, record):
-        return (self.todate(self.value(record)) - self.min()).days
-
-    @staticmethod
-    def todate(val):
-        return val if isinstance(val, datetime.date) else val.date()
+    def fromordinal(self, ordvalue):
+        return datetime.date.fromordinal(ordvalue)
 
 
 class Series(Axis):
@@ -186,19 +199,27 @@ class Series(Axis):
         logger.debug("Series.__init__ %s", type(self));
         self._trendlines = []
         self._polygon = None
-        self._color = kwargs.pop("color", Qt.black)
-        self._style = kwargs.pop("style", Qt.SolidLine)
+        self._color = kwargs.pop("color", None)
+        self._style = kwargs.pop("style", None)
         self._shade = kwargs.pop("shade", None)
         self._layer = kwargs.pop("layer", 1)
         g = kwargs.pop("graph", None)
         if g:
             g.addSeries(self)
+        self._visible = True
         super(Series, self).__init__(**kwargs)
 
     def setGraph(self, graph):
         super(Series, self).setGraph(graph)
         for tl in self._trendlines:
             tl.setGraph(graph)
+
+    def graph(self):
+        return self._graph
+
+    def setAxis(self, axis):
+        self._axis = axis
+        self.setGraph(axis.graph())
 
     def xaxis(self):
         return self._graph.xaxis() if self._graph else None
@@ -210,10 +231,15 @@ class Series(Axis):
         self._color = color
 
     def color(self):
-        return self._color
+        ret = self._color
+        print "_color", ret
+        if not ret:
+            ret = self._axis.color() if hasattr(self, "_axis") else Qt.black
+            print "_color up ", ret
+        return ret
 
     def style(self):
-        return self._style
+        return self._style or self._axis.style() if hasattr(self, "_axis") else Qt.SolidLine
 
     def setStyle(self, style):
         self._style = style
@@ -222,13 +248,22 @@ class Series(Axis):
         self._layer = layer
 
     def layer(self):
-        return self._layer;
+        return self._axis.layer() if hasattr(self, "_axis") else self._layer
 
     def shade(self):
-        return self._shade
+        return self._axis.shade() if hasattr(self, "_axis") else self._shade
 
     def setShade(self, shade):
         self._shade = bool(shade)
+
+    def visible(self):
+        return self._axis.visible() if hasattr(self, "_axis") else self._visible
+
+    def setVisible(self, visible):
+        self._visible = visible
+
+    def hide(self):
+        self.setVisible(False)
 
     def x(self, obj):
         return float(self.xaxis()(obj)) \
@@ -241,9 +276,7 @@ class Series(Axis):
     def polygon(self):
         if not self._polygon:
             xoffset = float(self.xaxis().offset()
-                            if self.xaxis() and
-                               hasattr(self.xaxis(), "offset") and
-                               callable(self.xaxis().offset)
+                            if self.xaxis() and hasattr(self.xaxis(), "offset") and callable(self.xaxis().offset)
                             else 0)
             yoffset = float(self.offset())
             if yoffset != 0:
@@ -267,9 +300,7 @@ class Series(Axis):
                        if self.xaxis() and hasattr(self.xaxis(), "scale") and callable(self.xaxis().scale)
                        else self._graph.width() - 40)
         yscale = (float(self.scale()) + 
-                  (2 * self.padding() 
-                    if self.offset() != 0
-                    else self.padding()) * float(self.scale()))
+                  (2 * self.padding() if self.offset() != 0 else self.padding()) * float(self.scale()))
         logger.debug("%s.draw() xscale %s yscale %s", self, xscale, yscale)
         if xscale != 0 and yscale != 0:
             self._graph.painter.scale(
@@ -278,6 +309,7 @@ class Series(Axis):
 
             p = QPen(QColor(self.color()))
             p.setStyle(self.style())
+            p.setWidth(0)
             self._graph.painter.setPen(p)
             if self.shade() is not None:
                 self._graph.painter.setBrush(QColor(self.shade()))
@@ -287,15 +319,19 @@ class Series(Axis):
 
             for trendline in self.trendLines():
                 p = QPen(self.color())
+                p.setWidth(0)
                 p.setStyle(trendline.style())
                 self._graph.painter.setPen(p)
                 self._graph.painter.drawPolyline(trendline.polygon())
 
-    def addTrendLine(self, formula, style = None):
+    def drawAxis(self, ix):
+        pass
+
+    def addTrendLine(self, formula, style=None):
         trendline = (formula
                      if isinstance(formula, Series)
-                     else Series(value = formula, style = style or Qt.SolidLine))
-        trendline.setGraph(self.graph())
+                     else Series(value=formula, style=style or Qt.DashDotLine))
+        trendline.setAxis(self)
         self._trendlines.append(trendline)
 
     def trendLines(self):
@@ -349,13 +385,32 @@ class Graph(QWidget):
         p = QPen(Qt.darkGray)
         p.setStyle(Qt.SolidLine)
         self.painter.setPen(p)
+        w = self.width() - 40
         self.painter.drawLine(0, 0, 0, -self.height() - 40)
-        self.painter.drawLine(0, 0, self.width() - 40, 0)
+        self.painter.drawLine(0, 0, w, 0)
 
-        for s in self._series:
-            self.painter.save()
-            s.draw()
-            self.painter.restore()
+        if self.xaxis():
+            fm = self.painter.fontMetrics()
+            for ix in range(0, 5):
+                v = str(self.xaxis().fromordinal(self.xaxis().offset() + (ix * self.xaxis().scale())/4))
+                tw = fm.width(v)
+                if ix == 0:
+                    x = 0
+                elif ix < 4:
+                    x = (ix*w)/4 - tw/2
+                else: # ix == 4
+                    x = w - tw
+                self.painter.drawText(x, fm.height(), v)
+                if ix > 0:
+                    self.painter.drawLine((ix*w)/4, 0, (ix*w)/4, - fm.height() / 2)
+
+        for ix in range(0, len(self._series)):
+            s = self._series[ix]
+            if s.visible():
+                self.painter.save()
+                s.drawAxis(-(ix/2) if (ix % 2) == 0 else (ix-1)/2)
+                s.draw()
+                self.painter.restore()
         self.painter = None
 
 

@@ -18,6 +18,7 @@
 
 
 import bisect
+import collections
 import datetime
 import sys
 import time
@@ -325,6 +326,9 @@ class TimeWindow(RollingWindow):
         super(TimeWindow, self).__init__(min_precision)
         self.duration = duration
 
+    def span(self):
+        return len(self)
+
     def max_span(self):
         return self.duration
 
@@ -362,34 +366,43 @@ class CriticalPowerReducer(Reducer):
         if avg and (self.max_avg is None or avg > self.max_avg):
             self.max_avg = avg
             self.starttime = self.window[0].timestamp
+            self.atdistance = self.window[0].distance
 
     def reduction(self):
         if self.starttime is not None:
             self.cp.power = self.max_avg
             self.cp.timestamp = self.starttime - self.cp.parent().get_interval().timestamp
+            self.cp.atdistance = self.atdistance
             self.cp.put()
 
 
 class CriticalPower(grumble.Model, Timestamped):
     cpdef = grumble.ReferenceProperty(sweattrails.config.CriticalPowerInterval)
-    timestamp = grumble.TimeDeltaProperty()
-    power = grumble.IntegerProperty()
+    timestamp = grumble.TimeDeltaProperty(verbose_name="Starting on")
+    atdistance = grumble.IntegerProperty(verbose_name="At distance")
+    power = grumble.IntegerProperty(verbose_name="Power")
 
-    def after_store(self):
-        q = BestCriticalPower.query(parent = self.cpdef).add_sort("snapshotdate")
-        q.add_filter("snapshotdate <= ", self.parent().get_session().start_time)
-        best = q.get()
-        if not best or self.power > best.power:
-            best = BestCriticalPower(parent = self.cpdef)
-            best.best = self
-            best.power = self.power
-            best.put()
+    @classmethod
+    def get_best_for(cls, cpdef):
+        for best in CriticalPower.query(cpdef=cpdef).add_sort("power", False).set_limit(1):
+            return best
+        return None
 
-
-class BestCriticalPower(grumble.Model):
-    snapshotdate = grumble.DateTimeProperty(auto_now_add = True)
-    best = grumble.ReferenceProperty(CriticalPower)
-    power = grumble.IntegerProperty(default = 0)
+    @classmethod
+    def get_progression(cls, cpdef, user):
+        q = cls.query(cpdef=cpdef).add_sort("p.start_time")
+        q.add_parent_join(BikePart, "part")
+        q.add_join(Session, "_parent", "session", "part")
+        q.add_join(sweattrails.config.CriticalPowerInterval, "cpdef", "cpi")
+        q.add_filter("session.athlete =", user)
+        q.add_condition("""k.power > COALESCE((SELECT MAX(cp.power) FROM %s cp
+                           INNER JOIN %s bp ON (bp._key = cp._parent)
+                           INNER JOIN %s sess ON (sess._key = bp._parent)
+                           WHERE cp.cpdef = %%s AND sess.start_time < session.start_time), k.power - 1)"""
+                        % (cls.modelmanager.tablename, BikePart.modelmanager.tablename, Session.modelmanager.tablename),
+                        str(cpdef.key()))
+        q.add_sort("k.power", False)
+        return q
 
 
 @grumble.property.transient
@@ -637,9 +650,6 @@ class BikePart(IntervalPart):
         self.max_cadence = 0
         self.average_torque = 0
         self.max_torque = 0
-        self.vi = 0.0
-        self.intensity_factor = 0.0
-        self.tss = 0.0
 
 
 class RunPaceWindow(RollingWindow):
@@ -707,49 +717,28 @@ class RunPace(grumble.Model, Timestamped):
     duration = grumble.property.IntegerProperty()
     speed = AvgSpeedProperty()
 
-    def after_store(self):
-        logger.debug("RunPace.after_store: %s in %s", self.cpdef.name, self.duration)
-        if (self.duration > 0) and Session.samekind(self.parent().get_interval()):
+    @classmethod
+    def get_best_for(cls, cpdef):
+        for best in RunPace.query(cpdef=cpdef).add_sort("duration").set_limit(1):
+            return best
+        return None
 
-            # See if this is a record at this time, i.e. if there is no
-            # faster entry dated before this session:
-            q = BestRunPace.query(parent=self.cpdef).add_sort("snapshotdate")
-            q.add_filter("snapshotdate <= ", self.parent().get_session().start_time)
-            q.add_filter("duration < ", self.duration)
-            best = q.get()
-            if not best:
-                logger.debug("RunPace.after_store: this is a record")
-                best = BestRunPace(parent=self.cpdef)
-                best.cpdef = self.cpdef
-                best.snapshotdate = self.parent().get_session().start_time
-                best.best = self
-                best.duration = self.duration
-                best.distance = self.distance
-                best.put()
-            else:
-                logger.debug("RunPace.after_store: didn't beat existing record -> %s in %s",
-                             self.cpdef.name, best.duration)
-
-            # Delete records set after this session that are not as good
-            # as this one. This can happen if old sessions are imported.
-            q = BestRunPace.query(parent=self.cpdef).add_sort("snapshotdate")
-            q.add_filter("snapshotdate > ", self.parent().get_session().start_time)
-            q.add_filter("duration <= ", self.duration)
-            for brp in q:
-                logger.debug("RunPace.after_store: cleaning up superceded record %s in %s",
-                             self.cpdef.name, brp.duration)
-            q.delete()
-        else:
-            logger.debug("RunPace.after_store: skipping, %s", self.parent().get_interval().__class__.__name__)
-
-
-class BestRunPace(grumble.Model):
-    cpdef = grumble.ReferenceProperty(sweattrails.config.CriticalPace)
-    snapshotdate = grumble.DateTimeProperty(auto_now_add=True)
-    best = grumble.ReferenceProperty(RunPace)
-    distance = grumble.IntProperty()
-    duration = grumble.IntProperty()
-    speed = AvgSpeedProperty()
+    @classmethod
+    def get_progression(cls, cpdef, user=None):
+        q = cls.query(keys_only=False, cpdef=cpdef)
+        q.add_parent_join(RunPart, "part")
+        q.add_join(Session, "_parent", "session", "part")
+        q.add_join(sweattrails.config.CriticalPace, "cpdef", "cpdef")
+        if user:
+            q.add_filter("session.athlete =", user)
+        q.add_condition("""k.duration < COALESCE((SELECT MIN(rp.duration) FROM %s rp 
+                           INNER JOIN %s runpart ON (runpart._key = rp._parent)
+                           INNER JOIN %s sess ON (sess._key = runpart._parent)
+                           WHERE rp.cpdef = %%s AND sess.start_time < session.start_time), k.duration + 1)""" %
+                        (cls.modelmanager.tablename, RunPart.modelmanager.tablename, Session.modelmanager.tablename),
+                        str(cpdef.key()))
+        q.add_sort("k.duration", True)
+        return q
 
 
 class RunPart(IntervalPart):
@@ -961,6 +950,15 @@ class Interval(grumble.Model, Timestamped):
         self.average_heartrate = 0
         self.max_heartrate = 0
         self.max_speed = 0.0
+        part = self.intervalpart
+        if part:
+            if hasattr(part, "reset") and callable(part.reset):
+                part.reset()
+            part.put()
+        self.put()
+        intervals = Interval.query(parent=self).fetchall()
+        for i in intervals:
+            i.reset()
 
 
 class IntervalReducable(Reducable):
@@ -1002,11 +1000,11 @@ class IntervalReducable(Reducable):
 class Session(Interval):
     athlete = grumble.reference.ReferenceProperty(grizzle.User)
     sessiontype = SessionTypeReference()
-    start_time = grumble.property.DateTimeProperty(verbose_name = "Date/Time")
-    notes = grumble.property.StringProperty(multiline = True)
-    posted = grumble.property.DateTimeProperty(auto_now_add = True, verbose_name = "Posted on")
-    inprogress = grumble.property.BooleanProperty(default = True)
-    device = grumble.property.StringProperty(default = "")
+    start_time = grumble.property.DateTimeProperty(verbose_name="Date/Time")
+    notes = grumble.property.StringProperty(multiline=True)
+    posted = grumble.property.DateTimeProperty(auto_now_add=True, verbose_name="Posted on")
+    inprogress = grumble.property.BooleanProperty(default=True)
+    device = grumble.property.StringProperty(default="")
 
     def get_session(self):
         return self
@@ -1019,27 +1017,15 @@ class Session(Interval):
         userprofile.last_upload = datetime.datetime.now()
         userprofile.put()
 
-    def waypoints(self, allwps = None):
+    def waypoints(self, allwps=None):
         if not hasattr(self, "_wps"):
             if allwps:
                 self._wps = allwps
             else:
-                q = Waypoint.query(parent = self, keys_only = False)
+                q = Waypoint.query(parent=self, keys_only=False)
                 q.add_sort("timestamp")
                 self._wps = q.fetchall()
         return self._wps
-
-    def reset(self):
-        intervals = [self]
-        intervals.extend(Interval.query(ancestor = self).fetchall())
-        for i in intervals:
-            i.reset()
-            part = i.intervalpart
-            if part:
-                if hasattr(part, "reset"):
-                    part.reset()
-                part.put()
-            i.put()
 
     def analyze(self, callback=None):
         logger.debug("Interval.analyze(): Getting subintervals")

@@ -214,6 +214,7 @@ class GeoPt(object):
     def from_dict(cls, d):
         return GeoPt(d)
 
+
 class GeoBox(object):
     def __init__(self, *args):
         self._sw = None

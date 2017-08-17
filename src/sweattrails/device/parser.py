@@ -20,8 +20,8 @@ import gripe
 import gripe.conversions
 import gripe.db
 import grumble.geopt
-import sweattrails.device.exceptions
 import sweattrails.config
+import sweattrails.device.exceptions
 import sweattrails.session
 
 logger = gripe.get_logger(__name__)

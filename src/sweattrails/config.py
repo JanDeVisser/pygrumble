@@ -16,9 +16,12 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
+import sys
+
 import gripe
 import gripe.db
 import grizzle
+import grumble.model
 import grumble.image
 import grumble.meta
 import grumble.property
@@ -36,7 +39,7 @@ class FlagProperty(grumble.property.StringProperty):
         pass
 
 
-class Country(grumble.Model):
+class Country(grumble.model.Model):
     countryname = grumble.property.StringProperty(verbose_name="Country name", is_label=True)
     countrycode = grumble.property.StringProperty(verbose_name="ISO 3166-1 code", is_key=True)
     flag_url = FlagProperty(transient=True)
@@ -58,7 +61,8 @@ class ProfileReference(object):
         return NodeTypeRegistry.get_by_ref_class(cls)
 
 
-class SessionType(grumble.Model, ProfileReference):
+@grumble.model.cached
+class SessionType(grumble.model.Model, ProfileReference):
     _resolved_parts = set()
     name = grumble.property.StringProperty(verbose_name="Activity", is_key=True, scoped=True)
     description = grumble.property.StringProperty()
@@ -79,7 +83,7 @@ class SessionType(grumble.Model, ProfileReference):
             return None
 
 
-class GearType(grumble.Model, ProfileReference):
+class GearType(grumble.model.Model, ProfileReference):
     name = grumble.property.StringProperty(is_key=True, scoped=True)
     description = grumble.property.StringProperty()
     icon = grumble.image.ImageProperty()
@@ -87,17 +91,17 @@ class GearType(grumble.Model, ProfileReference):
     usedFor = grumble.ReferenceProperty(SessionType, verbose_name="Used for")
 
 
-class CriticalPowerInterval(grumble.Model, ProfileReference):
+class CriticalPowerInterval(grumble.model.Model, ProfileReference):
     name = grumble.property.StringProperty(is_key=True, scoped=True)
-    duration = grumble.property.TimeDeltaProperty()
+    duration = grumble.property.TimeDeltaProperty(verbose_name="Duration")
 
 
-class CriticalPace(grumble.Model, ProfileReference):
+class CriticalPace(grumble.model.Model, ProfileReference):
     name = grumble.property.StringProperty(is_key=True, scoped=True)
-    distance = grumble.property.IntegerProperty()  # In m
+    distance = grumble.property.IntegerProperty(verbose_name="Distance")  # In m
 
 
-class Zone(grumble.Model, ProfileReference):
+class Zone(grumble.model.Model, ProfileReference):
     name = grumble.property.StringProperty(is_key=True, scoped=True)
 
 
@@ -301,8 +305,8 @@ class NodeTypeDefinition(object):
         return node
 
 
-@grumble.abstract
-class NodeBase(grumble.Model):
+@grumble.model.abstract
+class NodeBase(grumble.model.Model):
 
     @classmethod
     def get_node_definition(cls):
@@ -340,7 +344,7 @@ class NodeBase(grumble.Model):
         return d
 
 
-@grumble.abstract
+@grumble.model.abstract
 class TreeNodeBase(NodeBase):
     @classmethod
     def is_tree(cls):
@@ -572,14 +576,14 @@ class ActivityProfile(grizzle.UserPart):
 #
 
 
-class Brand(grumble.Model):
-    name = grumble.StringProperty()
-    description = grumble.StringProperty()
+class Brand(grumble.model.Model):
+    name = grumble.property.StringProperty()
+    description = grumble.property.StringProperty()
     logo = grumble.image.ImageProperty()
-    website = grumble.StringProperty()  # FIXME LinkProperty
-    about = grumble.TextProperty()
-    country = grumble.ReferenceProperty(Country)
-    gearTypes = grumble.ListProperty()  # (grumble.Key) FIXME Make list items typesafe
+    website = grumble.property.StringProperty()  # FIXME LinkProperty
+    about = grumble.property.TextProperty()
+    country = grumble.reference.ReferenceProperty(Country)
+    gearTypes = grumble.property.ListProperty()  # (grumble.Key) FIXME Make list items typesafe
 
     def sub_to_dict(self, descriptor, **flags):
         gts = []
