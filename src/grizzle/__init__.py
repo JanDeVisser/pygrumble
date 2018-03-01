@@ -270,6 +270,10 @@ class GroupsForUser(grumble.Model):
 
 class UserManager(object):
 
+    def __init__(self):
+        if "grizzle" not in gripe.Config:
+            gripe.Config["grizzle"] = {}
+
     @classmethod
     def get(cls, userid):
         ret = User.get_by_key(userid)
@@ -290,6 +294,12 @@ class UserManager(object):
 
     def has_users(self):
         return User.all(keys_only=True).count() > 0
+
+    def authenticate(self, **kwargs):
+        authenticator = kwargs.get("authenticator",
+                                   gripe.Config.grizzle.get("authenticator", "grizzle.qt.authenticate"))
+        authenticator = gripe.resolve(authenticator)
+        return authenticator(**kwargs)
 
 
 if True:

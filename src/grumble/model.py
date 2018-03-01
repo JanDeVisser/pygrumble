@@ -654,7 +654,6 @@ class Model(object):
         ix = 0
         while ix < len(args):
             arg = args[ix]
-            print ix, arg
             if isinstance(arg, (list, tuple)):
                 q.add_filter(*arg)
                 ix += 1

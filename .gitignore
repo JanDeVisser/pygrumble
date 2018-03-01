@@ -10,4 +10,6 @@ db/*
 src/conf/qtapp.json
 .kdev4/*
 .idea/*
+/dist/
+/*.egg-info
 **/#*#

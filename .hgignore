@@ -1,8 +1,0 @@
-.*\.pyc
-.*~
-.*\.log
-.*\.backup
-src/logs/.*
-nbproject/private/.*
-users/.*
-db/.*

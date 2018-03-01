@@ -138,12 +138,12 @@ def resolve(funcname, default=None):
     if funcname:
         if callable(funcname):
             return funcname
-        (module, dot, fnc) = funcname.rpartition(".")
-        logger.debug("Resolving function %s in module %s", fnc, module)
-        mod = importlib.import_module(module)
+        (modname, dot, fnc) = str(funcname).rpartition(".")
+        logger.debug("Resolving function %s in module %s", fnc, modname)
+        mod = importlib.import_module(modname)
         return getattr(mod, fnc) if hasattr(mod, fnc) and callable(getattr(mod, fnc)) else default
     else:
-        return resolve(default, None) if isinstance(default, basestring) else default
+        return resolve(default, None) if not callable(default) else default
 
 
 class abstract(object):
@@ -360,10 +360,11 @@ class Config(object):
         for f in os.listdir(os.path.join(root_dir(), "conf")):
             (section, ext) = os.path.splitext(f)
             if ext == ".json":
-                # print >> sys.stderr, "Reading conf file %s.json" % section
+                print >> sys.stderr, "Reading conf file %s.json" % section
                 config = gripe.json_util.JSON.file_read(os.path.join("conf", "%s.json" % section))
                 if config and ("components" in config) and isinstance(config.components, list):
                     for component in config.components:
+                        print >> sys.stderr, "Reading component conf file %s.json into section %s" % (component, section)
                         comp = gripe.json_util.JSON.file_read(os.path.join("conf", "%s.comp" % component))
                         if comp:
                             config.merge(comp)

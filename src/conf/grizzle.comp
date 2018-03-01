@@ -19,6 +19,9 @@
                 ]
             }
         },
-        "root": "root@sweattrails.com"
+        "root": "root@sweattrails.com",
+        "oauth": {
+            "browser": "grizzle.qt.OAuthBrowser"
+        }
     }
 }
