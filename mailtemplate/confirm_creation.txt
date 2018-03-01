@@ -1,0 +1,19 @@
+Hello {{process.display_name}},
+
+An administrator of {{app.application_name}} just created an account for you.
+
+You should log in using your email address:
+
+    {{process.email}}
+
+We generated the following password for you:
+
+    {{process.password}}
+
+Please visit the URL below to confirm your registration.
+
+    http://localhost/um/confirmcreate/{{process.id()}}
+
+We recommend you change your generated password after logging in.
+
+Thanks!

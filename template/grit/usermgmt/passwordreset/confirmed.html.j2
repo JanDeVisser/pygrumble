@@ -1,0 +1,22 @@
+{% extends "base.html.j2" %}
+{% do response.headers.setdefault("X-ST-Password", process.password) %}
+
+{% block tabs %}
+
+<st:tab code="confirmation" label="Password Reset">
+    Your password has been reset. You can now login using the password 
+    <blockquote>
+        <b>{{process.password}}</b>
+    </blockquote>
+    <p/>
+    <a href="/login">Log into {{app.application_name}}</a>.
+    <p/>
+    We recommend that you change your password after logging in.
+</st:tab>
+
+{% endblock tabs %}
+
+{% block topbar %}
+{% endblock topbar %}
+
+

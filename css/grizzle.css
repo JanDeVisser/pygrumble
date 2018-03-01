@@ -1,0 +1,385 @@
+/* 
+    Document   : sweattrails
+    Created on : 4-Mar-2012, 11:31:11 AM
+    Author     : jan
+    Description:
+        Basic sweattrails stylesheet
+*/
+
+root { 
+    display: block;
+}
+
+body {
+    font-family: Verdana,Arial,sans serif;
+    margin: 0 0 0 0;
+    padding: 0 0 0 0;
+}
+
+/*
+  Menu styling. 
+  See http://line25.com/tutorials/how-to-create-a-pure-css-dropdown-menu
+*/
+
+.topbar {
+    margin: 0 0 0 0;
+    width: 100%;
+    height: 50px;
+    background-color: #A30000;
+}
+
+.tools {
+    position: absolute;
+    top: 0;
+    right: 1em;
+    color: white;
+}
+
+nav ul ul {
+    display: none;
+}
+
+nav ul li:hover > ul {
+    display: block;
+}
+
+nav ul {
+    background: #A30000; 
+    background: linear-gradient(top, #a30000 0%, #ff0000 100%);  
+    background: -moz-linear-gradient(top, #a30000 0%, #ff0000 100%); 
+    background: -webkit-linear-gradient(top, #a30000 0%, #ff0000 100%); 
+    box-shadow: 0 0 9px rgba(0,0,0,0.15);
+    padding: 0 /*20px*/;
+    border-radius: 10px;  
+    list-style: none;
+    position: relative;
+    display: inline-table;
+}
+
+nav ul:after {
+    content: ""; 
+    clear: both; 
+    display: block;
+}
+
+nav ul li {
+    float: left;
+}
+
+nav ul li:hover {
+    background: #4b545f;
+    background: linear-gradient(top, #4f5964 0%, #5f6975 40%);
+    background: -moz-linear-gradient(top, #4f5964 0%, #5f6975 40%);
+    background: -webkit-linear-gradient(top, #4f5964 0%,#5f6975 40%);
+    border-radius: 10px;  
+}
+
+nav ul li:hover .navitem:first-child {
+    border-radius: 10px 0 0 10px;
+}
+
+nav ul li:hover .navitem:last-child {
+    border-radius: 0 10px 10px 0;
+}
+
+nav ul li:hover .navitem {
+    color: white;
+}
+	
+nav ul li .navitem {
+    display: block;
+    padding: 5px 5px;
+    border-radius: 10px;  
+    color: white;
+    text-decoration: none;
+}
+
+nav ul li .navitem:first-child {
+    border-radius: 10px 0 0 10px;
+}
+
+nav ul li .navitem:last-child {
+    border-radius: 0 10px 10px 0;
+}
+
+nav ul ul {
+    background: #5f6975; 
+    border-radius: 0;
+    padding: 0;
+    position: absolute; top: 100%;
+}
+
+nav ul ul li {
+    float: none; 
+    border-top: 1px solid #6b727c;
+    border-bottom: 1px solid #575f6a;
+    position: relative;
+}
+
+nav ul ul li .navitem {
+    padding: 15px 40px;
+    color: #fff;
+}	
+
+nav ul ul li .navitem:hover {
+    background: #4b545f;
+}
+
+nav ul ul ul {  
+    position: absolute; left: 100%; top:0;
+}
+
+/* Menu done */
+
+tr.tableheader {
+    background-color: #A30000;
+}
+
+th {
+    text-align: left;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    padding-right: 5px;
+    padding-left: 5px;
+}
+
+span.tab {
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-right: 10px;
+    padding-left: 10px;
+    border-style: solid;
+    border-width: thin;
+    border-radius: 5px 5px 0 0;
+}
+
+span.tab_selected {
+    background-color:  #A30000;
+    margin: 0;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    padding-right: 10px;
+    padding-left: 10px;
+    border-style: solid;
+    border-width: medium;
+    border-radius: 5px 5px 0 0;
+}
+
+div.tabpage {
+    height: 100%
+}
+
+div.tabbox {
+    padding-top: 12px;
+}
+
+div.pagebox {
+    margin-top: 10px;
+    margin-left: 0;
+    padding: 10px;
+    border: thin solid;
+    border-radius: 5px;
+    height: 100%;
+}
+
+div.boxtitle {
+    font-weight: bold;
+}
+
+div.buttonbar-container {
+    clear: both;
+}
+
+div.buttonbar-header {
+    border-bottom: thin solid black;
+    padding-top: 5px;
+    padding-left: 2px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+div.buttonbar-footer {
+    border-top: thin solid black;
+    padding-top: 5px;
+    padding-left: 2px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+div.buttonbar-empty {
+    padding-top: 5px;
+    padding-left: 2px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+div.menubar {
+    border-bottom: thin solid black;
+    padding-bottom: 5px;
+    padding-left: 2px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+.sidebarwrapper {
+    float: left;
+    width: 230px;
+    margin-left: -100%;
+    font-size: 90%;
+}
+
+.sidebar {
+    float: left;
+    width: 230px;
+    background-color: #A30000;
+    height: 100%;
+    padding-right: 4px;
+    padding-top: 5px;
+    padding-left: 10px;
+}
+
+.documentwrapper {
+    float: left;
+    width: 100%;
+}
+
+.mainpagewrapper {
+    margin: 0 0 0 244px;
+}
+
+.mainpage {
+    float: left;
+    width: 98%;
+    padding: 5px;
+}
+
+a.whitelink:link {
+    text-decoration: none;
+    color: white;
+}
+
+a.whitelink:visited {
+    text-decoration: none;
+    color: #D3D3D3;
+}
+
+a.greylink:link {
+    text-decoration: none;
+    color: #708090;
+}
+
+a.greylink:visited {
+    text-decoration: none;
+    color: #708090;
+}
+
+a.menulink {
+    text-decoration: none;
+    color: blue;
+}
+
+a.disabledmenulink {
+    text-decoration: none;
+    color: #BEBEBE;
+}
+
+.propsbox {
+    border: thin solid black;
+    padding: 5px;
+    margin-left: 20px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+.menu {
+    position: absolute;
+    background-color: white;
+    color: black;
+    border: thin solid black;
+    padding: 10px;
+    margin-left: 0;
+    margin-top: 0;
+    margin-bottom: 5px;
+    border-radius: 5px;
+}
+
+.popup {
+    position: absolute;
+    background-color: white;
+    color: black;
+    border: thin solid black;
+    padding: 10px;
+    margin-left: -200px;
+    margin-top: 0;
+    margin-bottom: 5px;
+    border-radius: 5px;
+}
+
+.popup::after {
+    position: absolute;
+    content: url("/image/close16x16.png");
+    right: -10px;
+    top: -10px;
+    width: 16px;
+    height: 16px;
+}
+
+.overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width:100%;
+    height:100%;
+    text-align:center;
+    background: rgb(105, 105, 105);
+    opacity: 0.3;
+    z-index: 1000;
+}
+
+.modal {
+    position: absolute;
+    width: 33%;
+    margin-top: 20%;
+    margin-left: 33%;
+    margin-right: auto;
+    background-color: white;
+    color: black;
+    border: thin solid black;
+    padding: 10px;
+    border-radius: 5px;
+    z-index: 1001;
+    opacity: 1;
+}
+
+.modal::after {
+    position: absolute;
+    content: url("/image/error.png");
+    right: -10px;
+    top: -10px;
+}
+
+.login {
+    position: absolute;
+    background-color: white;
+    color: black;
+    border: thin solid black;
+    padding: 10px;
+    margin-left: -100px;
+    margin-top: 15px;
+    margin-bottom: 5px;
+    border-radius: 5px;
+}
+
+div.treeview-daycare {
+    margin-left: 20px;
+}
+
+.td.formdata {
+    text-align: left;
+    width: auto;
+}
+
+.td.formlabel {
+    text-align: right;
+    width: auto;
+}

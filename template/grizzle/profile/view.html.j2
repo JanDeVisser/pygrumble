@@ -1,0 +1,59 @@
+{% extends "sweattrails/sweattrails.html.j2" %}
+
+{% block tabs %}
+
+<st:tab code="profile" label="Profile">
+    <st:form name="user" url="/json/user/{{user.key()}}">
+        <st:flag name="include_parts"/>
+        <st:field id="profile" type="title" text="User Profile"/>
+        <st:field id="email" type="text" property="email" label="Email" readonly="true"/>
+        <st:field id="display_name" type="text" property="display_name" label="Name" required="true"/>
+        <st:field id="country" type="lookup" property="_userprofile.country" label="Country"
+                  url="/json/country" text="countryname" key="countrycode"/>
+        <st:field id="location" type="text" property="_userprofile.location" label="Location"/>
+        <st:field id="dob" type="date" property="_userprofile.dob" label="Birthdate"/>
+        <st:field id="gender" type="lookup" property="_userprofile.gender" label="Gender" presentationtype="radio">
+            <st:value text="Female" key="female"/>
+            <st:value text="Male" key="male"/>
+            <st:value text="Other" key="other"/>
+        </st:field>
+        <st:field id="height" type="length" property="_userprofile.height" label="Height"/>
+        <st:field id="preferences" type="title" text="Preferences"/>
+        <st:field id="units" type="lookup" property="_userprofile.units" label="Units" presentationtype="radio">
+            <st:value text="Metric" key="metric"/>
+            <st:value text="Imperial" key="imperial"/>
+        </st:field>
+        <st:field id="components" type="title" text="Components"/>
+        <st:field id="weightmgmt" type="checkbox" property="weightmgmt" label="Weight Management"/>
+        <st:field id="seizuremgmt" type="checkbox" property="seizuremgmt" label="Seizure Management"/>
+
+        <st:footer>
+            <st:action mode="view" label="Edit" action="edit"/>
+            <st:action mode="edit" label="Save" action="save"/>
+            <st:action mode="edit" label="Cancel" action="cancel"/>
+        </st:footer>
+    </st:form>
+</st:tab>
+
+{% if object._seizuremgmt is defined %}
+<st:tab code="seizuremgmt" label="Seizures">
+    <st:table name="seizurelog" url="/json/seizurelog">
+        <st:parameter name="parent" value="{{object._seizuremgmt.id()}}"/>
+        <st:submitparameter name="parent" value="{{object._seizuremgmt.id()}}"/>
+        <st:column label="Date/Time" type="datetime" property="timestamp" select="true"/>
+        <st:column label="Description" type="text" property="description"/>
+        <st:column label="Severity" type="integer" property="severity"/>
+        <st:dataform>
+            <st:field id="timestamp" type="datetime" property="timestamp" label="Date/Time"/>
+            <st:field id="description" type="text" property="description" label="Description"/>
+            <st:field id="severity" type="integer" property="severity" label="Severity"/>
+            <st:action mode="view" label="Edit" action="edit"/>
+            <st:action mode="new;edit" label="Save" action="save"/>
+            <st:action mode="view;new;edit" label="Cancel" action="cancel"/>
+        </st:dataform>
+        <st:action label="Add" action="new"/>
+    </st:table>
+</st:tab>
+{% endif %}
+
+{% endblock tabs %}

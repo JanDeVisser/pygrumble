@@ -1,0 +1,16 @@
+{% extends "base.html.j2" %}
+
+{% block tabs %}
+
+<st:tab code="confirmation" label="Success!">
+    You have successfully confirmed your new account. You can now login:
+    <p/>
+    <a href="/login">Log into {{app.application_name}}</a>
+</st:tab>
+
+{% endblock tabs %}
+
+{% block topbar %}
+{% endblock topbar %}
+
+
