@@ -381,7 +381,7 @@ class Model(object):
 
     @classmethod
     def _deserialize(cls, descriptor):
-        for name, prop in filter(lambda (name, prop): ((not prop.private) and (name in descriptor)), cls._allproperties.items()):
+        for name, prop in filter(lambda (n, p): ((not p.private) and (n in descriptor)), cls._allproperties.items()):
             value = descriptor[name]
             try:
                 descriptor[name] = prop._from_json_value(value)
@@ -396,7 +396,8 @@ class Model(object):
             for b in self.__class__.__bases__:
                 if hasattr(b, "_update") and callable(b._update):
                     b._update(self, descriptor)
-            for prop in filter(lambda prop: not(prop.private) and not(prop.readonly) and (prop.name in descriptor), self.properties().values()):
+            for prop in filter(lambda p: not p.private and not p.readonly and (p.name in descriptor),
+                               self.properties().values()):
                 name = prop.name
                 try:
                     value = descriptor[name]

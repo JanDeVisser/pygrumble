@@ -97,6 +97,13 @@ class UserPartKennel(UserPart):
         Not revertable.
 """
 UserStatus = gripe.Enum(['Unconfirmed', 'Active', 'Admin', 'Banned', 'Inactive', 'Deleted'])
+
+
+def onUserStatusAssign(user, oldstatus, newstatus):
+    if newstatus in ["Inactive", "Deleted"]:
+        user.deactivate()
+
+
 GodList = ('jan@de-visser.net',)
 
 
@@ -109,7 +116,7 @@ class UserPartToggle(grumble.property.BooleanProperty):
     def _init_parts(self, instance):
         if not hasattr(instance, "_parts"):
             instance._parts = {grumble.Model.for_name(pn).basekind().lower(): None
-                               for pn in gripe.Config.app.grizzle.userparts}
+                               for pn in gripe.Config.key("app.grizzle.userparts")}
 
     def setvalue(self, instance, value):
         self._init_parts(instance)
@@ -136,7 +143,7 @@ class UserPartToggle(grumble.property.BooleanProperty):
 
 
 def customize_user_class(cls):
-    for (partname, partdef) in gripe.Config.app.grizzle.userparts.items():
+    for (partname, partdef) in gripe.Config.key("app.grizzle.userparts").items():
         (_, _, name) = partname.rpartition(".")
         name = name.lower()
         partcls = gripe.resolve(partname)
@@ -153,7 +160,12 @@ class User(grumble.Model, gripe.auth.AbstractUser):
     _customizer = staticmethod(customize_user_class)
     email = grumble.property.TextProperty(is_key=True)
     password = grumble.property.PasswordProperty()
-    status = grumble.property.TextProperty(choices=UserStatus, default='Unconfirmed', required=True)
+    status = grumble.property.TextProperty(
+        choices=UserStatus,
+        default='Unconfirmed',
+        required=True,
+        on_assign=onUserStatusAssign
+    )
     display_name = grumble.property.TextProperty(is_label=True)
     has_roles = grumble.property.ListProperty(verbose_name="Roles",
                                               choices={r: role.get("label", r)
@@ -179,7 +191,7 @@ class User(grumble.Model, gripe.auth.AbstractUser):
                 self.is_active() and
                 grumble.PasswordProperty.hash(password) == self.password)
 
-    def confirm(self, status = 'Active'):
+    def confirm(self, status='Active'):
         logger.debug("User(%s).confirm(%s)", self, status)
         if self.exists():
             self.status = status
@@ -196,7 +208,7 @@ class User(grumble.Model, gripe.auth.AbstractUser):
     def after_insert(self):
         kennel = UserPartKennel(parent=self)
         kennel.put()
-        for (partname, partdef) in gripe.Config.app.grizzle.userparts.items():
+        for (partname, partdef) in gripe.Config.key("app.grizzle.userparts").items():
             if partdef.default:
                 part = grumble.Model.for_name(partname)(parent=self)
                 part.put()
@@ -209,6 +221,7 @@ class User(grumble.Model, gripe.auth.AbstractUser):
         return d
 
     def on_update(self, d, **flags):
+        self.load_parts()
         for (k, part) in self._parts.items():
             key = "_" + k
             if (key in d) and part:
@@ -228,7 +241,7 @@ class User(grumble.Model, gripe.auth.AbstractUser):
     def load_parts(self):
         if not hasattr(self, "_parts"):
             self._parts = {grumble.Model.for_name(pn).basekind().lower(): None
-                           for pn in gripe.Config.app.grizzle.userparts}
+                           for pn in gripe.Config.key("app.grizzle.userparts")}
             logger.debug("load_parts - _parts: %s", self._parts)
             for part in grumble.Query(UserPart, keys_only=False, include_subclasses=True).set_parent(self):
                 k = part.basekind().lower()
@@ -259,6 +272,9 @@ class User(grumble.Model, gripe.auth.AbstractUser):
 
     def is_god(self):
         return self.uid() in GodList
+
+    def deactivate(self):
+        grumble.Query(UserPart, keys_only=False, include_subclasses=True).set_parent(self).delete()
 
 
 @grumble.model.flat

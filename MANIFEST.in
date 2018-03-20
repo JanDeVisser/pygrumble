@@ -1,0 +1,17 @@
+include README.md
+include image/*
+include css/*
+include data/template/*
+include conf/*
+include jscr/*
+include template/*.html.j2
+include template/grizzle/profile/*.html.j2
+include template/grizzle/user/*.html.j2
+include template/grit/usermgmt/*.html.j2
+include template/grit/usermgmt/passwordreset/*.html.j2
+include template/grit/usermgmt/usercreate/*.html.j2
+include template/grit/usermgmt/usersignup/*.html.j2
+include mailtemplate/*
+include autoreload.py
+include ceilingcat.jpg
+include index.py

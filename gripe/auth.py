@@ -131,9 +131,9 @@ class AbstractUser(AbstractAuthObject):
     def logged_out(self, session):
         pass
 
-    @classmethod
-    def generate_password(cls):
-        return "".join(random.sample("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890.,!@#$%^&*()_+=-", 10))
+
+def generate_password():
+    return "".join(random.sample("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890.,!@#$%^&*()_+=-", 10))
 
 
 if __name__ == "__main__":

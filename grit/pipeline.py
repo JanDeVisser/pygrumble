@@ -133,7 +133,6 @@ class Dispatcher(object):
             raise
         return self
 
-
     def __exit__(self, exception_type, exception_value, trace):
         # TODO: Do fancy HTTP error code stuffs maybe
         return False

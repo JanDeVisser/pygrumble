@@ -48,8 +48,7 @@ class Worker(object):
                 args = args or []
                 kwargs = action[2] if len(action) > 2 else {}
                 kwargs = kwargs or {}
-                logger.debug("Worker %s: handling(%s, %s, %s)", self._ix,
-                    a, args, kwargs)
+                logger.debug("Worker %s: handling(%s, %s, %s)", self._ix, a, args, kwargs)
                 with gripe.db.Tx.begin():
                     ret = a(*args, **kwargs)
                     if isinstance(ret, (basestring, Status)) and "process" in kwargs:
@@ -239,7 +238,7 @@ class Invoke(Action):
             self._method = args[0]
             if len(args) > 1:
                 self._args.extend(args[1:])
-        if "method" in kwargs:
+        elif "method" in kwargs:
             self._method = kwargs["method"]
         else:
             self._method = ".:invoke()"
@@ -275,11 +274,11 @@ class SendMail(Action):
     def _ctx_factory(self, msg, ctx):
         process = ctx["process"]()
         msg.recipients(process.resolve_attribute(self._recipients[1:])
-            if process and self._recipients and self._recipients.startswith("@")
-            else self._recipients)
+                       if process and self._recipients and self._recipients.startswith("@")
+                       else self._recipients)
         msg.subject(process.resolve_attribute(self._subject[1:])
-            if process and self._subject and self._subject.startswith("@")
-            else self._subject)
+                    if process and self._subject and self._subject.startswith("@")
+                    else self._subject)
         if self._headers:
             for header in self._headers:
                 val = self._headers[header]

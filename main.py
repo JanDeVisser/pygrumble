@@ -15,7 +15,7 @@ if __name__ != '__main__':
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/app.json'))
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/database.json'))
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/gripe.json'))
-    autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/grizzle.comp'))
+    autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/grizzle.inc'))
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/logging.json'))
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/model.json'))
     autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/smtp.json'))

@@ -67,22 +67,16 @@ class ModelBridge(object):
                 key = self.user.uid()
             elif key == "__userobjid":
                 key = self.user.id() if isinstance(self.user, grumble.Model) else None
-        if (key and not self._key) or override:
+        if key and (not self._key or override):
             self._key = str(key) if key else None
             self._obj = None
         return self._key
 
     def object(self, key=None):
         if key:
-            if isinstance(key, grumble.Model):
-                self._obj = key
-            else:
-                self._obj = self.kind().get(key)
-            self._key = self._obj.id()
-        elif (not hasattr(self, "_obj") or not self._obj) and hasattr(self, "_key") and self._key:
+            self.key(key if isinstance(key, basestring) else key().id(), True)
+        if not (hasattr(self, "_obj") and self._obj):
             self._obj = self.kind().get(self._key)
-        else:
-            assert hasattr(self, "_obj") and self._obj, "Object not set yet"
         return self._obj
 
     def save(self):
@@ -219,7 +213,7 @@ class PropertyBridgedHandler(BridgedHandler):
 
 
 class ImageHandler(PropertyBridgedHandler):
-    def post(self, key = None, kind = None, prop = None):
+    def post(self, key=None, kind=None, prop=None, content_type=None):
         logger.debug("ImageHandler.post(%s.%s, %s)", kind, prop, key)
         self._initialize_bridge(key, kind, prop)
         has_access = True
@@ -229,15 +223,16 @@ class ImageHandler(PropertyBridgedHandler):
             if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
                 self.initialize_bridge()
             if self.object() and self.can_update():
-                setattr(self.object(), self.property(), (self.request.get("image"), self.request.get("contentType")))
+                content_type = content_type or self.request.get("contentType")
+                setattr(self.object(), self.property(), (self.request.get("image"), content_type))
                 self.save()
-                return self.get()
+                return
             else:
                 self.error(401)
         else:
             self.error(401)
 
-    def get(self, key=None, kind=None, prop=None):
+    def get(self, key=None, kind=None, prop=None, content_type=None):
         logger.debug("ImageHandler.get(%s.%s, %s)", kind, prop, key)
         self._initialize_bridge(key, kind, prop)
         has_access = True
@@ -247,7 +242,8 @@ class ImageHandler(PropertyBridgedHandler):
             if hasattr(self, "initialize_bridge") and callable(self.initialize_bridge):
                 self.initialize_bridge()
             if self.object() and self.can_read():
-                if getattr(self.object(), self.property() + "_hash") in self.request.if_none_match:
+                if self.request.if_none_match and \
+                     getattr(self.object(), self.property() + "_hash") in self.request.if_none_match:
                     logger.debug("Client has up-to-date image")
                     self.response.status = "304"
                 else:
@@ -414,6 +410,7 @@ class SchemaHandler(grit.requesthandler.ReqHandler):
         logger.info("SchemaHandler.get(%s)", kind)
         k = grumble.Model.for_name(kind)
         self.json_dump(k.schema())
+
 
 app = webapp2.WSGIApplication([
         webapp2.Route(r'/json/<kind>', handler=JSONHandler, name='json-update'),

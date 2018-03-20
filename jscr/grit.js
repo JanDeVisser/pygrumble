@@ -113,6 +113,7 @@ com.sweattrails.api.Manager = function() {
     this.components = [];
     this.processors = [];
     this.objects = {};
+    this.deferred = [];
     this.register(this);
 };
 
@@ -171,6 +172,10 @@ com.sweattrails.api.Manager.prototype.all = function(type) {
     return this[type];
 };
 
+com.sweattrails.api.Manager.prototype.onstarted = function(f) {
+    this.deferred.push(f);
+}
+
 com.sweattrails.api.Manager.prototype.process = function() {
     for (var pix = 0; pix < this.processors.length; pix++) {
         var p = this.processors[pix];
@@ -185,6 +190,12 @@ com.sweattrails.api.Manager.prototype.process = function() {
             parent.removeChild(element);
         }
     }
+};
+
+com.sweattrails.api.Manager.prototype.start = function() {
+    for (i in this.deferred) {
+        this.deferred[i]();
+    };
 };
 
 com.sweattrails.api.Manager.prototype.run = function() {
@@ -459,38 +470,80 @@ com.sweattrails.api.internal.DataBridge = function() {
     this.set = (arguments.length > 1) ? arguments[1] : null;
 };
 
-com.sweattrails.api.internal.DataBridge.prototype.setValue = function(object, value) {
-    var s = this.set || this.get;
-    if (s && (typeof(s) === "string") && s.endsWith("()")) {
-        s = __.getfunc(s.substring(0, s.length() - 2));
+Object.defineProperty(com.sweattrails.api.internal.DataBridge.prototype, "get", {
+    get: function() {
+        return this._getvalue;
+    },
+    set: function(getvalue) {
+        this._getvalue = getvalue;
+        this._getstatic = null;
+        this._getter = null;
+        this._getprop = null;
+        if (getvalue) {
+            if (typeof(getvalue) === "string") {
+                if (getvalue.startsWith("=")) {
+                    this._getstatic = getvalue.substring(1);
+                } else if (getvalue.endsWith("()")) {
+                    this._getter = __.getfunc(g.substring(0, g.length() - 2), null, this);
+                } else {
+                    this._getprop = getvalue;
+                }
+            } else if (typeof(g) === "function") {
+                this._getter = g.bind(this);
+            } else {
+                this._getstatic = getvalue;
+            }
+        }
     }
-    if (typeof(s) === "function") {
-    	s(object, value);
-    } else if (s) {
-        $$.log(null, "Setting %s := %s", s, value);
-        __.setvar(s, value, object);
-        $$.log(null, "getvar(%s) = %s", s, __.getvar(s, object));
+});
+
+Object.defineProperty(com.sweattrails.api.internal.DataBridge.prototype, "set", {
+    get: function() {
+        return this._setvalue;
+    },
+    set: function(setvalue) {
+        this._setvalue = setvalue;
+        this._setter = null;
+        this._setprop = null;
+        var s = this._setvalue || this.get;
+        if (s) {
+            if ((typeof(s) === "string") && s.endsWith("()")) {
+                this._setter = __.getfunc(s.substring(0, s.length() - 2), null, this);
+            } else if (typeof(s) === "function") {
+                this._setter = s.bind(this);
+            } else {
+                this._setprop = s.toString();
+            }
+        }
+    }
+});
+
+com.sweattrails.api.internal.DataBridge.prototype.setValue = function(object, value) {
+    try {
+        if (this._setter) {
+        	this._setter(object, value);
+        } else if (this._setprop) {
+            __.setvar(this._setprop, value, object);
+        }
+    } catch (e) {
+        console.trace("Exception in Databridge.setValue: " + e);
+        com.sweattrails.api.dump(object, "bridge.set: " + this.set + " object =");
+        throw e;
     }
 };
 
 com.sweattrails.api.internal.DataBridge.prototype.getValue = function(object) {
     try {
-        var dbg = (arguments.length > 2) ? arguments[2] : false;
         var context = (arguments.length > 1) ? arguments[1] : window;
-        var ret = null;
-        var g = this.get;
-        if (g && (typeof(g) === "string") && g.endsWith("()")) {
-            g = __.getfunc(g.substring(0, g.length - 2));
+        if (this._getstatic) {
+            return this._getstatic;
+        } else if (this._getter) {
+            return this._getter(object, context);
+        } else if (this._get !== null) {
+            return __.getvar(this._get, object);
+        } else {
+            return null;
         }
-        if (dbg) {
-            __.dump(object, "bridge.getValue(%s)", g);
-        }
-        if (typeof(g) === "function") {
-            ret = g(object, context);
-        } else if (g !== null) {
-            return __.getvar(g, object);
-        }
-        return ret;
     } catch (e) {
         console.trace("Exception in Databridge.getValue: " + e);
         com.sweattrails.api.dump(object, "bridge.get: " + this.get + " object =");
@@ -499,14 +552,10 @@ com.sweattrails.api.internal.DataBridge.prototype.getValue = function(object) {
 };
 
 com.sweattrails.api.internal.DataBridge.prototype.clear = function(object) {
-    var s = this.set || this.get;
-    if (s && (typeof(s) === "string") && s.endsWith("()")) {
-        s = __.getfunc(s.substring(0, s.length() - 2));
-    }
-    if (typeof(s) === "function") {
-    	s(object, null);
-    } else if (s) {
-        __.clearvar(s, object);
+    if (this._setter) {
+    	this._setter(object, null);
+    } else if (this._set) {
+        __.clearvar(this._set, object);
     }
 };
 

@@ -10,6 +10,13 @@
     function refresh_table() {
         $("users").render();
     }
+
+    function validate_confirm(value) {
+        var pwd = this.form._("password");
+        return (value &amp;&amp; (!pwd || (pwd === "")))
+            ? "You must specify a password if you want to auto-confirm a new user"
+            : null;
+    }
 </script>
 
 <st:tab code="users" label="Users">
@@ -22,6 +29,7 @@
             <!-- 'Unconfirmed', 'Active', 'Admin', 'Banned', 'Inactive', 'Deleted' -->
             <st:icon value="Unconfirmed" icon="questionmark"/>
             <st:icon value="Active" icon="checkmark"/>
+            <st:icon value="Admin" icon="exclmark"/>
             <st:icon value="Banned" icon="forbidden"/>
             <st:icon value="Deleted" icon="close"/>
         </st:column>
@@ -30,9 +38,14 @@
         <st:dataform url="/um/create" onsubmitted="refresh_table">
             <st:field property="userid" type="text" label="Email"/>
             <st:field property="display_name" type="text" label="Name"/>
+            <st:field property="password" type="text" label="Password"/>
+            <st:field property="confirm" type="checkbox" label="Auto-Confirm" validate="validate_confirm"/>
             <st:action mode="new;edit" label="Save" action="save"/>
             <st:action mode="view;new;edit" label="Cancel" action="cancel"/>
         </st:dataform>
+        <st:footer>
+            <st:action label="New" action="new"/>
+        </st:footer>
     </st:table>
 </st:tab>
 

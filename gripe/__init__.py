@@ -17,6 +17,7 @@
 #
 
 
+import collections
 import errno
 import importlib
 import json
@@ -29,17 +30,59 @@ import traceback
 
 import gripe.json_util
 
+
+class ConfigMeta(type):
+    def __getattribute__(cls, name):
+        if name in ("backup", "restore") or name.startswith("_"):
+            return super(ConfigMeta, cls).__getattribute__(name)
+        if not super(ConfigMeta, cls).__getattribute__("_loaded"):
+            super(ConfigMeta, cls).__getattribute__("_load")()
+        return super(ConfigMeta, cls).__getattribute__(name)
+
+    def __setattr__(cls, name, value):
+        if not name.startswith("_"):
+            cls._sections.add(name)
+        return super(ConfigMeta, cls).__setattr__(name, gripe.json_util.JSON.create(value))
+
+    def __delattr__(cls, name):
+        cls._sections.remove(name)
+        return super(ConfigMeta, cls).__delattr__(name)
+
+    def __len__(cls):
+        return len(cls._sections)
+
+    def __getitem__(cls, key):
+        return getattr(cls, key)
+
+    def __setitem__(cls, key, value):
+        return setattr(cls, key, value)
+
+    def __delitem__(cls, key):
+        return delattr(cls, key)
+
+    def __iter__(cls):
+        return iter(cls._sections)
+
+    def __contains__(cls, key):
+        return key in cls._sections
+
+    def keys(cls):
+        return cls._sections
+
+
 #############################################################################
 #
 #  E X C E P T I O N S
 #
 #############################################################################
 
+
 class Error(Exception):
     """
         Base class for exceptions in this module.
     """
     pass
+
 
 class NotSerializableError(Error):
     """
@@ -52,7 +95,8 @@ class NotSerializableError(Error):
     def __str__(self):
         return "Property %s is not serializable" % (self.propname,)
 
-class AuthException(gripe.Error):
+
+class AuthException(Error):
     pass
 
 #############################################################################
@@ -61,24 +105,49 @@ class AuthException(gripe.Error):
 
 
 _root_dir = None
+_app_dirs = collections.OrderedDict()
+_users_init = set([])
+
+
 def root_dir():
     global _root_dir
     if not _root_dir:
-        modfile = sys.modules["gripe"].__file__
-        _root_dir = os.path.dirname(modfile)
-        _root_dir = os.path.dirname(_root_dir) if _root_dir != modfile else '..'
-        # print >> sys.stderr, "_root_dir = %s" % _root_dir
+        _root_dir = sys.modules["gripe"].__file__
+        print >> sys.stderr, _root_dir
+        while _root_dir and not os.path.isdir(os.path.join(_root_dir, "conf")):
+            _root_dir = os.path.dirname(_root_dir) if _root_dir != os.path.dirname(_root_dir) else None
+            print >> sys.stderr, _root_dir
+        assert _root_dir, "No configuration directory found under %s" % sys.modules["gripe"].__file__
+        print >> sys.stderr, "_root_dir = %s" % _root_dir
     return _root_dir
 
-_users_init = set([])
+
 def user_dir(uid):
     if not _users_init:
         mkdir("users")
     userdir = os.path.join("users", uid)
-    if uid not in _users_init:
+    if not os.path.exists(userdir):
         mkdir(userdir)
-        _users_init.add(uid)
+    _users_init.add(uid)
     return userdir
+
+
+def add_app_dir(app_name, app_dir):
+    d = os.path.abspath(app_dir)
+    if os.path.exists(d):
+        while d and d != os.path.dirname(d) and not os.path.isdir(os.path.join(d, "conf")):
+            d = os.path.dirname(d)
+        if d:
+            _app_dirs[app_name] = d
+
+
+def get_app_dir(app_name):
+    return_app_dirs.get(app_name)
+
+
+def get_app_dirs():
+    return _app_dirs.values()
+
 
 def read_file(fname):
     try:
@@ -97,9 +166,11 @@ def write_file(fname, data, mode = "w+"):
     with open(filename, mode) as fp:
         return fp.write(data)
 
+
 def exists(f):
     p = os.path.join(root_dir(), f)
     return os.access(p, os.F_OK)
+
 
 def unlink(f):
     p = os.path.join(root_dir(), f)
@@ -110,6 +181,7 @@ def unlink(f):
     except OSError as e:
         if e.errno != errno.ENOENT:
             raise
+
 
 def rename(oldname, newname):
     o = os.path.join(root_dir(), oldname)
@@ -123,6 +195,7 @@ def rename(oldname, newname):
         if e.errno != errno.ENOENT:
             raise
 
+
 def listdir(dirname):
     return os.listdir(os.path.join(root_dir(), dirname))
 
@@ -133,17 +206,34 @@ def mkdir(dirname):
     except:
         return False
 
-
 def resolve(funcname, default=None):
     if funcname:
         if callable(funcname):
             return funcname
         (modname, dot, fnc) = str(funcname).rpartition(".")
-        logger.debug("Resolving function %s in module %s", fnc, modname)
+        logger().debug("Resolving function %s in module %s", fnc, modname)
         mod = importlib.import_module(modname)
         return getattr(mod, fnc) if hasattr(mod, fnc) and callable(getattr(mod, fnc)) else default
     else:
         return resolve(default, None) if not callable(default) else default
+
+def get_logger(logger_name):
+    return LogConfig.get(logger_name).get_logger()
+
+def print_stack(logger_obj, caption):
+    stack = traceback.format_stack()
+    s = caption + "\n"
+    for frame in stack[:-2]:
+        s += frame
+    logger_obj.debug(s)
+
+
+_logger = None
+def logger():
+    global _logger
+    if _logger is None:
+        _logger = get_logger(__name__)
+    return _logger
 
 
 class abstract(object):
@@ -160,19 +250,23 @@ class abstract(object):
                 m = str(method)
                 doc = None
                 decorator = None
+
             def wrapper(instance):
                 n = instance.__name__ if isinstance(instance, type) else instance.__class__.__name__
                 assert 0, "Method %s of class %s is abstract" % (method, n)
+
             wrapper.__doc__ = doc
             if decorator:
                 wrapper = decorator(wrapper)
             setattr(cls, m, wrapper)
         return cls
 
+
 class LoopDetector(set):
     _tl = threading.local()
 
     def __init__(self):
+        super(LoopDetector, self).__init__()
         self.count = 0
         self.loop = False
         LoopDetector._tl.detector = self
@@ -230,18 +324,21 @@ class ContentType(object):
         self.content_type = ct
         self.extension = ext
         self.type = type
-        ContentType._by_ext[ext] = self
-        ContentType._by_content_type[ct] = self
+        self.__class__._by_ext[ext] = self
+        self.__class__._by_content_type[ct] = self
+
+    def __str__(self):
+        return "%s (%s, %s)" % (self.content_type, self.extension, self.type)
 
     def is_text(self):
-        return self.type == ContentType.Text
+        return self.type == self.__class__.Text
 
     def is_binary(self):
-        return self.type == ContentType.Binary
+        return self.type == self.__class__.Binary
 
     @classmethod
     def for_extension(cls, ext, default = None):
-        return ContentType._by_ext.get(ext, default)
+        return cls._by_ext.get(ext, default)
 
     @classmethod
     def for_path(cls, path, default = None):
@@ -252,6 +349,7 @@ class ContentType(object):
     def for_content_type(cls, ct, default = None):
         return cls._by_content_type.get(ct, default)
 
+
 JSON = ContentType(".json", "application/json", ContentType.Text)
 JPG = ContentType(".jpg", "image/jpeg", ContentType.Binary)
 GIF = ContentType(".gif", "image/gif", ContentType.Binary)
@@ -261,44 +359,6 @@ CSS = ContentType(".css", "text/css", ContentType.Text)
 XML = ContentType(".xml", "text/xml", ContentType.Text)
 TXT = ContentType(".txt", "text/plain", ContentType.Text)
 HTML = ContentType(".html", "text/html", ContentType.Text)
-
-class ConfigMeta(type):
-    def __getattribute__(cls, name):
-        if name in ("backup", "restore", "_sections"):
-            return super(ConfigMeta, cls).__getattribute__(name)
-        if not super(ConfigMeta, cls).__getattribute__("_loaded"):
-            super(ConfigMeta, cls).__getattribute__("_load")()
-        return super(ConfigMeta, cls).__getattribute__(name)
-
-    def __setattr__(cls, name, value):
-        if not name.startswith("_"):
-            cls._sections.add(name)
-        return super(ConfigMeta, cls).__setattr__(name, gripe.json_util.JSON.create(value))
-
-    def __delattr__(cls, name):
-        cls._sections.remove(name)
-        return super(ConfigMeta, cls).__delattr__(name)
-
-    def __len__(cls):
-        return len(cls._sections)
-
-    def __getitem__(cls, key):
-        return getattr(cls, key)
-
-    def __setitem__(cls, key, value):
-        return setattr(cls, key, value)
-
-    def __delitem__(cls, key):
-        return delattr(cls, key)
-
-    def __iter__(cls):
-        return iter(cls._sections)
-
-    def __contains__(cls, key):
-        return key in cls._sections
-
-    def keys(cls):
-        return cls._sections
 
 
 class Config(object):
@@ -343,6 +403,23 @@ class Config(object):
         return json.dumps(cls.as_dict())
 
     @classmethod
+    def key(cls, path):
+        p = path.strip()
+        p = p.split('.') if p else []
+        d = cls
+        ix = 0
+        while ix < len(p):
+            if p[ix] in d:
+                if isinstance(d[p[ix]], dict):
+                    d = d[p[ix]]
+                    ix += 1
+                else:
+                    return d[p[ix]] if ix == len(p) - 1 else {}
+            else:
+                return {}
+        return d
+
+    @classmethod
     def set(cls, section, config):
         config = gripe.json_util.JSONObject(config) \
             if not isinstance(config, gripe.json_util.JSONObject) \
@@ -356,27 +433,47 @@ class Config(object):
         return config
 
     @classmethod
+    def _load_file(cls, conf_dir, section, conf_file):
+        print >> sys.stderr, "Reading conf file %s/%s into section %s" % (conf_dir, conf_file, section)
+        config = gripe.json_util.JSON.file_read(os.path.join(conf_dir, conf_file))
+        if config and ("include" in config) and isinstance(config.include, list):
+            for include in config.include:
+                print >> sys.stderr, "Reading include conf file %s.inc into section %s" % (include, section)
+                inc = cls._load_file(conf_dir, section, "%s.inc" % include)
+                if inc:
+                    config.merge(inc)
+            del config["include"]
+        return config
+
+    @classmethod
+    def _load_dir(cls, dir_name):
+        d = dir_name if dir_name.endswith("conf") else os.path.join(dir_name, "conf")
+        print >> sys.stderr, "Reading configuration from %s" % d
+        for f in filter(lambda fname: fname.endswith(".json"), os.listdir(d)):
+            (section, _) = os.path.splitext(f)
+            c = cls._load_file(d, section, f)
+            config = getattr(cls, section) if hasattr(cls, section) else None
+            if config and c:
+                config.merge(c)
+            setattr(cls, section, config if config else c)
+
+    @classmethod
     def _load(cls):
-        for f in os.listdir(os.path.join(root_dir(), "conf")):
-            (section, ext) = os.path.splitext(f)
-            if ext == ".json":
-                print >> sys.stderr, "Reading conf file %s.json" % section
-                config = gripe.json_util.JSON.file_read(os.path.join("conf", "%s.json" % section))
-                if config and ("components" in config) and isinstance(config.components, list):
-                    for component in config.components:
-                        print >> sys.stderr, "Reading component conf file %s.json into section %s" % (component, section)
-                        comp = gripe.json_util.JSON.file_read(os.path.join("conf", "%s.comp" % component))
-                        if comp:
-                            config.merge(comp)
-                    del config["components"]
-                # print >> sys.stderr, "Config.%s: %s" % (section, json.dumps(config))
-                setattr(cls, section, config)
-        # print >> sys.stderr, "Read all conf files"
         cls._loaded = True
         # logging is special. We always want it.
-        if not hasattr(cls, "logging"):
-            print "Adding dummy logging conf"
-            setattr(cls, "logging", gripe.json_util.JSONObject())
+        setattr(cls, "logging", gripe.json_util.JSONObject())
+        cls._load_dir(root_dir())
+        for d in _app_dirs.values():
+            cls._load_dir(d)
+
+        # Tie our logging config into the platform's by pre-initializing all loggers
+        # we know of. This way we can use propagate = True to combine logging across
+        # a package.
+        #
+        # FIXME: I should really do this properly and have the platform logging use
+        # gripe.Config.
+        for name in filter(lambda n: n in ("__root__", "__main__") or not n.startswith("_"), cls["logging"].keys()):
+            LogConfig.get(name if name != "__root__" else "").get_logger()
 
     @classmethod
     def backup(cls):
@@ -397,6 +494,7 @@ class Config(object):
             if ext == ".backup":
                 os.rename(os.path.join(root_dir(), "conf", "%s.json.backup" % section),
                           os.path.join(root_dir(), "conf", "%s.json" % section))
+
 
 class Enum(tuple):
     """
@@ -420,12 +518,14 @@ class Enum(tuple):
 
 # Configure logging
 
-class LoggerProxy(object):
-    def __init__(self, logger):
-        self._logger = logger;
 
-    def __getattr__(self, name):
-        return getattr(self._logger, name)
+class LoggerProxy(object):
+    def __init__(self, logger_obj):
+        self._logger = logger_obj;
+
+    def __getattr__(self, attr_name):
+        return getattr(self._logger, attr_name)
+
 
 class LogConfig(object):
     _configs = {}
@@ -439,7 +539,7 @@ class LogConfig(object):
         "dateformat": "%y%m%d %H:%M:%S"
     }
 
-    def __init__(self, name = None, config = None):
+    def __init__(self, name=None, config=None):
         if config:
             self._build(name, config)
         else:
@@ -474,13 +574,13 @@ class LogConfig(object):
         self._logger = None
         self._handler = None
 
-        self.log_level   = config.get("level")
+        self.log_level = config.get("level")
         self.destination = config.get("destination")
-        self.filename    = config.get("filename")
-        self.append      = config.get("append")
-        self.format      = self.config.get("format")
-        self.dateformat  = self.config.get("dateformat")
-        self.flat        = True
+        self.filename = config.get("filename")
+        self.append = config.get("append")
+        self.format = self.config.get("format")
+        self.dateformat = self.config.get("dateformat")
+        self.flat = True
 
     def _get_config(self):
         ret = Config["logging"].get(self.name) \
@@ -537,40 +637,19 @@ class LogConfig(object):
         return getattr(config, "_create_%s_handler" % config.destination)
 
     @classmethod
-    def get(cls, name):
-        name = name or ""
-        ret = LogConfig._configs.get(name)
+    def get(cls, logger_name):
+        logger_name = logger_name or ""
+        ret = LogConfig._configs.get(logger_name)
         if not ret:
-            ret = LogConfig(name)
-            LogConfig._configs[name] = ret
+            ret = LogConfig(logger_name)
+            LogConfig._configs[logger_name] = ret
         return ret
 
-def get_logger(name):
-    return LogConfig.get(name).get_logger()
 
-def print_stack(logger, caption):
-    stack = traceback.format_stack()
-    s = caption + "\n"
-    for frame in stack[:-2]:
-        s += frame
-    logger.debug(s)
-
-
-# Tie our logging config into the platform's by pre-initializing all loggers
-# we know of. This way we can use propagate = True to combine logging across
-# a package.
-#
-# FIXME: I should really do this properly and have the platform logging use
-# gripe.Config.
-for name in filter(lambda n: n in ("__root__", "__main__") or not n.startswith("_"), Config["logging"].keys()):
-    get_logger(name if name != "__root__" else "")
-
-logging.basicConfig(stream = sys.stderr,
-                    level = LogConfig._default_config["level"],
-                    datefmt = LogConfig._default_config["dateformat"],
-                    format = LogConfig._default_config["format"])
-
-logger = gripe.get_logger("gripe")
+logging.basicConfig(stream=sys.stderr,
+                    level=LogConfig._default_config["level"],
+                    datefmt=LogConfig._default_config["dateformat"],
+                    format=LogConfig._default_config["format"])
 
 if __name__ == "__main__":
     Config.backup()

@@ -184,6 +184,7 @@ class Tx(object):
         cur._close()
 
     def _end_tx(self,  rollback=False):
+        logger.debug("_end_tx")
         try:
             try:
                 for c in self.cursors:

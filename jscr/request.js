@@ -264,16 +264,19 @@ com.sweattrails.api.internal.HttpRequest = function(url) {
 com.sweattrails.api.internal.HttpRequest.prototype.add = function(name, value) {
     this.log("add(%s = %s)", name, value);
     if (!name && !value) {
+        $$.log(this, " --> All NULL");
         return this;
     } else if (value instanceof Array) {
         value.forEach(function (v) {
             this.add(name, v);
         }, this);
     } else if ((value instanceof Object) && !(value instanceof File)) {
+        __.dump(value, "Object");
         for (var a in value) {
-            if (!value.hasOwnProperty(a)) {
-                continue;
-            }
+            // if (!value.hasOwnProperty(a)) {
+            //     continue;
+            // }
+            $$.log(this, " --> " + a);
             this.add(((name) ? (name + ".") : "") + a, value[a]);
         }
     } else {
@@ -393,7 +396,8 @@ com.sweattrails.api.internal.JSONRequest.prototype.serialize = function() {
 
 com.sweattrails.api.internal.JSONRequest.prototype.submit = function(body) {
     var method = this.method || "POST";
-    this.log(method + " " + this.processedUrl + " as JSON data with body\n" + body);
+    this.log(method + " " + this.processedUrl + " as JSON data with body");
+    $$.dump(body);
     this.httpRequest.open(method, this.processedUrl, this.async);
     this.httpRequest.setRequestHeader("ST-JSON-Request", "true");
     this.httpRequest.send(body);

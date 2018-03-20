@@ -102,14 +102,14 @@ com.sweattrails.api.internal.HTMLAction = function(elem) {
 com.sweattrails.api.internal.HTMLAction.prototype.render = function(parent) {
     for (var nix = 0; nix < this.nodes.length; nix++) {
         parent.appendChild(this.nodes[nix]);
-    };
+    }
 };
 
 /* ----------------------------------------------------------------------- */
 
 com.sweattrails.api.internal.FormAction = function(elem) {
     this.form = elem.getAttribute("form");
-    this.mode = elem.getAttribute("mode") ? elem.getAttribute("mode") : null;
+    this.mode = elem.getAttribute("formmode") ? elem.getAttribute("form-mode") : null;
     this.id = "form";
 };
 
@@ -121,7 +121,7 @@ com.sweattrails.api.internal.FormAction.prototype.onClick = function() {
 
 com.sweattrails.api.internal.CustomAction = function(name, action) {
     this.name = name || action;
-    this.onclick = __.getfunc(action);
+    this.onclick = __.getfunc(action, null, this);
     this.id = "custom";
 };
 
@@ -334,10 +334,10 @@ com.sweattrails.api.Action.prototype.build = function(a) {
     if (this.impl) this.impl.action = this;
     $$.register(this);
     if (a.getAttribute("isactive")) {
-        this.isactive = __.getfunc(a.getAttribute("isactive"));
+        this.isactive = __.getfunc(a.getAttribute("isactive")).bind(this);
     }
     if (a.getAttribute("ondone")) {
-        this.onDataEnd = __.getfunc(a.getAttribute("ondone"));
+        this.onDataEnd = __.getfunc(a.getAttribute("ondone")).bind(this);
     }
     if (a.getAttribute("redirect")) {
         this.onDataEnd = this.doRedirect.bind(this, a.getAttribute("redirect"));
@@ -381,4 +381,3 @@ com.sweattrails.api.Action.prototype.onClick = function() {
         this.impl.onClick();
     }
 };
-

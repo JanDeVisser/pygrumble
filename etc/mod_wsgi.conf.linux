@@ -1,11 +1,11 @@
-WSGIPythonPath /home/jan/Projects/Grumble/src
+WSGIPythonPath /home/jan/projects/grumble
 <VirtualHost *:80>
 	ServerAdmin webmaster@localhost
 
 	DocumentRoot /usr/share/doc/
-	WSGIScriptAlias / "/home/jan/Projects/Grumble/src/main.py"
-	WSGIDaemonProcess wolverine user=jan group=jan threads=25 python-path=/home/jan/Projects/Grumble/src
-	WSGIProcessGroup wolverine
+	WSGIScriptAlias / "/home/jan/projects/grumble/main.py"
+	WSGIDaemonProcess coyote user=jan group=jan threads=25 python-path=/home/jan/projects/grumble
+	WSGIProcessGroup coyote
 	WSGICallableObject app
 	<Directory />
 		Options FollowSymLinks

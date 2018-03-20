@@ -18,6 +18,7 @@
 
 
 import jinja2
+import os.path
 import webapp2
 
 import gripe
@@ -42,10 +43,14 @@ class ReqHandler(webapp2.RequestHandler):
     @classmethod
     def _get_env(cls):
         if not hasattr(cls, "env"):
-            loader = jinja2.ChoiceLoader([
-                jinja2.FileSystemLoader("%s/%s" % (gripe.root_dir(), cls.template_dir)),
+            fsloaders = []
+            for app_dir in gripe.get_app_dirs():
+                fsloaders.append(jinja2.FileSystemLoader(os.path.join(app_dir, cls.template_dir)))
+            fsloaders.extend([
+                jinja2.FileSystemLoader(os.path.join(gripe.root_dir(), cls.template_dir)),
                 jinja2.PackageLoader("grit", "template")
             ])
+            loader = jinja2.ChoiceLoader(fsloaders)
             env = jinja2.Environment(loader=loader, extensions=['jinja2.ext.do'])
             if hasattr(cls, "get_env") and callable(cls.get_env):
                 env = cls.get_env(env)

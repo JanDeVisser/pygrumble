@@ -46,7 +46,7 @@ com.sweattrails.api.internal.DataSource.prototype.sortorder = function() {
     __.dump(this._sort, "sortorder()");
     return this._sort;
 };
-    
+
 com.sweattrails.api.internal.DataSource.prototype.addFlag = function(name, value) {
     this._flags[name] = value;
 };
@@ -54,7 +54,7 @@ com.sweattrails.api.internal.DataSource.prototype.addFlag = function(name, value
 com.sweattrails.api.internal.DataSource.prototype.flags = function() {
     return this._flags;
 };
-    
+
 com.sweattrails.api.internal.DataSource.prototype.parameter = function(param, value) {
     $$.log(this, "parameter(%s = %s [%s])", param, value, typeof(value));
     this._parameters[param] = value;
@@ -94,28 +94,25 @@ com.sweattrails.api.internal.DataSource.prototype.processData = function() {
 };
 
 com.sweattrails.api.internal.DataSource.prototype.next = function() {
+    var ret = null;
+
     if (this.data) {
         if (Array.isArray(this.data)) {
-            if (this.ix < this.data.length) {
-                return this.data[this.ix++];
-            } else {
-                return null;
-            }
+            this.object = (this.ix < this.data.length) ? this.data[this.ix++] : null;
         } else {
-            this.object = (!this.object) ? this.data : null;
-            if (this.object && ("key" in this.object)) {
-                this.key = this.object.key;
-            }
-            if (this.debug && this.object) {
-                $$.log(this, "next(): " + this.object);
-                ST.dump(this.object);
-            }
+            this.object = this.data;
             this.data = null;
-            return this.object;
+        }
+        ret = this.object;
+        this.key = (this.object && ("key" in this.object)) ? this.object.key : null;
+        if (this.debug && this.object) {
+            $$.log(this, "next(): " + this.object);
+            ST.dump(this.object);
         }
     } else {
-        return null;
+        ret = null;
     }
+    return ret;
 };
 
 com.sweattrails.api.internal.DataSource.prototype.reset = function() {
@@ -365,9 +362,9 @@ com.sweattrails.api.JSONDataSourceBuilder.prototype.build = function(elem) {
 
 /**
  * CustomDataSource -
- * 
+ *
  * @param {Function,String} func Function used to query data.
- * @param {Function,String} submitfnc Function used to submit data. If ommitted 
+ * @param {Function,String} submitfnc Function used to submit data. If ommitted
  * or <b>null</b>, this datasource is read-only and can not be used to submit
  * data.
  */
@@ -467,7 +464,7 @@ com.sweattrails.api.StaticDataSourceBuilder.prototype.build = function(elem, val
     	var v = values[ix];
         var val = v.getAttribute("text");
         if (!val) {
-            val = v.nodeValue;
+            val = v.textContent;
         }
         var key = v.getAttribute("key");
         if (!key) {
@@ -537,8 +534,8 @@ com.sweattrails.api.NullDataSourceBuilder.prototype.build = function() {
 
 /**
  * ProxyDataSource -
- * 
- * @param {object} proxy Object to obtain/submit data from and to. The object 
+ *
+ * @param {object} proxy Object to obtain/submit data from and to. The object
  * should have <tt>getProxyData()</tt> and <tt>submitProxyData(object)</tt>
  * methods.
  */

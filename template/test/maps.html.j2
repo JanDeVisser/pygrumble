@@ -1,0 +1,39 @@
+{% extends "base.html.j2" %}
+
+{% block imports %}
+    {{ import_maps() }}
+    <script src="https://rawgithub.com/mpetazzoni/leaflet-gpx/master/gpx.js"></script>
+    <script src="https://mapbox.github.io/leaflet-image/leaflet-image.js"></script>
+{% endblock %}
+
+{% block css %}
+    #map-leaflet { height: 1000px; }
+{% endblock %}
+
+{% block tabs %}
+
+<script>
+
+function customGetBounds() {
+    return new L.latLngBounds(new L.latLng(51.3, 0), new L.latLng(51.7, -0.22));
+}
+
+function makeCustomMap() {
+    this.getBounds = customGetBounds;
+    return L.circle([51.508, -0.11], {
+        color: 'red',
+        fillColor: '#f03',
+        fillOpacity: 0.5,
+        radius: 500
+    });
+}
+</script>
+
+<st:tab code="map" label="Map">
+    <st:map name="leaflet" height="600">
+        <st:tile id="osm.basic"/>
+        <st:custom id="custom-map" make="makeCustomMap"/>
+    </st:map>
+</st:tab>
+
+{% endblock tabs %}

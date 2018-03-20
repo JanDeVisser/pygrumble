@@ -239,6 +239,7 @@ class UserCreate(grumble.Model):
     userid = grumble.TextProperty()
     display_name = grumble.TextProperty()
     password = grumble.TextProperty()
+    confirm = grumble.BooleanProperty()
 
     user_exists = grudge.Status()
     user_created = grudge.Status()
@@ -249,11 +250,12 @@ class UserCreate(grumble.Model):
     def create_user(self):
         try:
             um = grit.Session.get_usermanager()
-            self.password = um.gen_password()
-            um.add(self.userid, self.password, self.display_name)
+            if not self.password:
+                self.password = gripe.auth.generate_password()
+            um.add(self.userid, password=self.password, display_name=self.display_name)
             self.put()
             logger.debug("Create User OK")
-            return self.user_created
+            return self.user_created if not self.confirm else self.confirmed
         except gripe.auth.UserExists:
             return self.user_exists
         except gripe.Error as e:
@@ -261,7 +263,7 @@ class UserCreate(grumble.Model):
             raise
 
     def prepare_message(self, msg, ctx):
-        msg.set_header("X-ST-URL", "http://localhost/um/confirmcreate/%s" % self.id())
+        msg.set_header("X-ST-URL", "%s/um/confirmreset/%s" % (Config.app.config.application_url, self.id()))
         return ctx
 
     def activate_user(self):
@@ -323,7 +325,7 @@ class PasswordReset(grumble.Model):
             raise
 
     def prepare_message(self, msg, ctx):
-        msg.set_header("X-ST-URL", "http://localhost/um/confirmreset/%s" % self.id())
+        msg.set_header("X-ST-URL", "%s/um/confirmreset/%s" % (Config.app.config.application_url, self.id()))
         return ctx
 
     def reset_password(self):
@@ -370,7 +372,7 @@ app = webapp2.WSGIApplication([
             handler="grudge.control.Startup", name='signup',
             defaults={
                 "process": gripe.Config.app.workflows.usercreate,
-                "mapping": ["userid", "display_name"]
+                "mapping": ["userid", "display_name", "password", "confirm"]
             }
         ),
 

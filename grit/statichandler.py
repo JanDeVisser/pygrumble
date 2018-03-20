@@ -34,54 +34,70 @@ class StaticHandler(grit.requesthandler.ReqHandler):
         logger.info("StaticHandler.get(%s)", request.path)
         reqpath = route.grit_params["alias"] if 'alias' in route.grit_params else request.path
 
+        path = None
+        full_path = None
         if "abspath" in route.grit_params:
-            if reqpath[0] == '/' or reqpath[0] == '\\':
+            if os.path.isabs(reqpath):
                 reqpath = reqpath[1:]
-            path = os.path.join(kwargs["abspath"], reqpath)
-            logger.debug("Retrieving %s using absolute path %s", path, route.grit_params["abspath"])
+            full_path = os.path.join(kwargs["abspath"], reqpath)
         elif "relpath" in route.grit_params:
             prefix = os.path.commonprefix([route.grit_params["path"], reqpath])
             relative = os.path.relpath(reqpath, prefix)
-            if relative[0] == '/' or relative[0] == '\\':
+            if os.path.isabs(relative):
                 relative = relative[1:]
             relpath = route.grit_params["relpath"]
-            if relpath[0] == '/' or relpath[0] == '\\':
+            if os.path.isabs(relpath):
                 relpath = relpath[1:]
-            path = os.path.join(gripe.root_dir(), relpath, relative)
-            logger.debug("Mapping '%s' to '%s' using relative path '%s'", reqpath, path, route.grit_params["relpath"])
+            path = os.path.join(relpath, relative)
         else:
-            if reqpath[0] == '/' or reqpath[0] == '\\':
-                reqpath = reqpath[1:]
-            path = os.path.join(gripe.root_dir(), reqpath)
-            logger.debug("Joining %s with root_dir %s gives %s", reqpath, gripe.root_dir(), path)
+            path = reqpath
 
-        if not os.path.exists(path):
+        if not full_path:
+            logger.debug("Finding full path for path %s", path)
+            if os.path.isabs(path):
+                path = path[1:]
+            for dir in gripe.get_app_dirs():
+                full_path = os.path.join(dir, path)
+                if os.path.exists(full_path):
+                    break
+                else:
+                    full_path = None
+            if not full_path:
+                full_path = os.path.join(gripe.root_dir(), path)
+                if not os.path.exists(full_path):
+                    full_path = None
+            logger.debug("Going ahead with full path %s", full_path)
+        else:
+            if not os.path.exists(full_path):
+                full_path = None
+
+        if not full_path:
             logger.info("Static file %s does not exist", path)
             self.request.response.status = "404 Not Found"
         else:
+            logger.debug("Serving static file %s", full_path)
             if_none_match = self.request.if_none_match
-            hashvalue = self.etags.get(path)
+            hashvalue = self.etags.get(full_path)
             if if_none_match and hashvalue and hashvalue in if_none_match:
-                logger.debug("Client has up-to-date resource %s: %s %s", path, if_none_match, hashvalue)
+                logger.debug("Client has up-to-date resource %s: %s %s", full_path, if_none_match, hashvalue)
                 self.response.status = "304 Not Modified"
             else:
-                self.response.content_length = str(os.path.getsize(path))
-                content_type = gripe.ContentType.for_path(path)
+                self.response.content_length = str(os.path.getsize(full_path))
+                content_type = gripe.ContentType.for_path(full_path)
                 self.response.content_type = content_type.content_type
                 if content_type.is_text():
                     self.response.charset = "utf-8"
                     mode = "r"
                 else:
                     mode = "rb"
-                with open(path, mode) as fh:
+                with open(full_path, mode) as fh:
                     buf = fh.read()
-                if path not in self.etags:
+                if full_path not in self.etags:
                     hashvalue = hashlib.md5(buf).hexdigest()
-                    self.etags[path] = hashvalue
+                    self.etags[full_path] = hashvalue
                     if if_none_match and hashvalue in if_none_match:
-                        logger.debug("Client has up-to-date resource %s. I had to hash it though. %s %s", path, if_none_match, hashvalue)
+                        logger.debug("Client has up-to-date resource %s. I had to hash it though. %s %s", full_path, if_none_match, hashvalue)
                         self.response.status = "304 Not Modified"
                         return
                 self.response.etag = hashvalue
                 self.response.body = str(buf)
-

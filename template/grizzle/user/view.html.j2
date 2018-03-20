@@ -9,11 +9,15 @@
 <script>
     var key = "{{key}}";
     function user_active() {
+        __.dump(this.owner.datasource);
         return this.owner.datasource.object["status"] === "Active";
     }
     function user_active_banned() {
         var s = this.owner.datasource.object["status"];
         return (s === "Active") || (s === "Banned");
+    }
+    function ban() {
+
     }
 </script>
 
@@ -30,10 +34,9 @@
             <st:value text="Deleted" key="Deleted"/>
         </st:field>
         <st:footer>
-            <st:action mode="view" label="Edit" action="edit"/>
-            <st:action mode="view" label="Ban" action="submit" isactive="user_active"/>
-            <st:action mode="view" label="Retire" action="edit" isactive="user_active_banned"/>
-            <st:action mode="view" label="Delete" action="edit" isactive="user_active_banned"/>
+            <st:action mode="view" label="Ban" action="ban" isactive="user_active"/>
+            <st:action mode="view" label="Retire" action="retire" isactive="user_active_banned"/>
+            <st:action mode="view" label="Delete" action="delete" isactive="user_active_banned"/>
             <st:action mode="view" label="Edit" action="edit"/>
             <st:action mode="edit" label="Save" action="save"/>
             <st:action mode="edit" label="Cancel" action="cancel"/>

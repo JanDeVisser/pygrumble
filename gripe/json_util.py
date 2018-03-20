@@ -185,7 +185,7 @@ class JSONArray(list, JSON):
 
 class JSONObject(dict, JSON):
     def __init__(self, d=None):
-        super(JSONObject, self).__init__(d)
+        super(JSONObject, self).__init__(d if d else {})
         self._id = None
         self._db = None
         assert not d or isinstance(d, dict)

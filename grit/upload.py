@@ -42,7 +42,7 @@ class UploadedFile(grumble.Model):
 
 
 class Uploader(grit.handlers.BridgedHandler):
-    def post(self, action=None, param="file"):
+    def post(self, action=None, param="file", **kwargs):
         if not self.user:
             self.error(401)
         elif not action:
@@ -68,7 +68,7 @@ class Uploader(grit.handlers.BridgedHandler):
                     uploaded_file.filename = os.path.basename(upload.filename)
                     uploaded_file.content_type = upload.type
                     uploaded_file.put()
-                    p = process_class.instantiate(uploadedFile=uploaded_file)
+                    p = process_class.instantiate(uploadedFile=uploaded_file, **kwargs)
                     p.start()
 
                 try:

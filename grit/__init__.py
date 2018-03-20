@@ -30,7 +30,6 @@ import gripe.role
 import gripe.sessionbridge
 import grumble
 
-
 import grit.log
 import grit.pipeline
 import grit.requesthandler
@@ -78,9 +77,9 @@ class SessionData(dict):
         """
             Checks if this session is still valid. A session is valid if
             it is not empty and is less than 2 hours old, or, if it is empty,
-            is less than a minute old. This last condition gives users a 
+            is less than a minute old. This last condition gives users a
             minute to login or sign up a new account.
-            
+
             FIXME: Is that last check really necessary or can we just discard
             empty sessions at will?
             FIXME: Make time limit(s) configurable
@@ -90,7 +89,7 @@ class SessionData(dict):
             (delta.seconds < 60)
 
     def set_user(self, user):
-        self._user = user.uid()
+        self._user = user.uid() if user else None
 
     def user(self):
         return Session.get_usermanager().get(self._user) if self._user else None
@@ -369,7 +368,7 @@ class SessionBridge(object):
 
 def handle_request(request, *args, **kwargs):
     """
-        Handles a request to a grit application by feeding it through the 
+        Handles a request to a grit application by feeding it through the
         pipeline set up in the application config. The final element of the
         pipeline is typically the Dispatcher, which dispatches the request either
         to a sub-application or a request handler. Other pipeline elements
@@ -379,21 +378,21 @@ def handle_request(request, *args, **kwargs):
             . Auth, which ensures that the requesting user has appropriate
               permissions to execute the request
             . Session, which associates a Session object with the request.
-            
+
         Pipeline entries use the 'with' protocol, with the added extension that
         the 'begin' method is assumed to act as a factory for the element, i.e.
         the pattern is
-        
+
           with pipeline_element_class.begin(reqctx):
                 ...
-                
-        The 'begin' classmethod should return a pipeline element, initialized 
+
+        The 'begin' classmethod should return a pipeline element, initialized
         with the request context object which holds a reference to the request
         and response objects. The 'with' protocol will then call the __enter__
         and __exit__ methods. The elements are stacked, which means that first
-        all the __enter__ methods will be called, end then all the __exit__
+        all the __enter__ methods will be called, and then all the __exit__
         methods, but in reverse order. Also, when any begin() or __enter__
-        method sets the response's status to an error-like number (>= 300), the 
+        method sets the response's status to an error-like number (>= 300), the
         rest of the pipeline is skipped. The __exit__ methods of the entries
         whose __enter__ methods were executed are still executed in that case.
     """
@@ -482,8 +481,25 @@ class WSGIApplication(webapp2.WSGIApplication):
         self.error_handlers[404] = grit.requesthandler.handle_404
 
 
-app = WSGIApplication(debug = True)
+app = WSGIApplication(debug=True)
 
 if __name__ == '__main__':
-    from paste import httpserver
-    httpserver.serve(app, host = '127.0.0.1', port = '8080')
+    import os.path
+
+    import paste.httpserver
+    import paste.translogger
+
+    import autoreload
+    import grit
+
+    autoreload.start(interval=1.0)
+    autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/app.json'))
+    autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/database.json'))
+    autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/gripe.json'))
+    autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/grizzle.inc'))
+    autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/logging.json'))
+    autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/model.json'))
+    autoreload.track(os.path.join(os.path.dirname(__file__), 'conf/smtp.json'))
+
+    paste.httpserver.serve(paste.translogger.TransLogger(grit.app),
+                           host='127.0.0.1', port='8080')

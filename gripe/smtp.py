@@ -8,11 +8,11 @@ import os
 import smtplib
 import mimetypes
 import email
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email.mime.text import MIMEText
-from email.mime.audio import MIMEAudio
-from email.mime.image import MIMEImage
+import email.mime.multipart
+import email.mime.base
+import email.mime.text
+import email.mime.audio
+import email.mime.image
 from email.encoders import encode_base64
 import jinja2
 
@@ -20,24 +20,26 @@ import gripe
 
 logger = gripe.get_logger(__name__)
 
+
 def sendMail(recipients, subject, text, *attachmentFilePaths, **headers):
-    msg = MIMEMultipart()
-    msg['From'] = gripe.Config.smtp.username
-    msg['To'] = recipients if isinstance(recipients, basestring) else ",".join(recipients)
-    msg['Subject'] = subject
+    message = email.mime.multipart.MIMEMultipart()
+    message['From'] = gripe.Config.smtp.username
+    message['To'] = recipients if isinstance(recipients, basestring) else ",".join(recipients)
+    message['Subject'] = subject
     for header in headers:
-        msg[header] = headers[header]
-    msg.attach(MIMEText(text))
+        message[header] = headers[header]
+    message.attach(email.mime.text.MIMEText(text))
     for attachmentFilePath in attachmentFilePaths:
-        msg.attach(getAttachment(attachmentFilePath))
+        message.attach(getAttachment(attachmentFilePath))
     mailServer = smtplib.SMTP(gripe.Config.smtp.smtphost, gripe.Config.smtp.smtpport)
     mailServer.ehlo()
     mailServer.starttls()
     mailServer.ehlo()
     mailServer.login(gripe.Config.smtp.username, gripe.Config.smtp.password)
-    mailServer.sendmail("%s <%s>" % (gripe.Config.smtp.fromname, gripe.Config.smtp.username), recipients, msg.as_string())
+    mailServer.sendmail("%s <%s>" % (gripe.Config.smtp.fromname, gripe.Config.smtp.username), recipients, message.as_string())
     mailServer.close()
     logger.info('Sent email to %s', recipients)
+
 
 def getAttachment(attachmentFilePath):
     logger.debug("Attaching file %s", attachmentFilePath)
@@ -48,15 +50,15 @@ def getAttachment(attachmentFilePath):
     logger.debug("Mime %s main %s sub %s", contentType, mainType, subType)
     with open(attachmentFilePath, 'rb') as file:
         if mainType == 'text':
-            attachment = MIMEText(file.read())
+            attachment = email.mime.text.MIMEText(file.read())
         elif mainType == 'message':
             attachment = email.message_from_file(file)
         elif mainType == 'image':
-            attachment = MIMEImage(file.read(), _subType = subType)
+            attachment = email.mime.image.MIMEImage(file.read(), _subType = subType)
         elif mainType == 'audio':
-            attachment = MIMEAudio(file.read(), _subType = subType)
+            attachment = email.mime.audio.MIMEAudio(file.read(), _subType = subType)
         else:
-            attachment = MIMEBase(mainType, subType)
+            attachment = email.mime.base.MIMEBase(mainType, subType)
             attachment.set_payload(file.read())
         logger.debug("attachment is a %s", attachment.__class__.__name__)
         encode_base64(attachment)
@@ -124,6 +126,8 @@ class MailMessage(object):
         ctx = ctx if ctx is not None else {}
         if "app" not in ctx:
             ctx['app'] = gripe.Config.app.get("about", {})
+        if "config" not in ctx:
+            ctx['config'] = gripe.Config.app.get("config", {})
         if "msg" not in ctx:
             ctx["msg"] = self
         if hasattr(self, "get_context") and callable(self.get_context):
@@ -131,6 +135,7 @@ class MailMessage(object):
         ctx = ctx if ctx is not None else {}
         return sendMail(self.recipients(), self.subject(), 
             self._get_template().render(ctx), *self.attachments(), **self.headers())
+
 
 class TemplateMailMessage(MailMessage):
     template_dir = "mailtemplate"
@@ -170,7 +175,8 @@ class TemplateMailMessage(MailMessage):
         tpl = gripe.Config.app.get(cname, tpl)
         logger.info("TemplateMailMessage: using template %s", tpl)
         return self._get_env().get_template(tpl + ".txt")
-    
+
+
 if __name__ == '__main__':
     sendMail("jan@de-visser.net", "Test", """
 Hi Jan,
@@ -183,7 +189,7 @@ jan
 """, *[ "%s/image/Desert.jpg" % gripe.root_dir() ])
 
 
-    msg = TemplateMailMessage("testmessage")
-    msg.recipients("jan@de-visser.net")
-    msg.subject("Test")
-    msg.send()
+    message = TemplateMailMessage("testmessage")
+    message.recipients("jan@de-visser.net")
+    message.subject("Test")
+    message.send()

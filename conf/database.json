@@ -26,7 +26,7 @@
             "user_id": "jan",
             "password": "wbw417"
         },
-	       "host": "localhost",
+        "host": "localhost",
         "database": "jan",
         "schema": "grumble",
         "_wipe_schema": true,

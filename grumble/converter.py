@@ -109,10 +109,13 @@ class ListConverter(PropertyConverter):
     datatype = list
 
     def convert(self, value):
-        try:
+        if isinstance(value, (list, tuple)):
             return list(value)
-        except TypeError:
-            return json.loads(str(value)) if value is not None else []
+        elif isinstance(value, basestring):
+            s = value.strip() if value or value == '' else None
+            if s and s.startswith("[") and s.endswith("]"):
+                return json.loads(s)
+        return [] if value is None else [value]
 
     def to_jsonvalue(self, value):
         assert value is not None, "ListConverter.to_jsonvalue(): value should not be None"

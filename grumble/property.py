@@ -374,6 +374,22 @@ class CompoundProperty(object):
         for prop in self.compound:
             prop.set_kind(kind)
 
+    def schema(self):
+        ret = {
+            "name": self.name, "type": self.__class__.__name__,
+            "verbose_name": self.verbose_name,
+            "readonly": self.readonly,
+            "is_key": False,
+            "components": [
+                prop.schema() for prop in self.compound
+            ]
+        }
+        self._schema(ret)
+        return ret;
+
+    def _schema(self, schema):
+        return schema
+
     def get_coldef(self):
         ret = []
         for prop in self.compound:
@@ -437,6 +453,7 @@ class StringProperty(ModelProperty):
     datatype = str
     sqltype = "TEXT"
 
+
 TextProperty = StringProperty
 StrProperty = StringProperty
 
@@ -481,6 +498,7 @@ class ListProperty(ModelProperty):
 class IntegerProperty(ModelProperty):
     datatype = int
     sqltype = "INTEGER"
+
 
 IntProperty = IntegerProperty
 
