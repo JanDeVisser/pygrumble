@@ -534,13 +534,12 @@ com.sweattrails.api.internal.DataBridge.prototype.setValue = function(object, va
 
 com.sweattrails.api.internal.DataBridge.prototype.getValue = function(object) {
     try {
-        var context = (arguments.length > 1) ? arguments[1] : window;
         if (this._getstatic) {
             return this._getstatic;
         } else if (this._getter) {
-            return this._getter(object, context);
-        } else if (this._get !== null) {
-            return __.getvar(this._get, object);
+            return this._getter(object, (arguments.length > 1) ? arguments[1] : window);
+        } else if (this._getprop !== null) {
+            return __.getvar(this._getprop, object);
         } else {
             return null;
         }
