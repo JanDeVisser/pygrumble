@@ -142,6 +142,7 @@ class PageHandler(BridgedHandler):
         return ctx
 
     def get(self, key=None, kind=None, template=None):
+	logger.debug("PageHandler.get(%s,%s) %s", key, kind, self.request.path)
         self._initialize_bridge(key, kind)
         if template:
             self.template = template
