@@ -49,6 +49,5 @@
         { "path": "/t/.+", "roles": [], "app": "index.app" },
         { "path": "/test/.+", "roles": [], "static": true }
     ],
-    "include": [ "grizzle" ],
-    "applications": { "prettymaps": "/home/jan/projects/PrettyMaps"}
+    "include": [ "grizzle", "applications" ]
 }
