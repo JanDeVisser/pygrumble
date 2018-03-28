@@ -36,7 +36,7 @@
         "pwdreset": "grit.usermgmt.PasswordReset"
     },
     "mounts": [
-        { "path": "/", "app": "index.app", "roles": [] },
+        { "path": "/", "app": "grit.index.app", "roles": [] },
         { "path": "/login|/logout|/profile|/um/.+", "app": "grit.usermgmt.app", "roles": [] },
         { "path": "/css/[^/]+", "roles": [], "static": true},
         { "path": "/image/[^/]+", "roles": [], "static": true},
@@ -49,5 +49,6 @@
         { "path": "/t/.+", "roles": [], "app": "index.app" },
         { "path": "/test/.+", "roles": [], "static": true }
     ],
-    "include": [ "grizzle" ]
+    "include": [ "grizzle" ],
+    "applications": { "prettymaps": "/home/jan/projects/PrettyMaps"}
 }

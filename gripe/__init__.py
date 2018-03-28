@@ -133,16 +133,23 @@ def user_dir(uid):
 
 
 def add_app_dir(app_name, app_dir):
+    print >> sys.stderr, "Adding application %s: %s" % (app_name, app_dir)
     d = os.path.abspath(app_dir)
     if os.path.exists(d):
+        # print >> sys.stderr, "Finding conf. directory starting from %s" % d
         while d and d != os.path.dirname(d) and not os.path.isdir(os.path.join(d, "conf")):
             d = os.path.dirname(d)
         if d:
+            # print >> sys.stderr, "Using app.dir %s" % d
             _app_dirs[app_name] = d
+        else:
+            print >> sys.stderr, "Could not find conf directory for app.dir %s" % app_dir
+    else:
+        print >> sys.stderr, "Abs.path %s for app.dir %s does not exist" % (app_dir, d)
 
 
 def get_app_dir(app_name):
-    return_app_dirs.get(app_name)
+    return _app_dirs.get(app_name)
 
 
 def get_app_dirs():
@@ -436,13 +443,17 @@ class Config(object):
     def _load_file(cls, conf_dir, section, conf_file):
         print >> sys.stderr, "Reading conf file %s/%s into section %s" % (conf_dir, conf_file, section)
         config = gripe.json_util.JSON.file_read(os.path.join(conf_dir, conf_file))
-        if config and ("include" in config) and isinstance(config.include, list):
-            for include in config.include:
-                print >> sys.stderr, "Reading include conf file %s.inc into section %s" % (include, section)
-                inc = cls._load_file(conf_dir, section, "%s.inc" % include)
-                if inc:
-                    config.merge(inc)
-            del config["include"]
+        if config:
+            if ("include" in config) and isinstance(config.include, list):
+                for include in config.include:
+                    print >> sys.stderr, "Reading include conf file %s.inc into section %s" % (include, section)
+                    inc = cls._load_file(conf_dir, section, "%s.inc" % include)
+                    if inc:
+                        config.merge(inc)
+                del config["include"]
+            if ("applications" in config) and  isinstance(config.applications, dict):
+                map(lambda ((appname, appvalue)): add_app_dir(appname, appvalue), config.applications.items())
+                del config.applications
         return config
 
     @classmethod

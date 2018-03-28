@@ -262,8 +262,8 @@ com.sweattrails.api.JSONDataSource.prototype.onJSONData = function(data) {
     $$.log(this, "onJSONData(data)");
     this.data = null;
     this.object = null;
-    this.metadata = data.meta;
-    data = data.data;
+    this.metadata = data.meta || {};
+    data = data.data || {};
     this.reset(data);
     this.processData();
 };

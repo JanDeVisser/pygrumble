@@ -501,12 +501,12 @@ com.sweattrails.api.FormField = function (elem, parent) {
     if ((typeof(this.impl.isMute) === "undefined") || !this.impl.isMute()) {
         var g = null, s = null;
         if (elem.getAttribute("property")) {
-            g = elem.getAttribute("property");
+            g = s = elem.getAttribute("property");
         } else if (elem.getAttribute("get")) {
             g = elem.getAttribute("get");
-            s = elem.getAttribute("set");
+            s = elem.getAttribute("set") || g;
         } else {
-            g = this.id;
+            g = s = this.id;
         }
         this.bridge = new com.sweattrails.api.internal.DataBridge(g, s);
     } else {

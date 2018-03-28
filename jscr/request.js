@@ -148,6 +148,8 @@ com.sweattrails.api.internal.JSONResponse = function(httpRequest) {
             this.object = this.responseText;
             this.status = -1;
         }
+    } else {
+        this.object = {};
     }
 };
 
@@ -195,7 +197,7 @@ com.sweattrails.api.getHttpRequest = function(request) {
         alert('Giving up :( Cannot create an XMLHTTP instance');
         return false;
     }
-    
+
     if (!httpRequest.sendAsBinary) {
         httpRequest.sendAsBinary = function(sData) {
             var nBytes = sData.length, ui8Data = new Uint8Array(nBytes);
@@ -205,7 +207,7 @@ com.sweattrails.api.getHttpRequest = function(request) {
             this.send(ui8Data);
         };
     }
-    
+
     httpRequest.request = request;
     httpRequest.onreadystatechange = function() {
         if (this.readyState === 4) {
@@ -486,4 +488,3 @@ com.sweattrails.api.getRequest = function(contenttype, url) {
 };
 
 /* ----------------------------------------------------------------------- */
-

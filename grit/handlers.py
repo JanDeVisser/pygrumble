@@ -413,6 +413,10 @@ class SchemaHandler(grit.requesthandler.ReqHandler):
         self.json_dump(k.schema())
 
 
+class MainPage(PageHandler):
+    template = "index"
+
+
 app = webapp2.WSGIApplication([
         webapp2.Route(r'/json/<kind>', handler=JSONHandler, name='json-update'),
         webapp2.Route(r'/json/<kind>/<key>', handler=JSONHandler, name='json-query'),
