@@ -16,6 +16,8 @@
 # Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #
 
-import grit
+import autoreload
+autoreload.start(interval=1.0)
 
+import grit
 app = grit.app

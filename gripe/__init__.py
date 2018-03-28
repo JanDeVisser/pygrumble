@@ -28,6 +28,7 @@ import sys
 import threading
 import traceback
 
+import autoreload
 import gripe.json_util
 
 
@@ -116,9 +117,9 @@ def root_dir():
         print >> sys.stderr, _root_dir
         while _root_dir and not os.path.isdir(os.path.join(_root_dir, "conf")):
             _root_dir = os.path.dirname(_root_dir) if _root_dir != os.path.dirname(_root_dir) else None
-            print >> sys.stderr, _root_dir
         assert _root_dir, "No configuration directory found under %s" % sys.modules["gripe"].__file__
         print >> sys.stderr, "_root_dir = %s" % _root_dir
+        autoreload.trackdir(os.path.join(_root_dir, "conf"))
     return _root_dir
 
 
@@ -142,10 +143,16 @@ def add_app_dir(app_name, app_dir):
         if d:
             # print >> sys.stderr, "Using app.dir %s" % d
             _app_dirs[app_name] = d
+            autoreload.trackdir(os.path.join(d, "conf"))
+            sys.path.append(d)
         else:
             print >> sys.stderr, "Could not find conf directory for app.dir %s" % app_dir
     else:
         print >> sys.stderr, "Abs.path %s for app.dir %s does not exist" % (app_dir, d)
+
+
+def add_app(app):
+    return add_app_dir(app, os.path.join(os.path.dirname(root_dir()), app))
 
 
 def get_app_dir(app_name):
@@ -451,8 +458,8 @@ class Config(object):
                     if inc:
                         config.merge(inc)
                 del config["include"]
-            if ("applications" in config) and  isinstance(config.applications, dict):
-                map(lambda ((appname, appvalue)): add_app_dir(appname, appvalue), config.applications.items())
+            if ("applications" in config) and isinstance(config.applications, list):
+                map(lambda app: add_app(app), config.applications)
                 del config.applications
         return config
 

@@ -2,6 +2,7 @@
 # stolen a lot from Ian Bicking's WSGIKit (www.wsgikit.org)
 
 import os
+import os.path
 import sys
 import time
 import signal
@@ -107,9 +108,23 @@ def _exiting():
 
 atexit.register(_exiting)
 
+def _track(paths):
+    if not isinstance(paths, basestring):
+        map(lambda path: _track(path), paths)
+    else:
+        if not paths in _files:
+            _files.append(paths)
+
+
 def track(path):
-    if not path in _files:
-        _files.append(path)
+    print >> sys.stderr, "Change monitor tracks file(s) %s" % path
+    _track(path)
+
+
+def trackdir(dir):
+    print >> sys.stderr, "Change monitor tracks directory %s" % dir
+    _track([ os.path.join(dir, entry) for entry in os.listdir(dir) ])
+
 
 def start(interval=1.0):
     global _interval

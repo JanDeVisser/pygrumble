@@ -56,7 +56,7 @@ class StaticHandler(grit.requesthandler.ReqHandler):
             logger.debug("Finding full path for path %s", path)
             if os.path.isabs(path):
                 path = path[1:]
-            for dir in gripe.get_app_dirs():
+            for dir in reversed(gripe.get_app_dirs()):
                 full_path = os.path.join(dir, path)
                 if os.path.exists(full_path):
                     break

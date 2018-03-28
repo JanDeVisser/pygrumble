@@ -1,0 +1,23 @@
+# Setting SourcePath to the directory *above* the grumble directory is 
+# mandatory:
+Define SourcePath /var/www/wsgi
+
+# Set PythonHome if you want to use a virtual env:
+# Define PythonHome /home/user/venvs/myenv
+
+Define PythonUser user
+Define PythonGroup user
+
+<IfDefine PythonHome>
+  WSGIDaemonProcess grumble user=${PythonUser} group=${PythonGroup} threads=25 python-home=${PythonHome} python-path=${SourcePath}/grumble display-name=%{GROUP}
+</IfDefine>
+<IfDefine !PythonHome>
+  WSGIDaemonProcess grumble user=${PythonUser} group=${PythonGroup} threads=25 python-path=${SourcePath}/grumble display-name=%{GROUP}
+</IfDefine>
+WSGIProcessGroup grumble
+WSGICallableObject app
+WSGIScriptAlias / ${SourcePath}/grumble/grit/grit.wsgi
+
+<Directory ${SourcePath}>
+   Require all granted
+</Directory>
