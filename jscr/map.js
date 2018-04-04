@@ -531,7 +531,7 @@ com.sweattrails.api.Map = class {
     }
 
     drop(ev1, ev2) {
-        var layer = this.selectedLayer && this.selectedLayer()
+        const layer = this.selectedLayer && this.selectedLayer()
         if (layer) {
             // var inputs = document.getElementById("iconChoices.getElementsByTagName("input;
             // for (var ix = 0; ix < inputs.length; ix++ ) {
@@ -628,38 +628,33 @@ com.sweattrails.api.MapBuilder = class  {
         $$.processor("map", this);
     }
 
-    parseOptions(elem, suboptions, level) {
-        if (typeof(level) === "undefined") {
-            level = 0;
-        }
-        var ret = {};
-        var children = elem.childNodes;
-        for (var ix = 0; ix < children.length; ix++) {
-            var c = children[ix];
-            var n = c.localName;
+    parseOptions(elem, suboptions, level = 0) {
+        const ret = Array.from(elem.childNodes).reduce((accum, c) => {
+            const n = c.localName;
             if (((n === "option") || (n === "value")) && c.getAttribute("name")) {
-                ret[c.getAttribute("name")] = c.getAttribute("value") || c.textContent;
+                accum[c.getAttribute("name")] = c.getAttribute("value") || c.textContent;
             } else if (suboptions && (typeof(suboptions[n]) !== "undefined")) {
-                ret[n] = this.parseOptions(c, suboptions[n], level+1);
+                accum[n] = this.parseOptions(c, suboptions[n], level+1);
             }
-        }
+            return accum;
+        }, {});
+
         if (level == 0) {
-            for (let attr of elem.getAttributeNames()) {
+            Array.from(elem.getAttributeNames()).forEach((attr) => {
                 ret[attr] = elem.getAttribute(attr);
-            }
+            });
         }
         // Convert "[xxx, yyy]" to an array.
-        for (let attr in ret) {
-            var t = ret[attr];
-            if (/^\[\ *(-?\d+\ *(,\ *-?\d+\ *)*)*\ *\]$/.test(t)) {
-               ret[attr] = eval(t);
+        Object.entries(ret).forEach(([attr, value]) => {
+            if (/^\[\ *(-?\d+\ *(,\ *-?\d+\ *)*)*\ *\]$/.test(value)) {
+               ret[attr] = eval(value);
             }
-        }
+        });
         return ret;
     }
 
     buildGPX(parent, elem, attachTo) {
-        var options = this.parseOptions(elem, {
+        const options = this.parseOptions(elem, {
             polyline_options: null,
             marker_options: { wptIconUrls: null }
         });
@@ -667,8 +662,8 @@ com.sweattrails.api.MapBuilder = class  {
     }
 
     buildTile(parent, elem, attachTo) {
-        var l = null;
-        var id = elem.getAttribute("id");
+        let l = null;
+        const id = elem.getAttribute("id");
         if (id) {
             if (!__.getvar(id, com.sweattrails.api.TileLayers)) {
                 $$.log(this, "Tile Layer with id %s not found", id);
@@ -676,9 +671,9 @@ com.sweattrails.api.MapBuilder = class  {
                 l = new com.sweattrails.api.TileLayer(parent, id);
             }
         } else {
-            var label = elem.getAttribute("label");
-            var url = elem.getAttribute("url");
-            var descr = this.parseOptions(elem, null);
+            const label = elem.getAttribute("label");
+            const url = elem.getAttribute("url");
+            const descr = this.parseOptions(elem, null);
             l = new com.sweattrails.api.TileLayer(parent, id, label, url, descr);
         }
         l && parent.addLayer(l);
@@ -693,9 +688,9 @@ com.sweattrails.api.MapBuilder = class  {
     }
 
     buildDataLayer(parent, elem, attachTo, factory) {
-        var ds = com.sweattrails.api.dataSourceBuilder.build(elem);
-        var options = this.parseOptions(elem, { fallback: {} });
-        var layer = new factory(parent, options.id, ds, options.label, options);
+        const ds = com.sweattrails.api.dataSourceBuilder.build(elem);
+        const options = this.parseOptions(elem, { fallback: {} });
+        const layer = new factory(parent, options.id, ds, options.label, options);
         if (options.coordinate) {
             layer.setCoordinateProperty(options.coordinate);
         } else {
@@ -723,39 +718,37 @@ com.sweattrails.api.MapBuilder = class  {
     }
 
     buildLayers(parent, elem, attachTo) {
-        var layer = new com.sweattrails.api.LayerControl(parent, null, this.parseOptions(elem));
+        const layer = new com.sweattrails.api.LayerControl(parent, null, this.parseOptions(elem));
         parent.addLayer(layer);
         this.copyNode(layer, elem, attachTo);
     }
 
     buildCustom(parent, elem, attachTo) {
-        var options = this.parseOptions(elem);
-        var layer = new com.sweattrails.api.CustomLayer(parent, options);
+        const options = this.parseOptions(elem);
+        const layer = new com.sweattrails.api.CustomLayer(parent, options);
         parent.addLayer(layer);
         this.copyNode(layer, elem, attachTo);
     }
 
     process(t) {
-        var p = t.parentElement;
-        var options = this.parseOptions(t);
+        const p = t.parentElement;
+        const options = this.parseOptions(t);
         $$.log(this, "mapBuilder: building " + options.id || options.name);
-        var map = new com.sweattrails.api.Map(p, options);
+        const map = new com.sweattrails.api.Map(p, options);
         this.copyNode(map, t, p);
     }
 
     copyNode (parent, elem, attachTo) {
-        var children = elem.childNodes;
-        for (var ix = 0; ix < children.length; ix++) {
-            var c = children[ix];
+        Array.from(elem.childNodes).forEach((c) => {
             if (c.namespaceURI === com.sweattrails.api.xmlns) {
-                var n = c.localName;
+                const n = c.localName;
                 this.builders[n] && this.builders[n].bind(this)(parent, c, attachTo);
             } else {
-                var childClone = c.cloneNode(false);
+                const childClone = c.cloneNode(false);
                 attachTo.appendChild(childClone);
                 this.copyNode(parent, c, childClone);
             }
-        }
+        });
     }
 }
 

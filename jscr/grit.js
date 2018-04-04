@@ -50,6 +50,7 @@ if (typeof(String.prototype.toTitleCase) !== 'function') {
     }
 }
 
+const has = Object.prototype.hasOwnProperty;
 
 if (typeof(com) !== 'object') {
     var com = {}
@@ -61,46 +62,23 @@ com.sweattrails.api.internal = {}
 com.sweattrails.api.prototypes = {}
 
 com.sweattrails.author = "Jan de Visser";
-com.sweattrails.copyright = "(c) Jan de Visser 2012-2017 under the GPLv3 License";
+com.sweattrails.copyright = "(c) Jan de Visser 2012-2018 under the GPLv3 License";
 com.sweattrails.api.xmlns = "http://www.sweattrails.com/html";
 
-if (typeof(ST) !== 'object') {
-    var ST = com.sweattrails.api;
-    var ST_int = com.sweattrails.api.internal;
-}
+var ST = com.sweattrails.api;
+var ST_int = com.sweattrails.api.internal;
+var __ = com.sweattrails.api;
+var ___ = com.sweattrails.api.internal;
 
-com.sweattrails.api.TypeError = function(t) {
-  this.message = "Type error: " + t;
-}
-
-com.sweattrails.api.internal.dumpobj = function(indent, name, o) {
-    if (typeof(o) === "object") {
-        console.log(indent + name + ":");
-        com.sweattrails.api.internal.dump(indent + "  ", o);
-    } else {
-        console.log(indent + name + ": " + o);
+com.sweattrails.api.TypeError = class {
+    constructor(t) {
+        this.message = "Type error: " + t;
     }
 }
 
-com.sweattrails.api.internal.mydump = function(indent, o) {
-    if (Array.isArray(o)) {
-        console.log(indent + "[ length " + o.length);
-        for (var ix  = 0; ix < o.length; ix++) {
-            com.sweattrails.api.internal.dumpobj(indent + "  ", ix, o[ix]);
-        }
-        console.log(indent + "]");
-    } else {
-        for (var k in o) {
-            if (o.hasOwnProperty(k)) {
-                com.sweattrails.api.internal.dumpobj(indent, k, o[k]);
-            }
-        }
-    }
-}
-
-com.sweattrails.api.dump = function(o) {
-    if (arguments.length > 1) {
-        console.log.apply(this, Array.prototype.slice.call(arguments, 1));
+com.sweattrails.api.dump = function(o, ...args) {
+    if (args.length > 0) {
+        console.log(...args);
     }
     console.dir(o)
 }
@@ -119,14 +97,14 @@ com.sweattrails.api.Manager = class {
     }
 
     registerObject(c) {
-        var t = c.type;
-        var what = t
+        const t = c.type;
+        const what = t
             || (c.__proto__ && c.__proto__.constructor && c.__proto__.constructor.name)
             || "unknown";
         if (!c.type) {
             c.type = what;
         }
-        var name = c.id || c.name;
+        const name = c.id || c.name;
         if (!c.id) {
             c.id = name;
         }
@@ -145,9 +123,9 @@ com.sweattrails.api.Manager = class {
         this.registerObject(c);
         this.components.push(c);
         if (c.container && c.render && this.objects.TabManager) {
-            var elem = c.container;
-            var renderables = this.objects.TabManager.renderables;
-            for (var p = elem; p; p = p.parentNode) {
+            const elem = c.container;
+            let renderables = this.objects.TabManager.renderables;
+            for (let p = elem; p; p = p.parentNode) {
                 if (p.className === "tabpage") {
                     renderables = this.tab[p.id.substring(5)].renderables;
                     break;
@@ -161,8 +139,7 @@ com.sweattrails.api.Manager = class {
 
     processor(tagname, processor) {
         this.register(processor);
-        var p = { tagname: tagname, processor: processor }
-        this.processors.push(p);
+        this.processors.push({ tagname, processor });
     }
 
     get(id) {
@@ -178,25 +155,22 @@ com.sweattrails.api.Manager = class {
     }
 
     process() {
-        for (var pix = 0; pix < this.processors.length; pix++) {
-            var p = this.processors[pix];
-            var tagname = p.tagname;
-            var processor = p.processor;
-            var elements = document.getElementsByTagNameNS(com.sweattrails.api.xmlns, tagname);
-            this.log(this, "build(" + tagname + "): found " + elements.length + " elements");
+        this.processors.forEach((p) => {
+            const tagname = p.tagname;
+            const processor = p.processor;
+            const elements = document.getElementsByTagNameNS(com.sweattrails.api.xmlns, tagname);
+            this.log(this, `build(${tagname}): found ${elements.length} elements`);
             for ( ; elements.length > 0; ) {
-                var element = elements[0];
-                var parent = element.parentNode;
+                const element = elements[0];
+                const parent = element.parentNode;
                 processor.process(element);
                 parent.removeChild(element);
             }
-        }
+        });
     }
 
     start() {
-        for (i in this.deferred) {
-            this.deferred[i]();
-        }
+        this.deferred.forEach((deferred) => deferred());
     }
 
     run() {
@@ -215,20 +189,25 @@ com.sweattrails.api.Manager = class {
     }
 
     executeOn(id, func) {
-        var obj = this.objects[id];
-        obj && obj[func] && obj[func]();
+        const obj = this.objects[id];
+        if (obj && obj[func]) {
+            obj[func]();
+        }
     }
 
     dispatch(d) {
-        for (var ix = 0; ix < this.components.length; ix++) {
-            var c = this.components[ix];
-            c[d] && c[d]();
-        }
+        this.components.forEach((c) => {
+            if (c[d]) {
+                c[d]();
+            }
+        });
     }
 
     async(obj) {
         if (typeof(this.asyncQueue) === "undefined") {
             this.asyncQueue = [];
+        }
+        if (this.asyncQueue.length === 0) {
             setInterval(com.sweattrails.api.internal.asyncHandler, 0);
         }
         this.asyncQueue.push(obj);
@@ -236,10 +215,10 @@ com.sweattrails.api.Manager = class {
 
 
     objectlabel(obj) {
-        var o = "";
+        let o = "";
         if (obj) {
             if (obj.type) {
-                o = obj.type + ((obj.id || obj.name) && ("(" + (obj.id || obj.name) + ")"));
+                o = obj.type + ((obj.id || obj.name) ? ("(" + (obj.id || obj.name) + ")") : "");
             } else {
                 o = obj.toString();
             }
@@ -248,12 +227,12 @@ com.sweattrails.api.Manager = class {
         return o;
     }
 
-    log(obj, msg) {
-        var args = [this.objectlabel(obj) + msg];
-        if (arguments.length > 2) {
-            args = args.concat(Array.prototype.slice.call(arguments, 2));
+    log(obj, msg, ...args) {
+        let logargs = [this.objectlabel(obj) + msg];
+        if (args.length > 0) {
+            logargs = logargs.concat(args);
         }
-        console.log.apply(this, args);
+        console.log(...logargs);
     }
 
     assert(obj, condition, msg) {
@@ -261,14 +240,14 @@ com.sweattrails.api.Manager = class {
     }
 
     dump(...args) {
-        com.sweattrails.api.dump.apply(this, args);
+        com.sweattrails.api.dump(...args);
     }
 }
 
 com.sweattrails.api.STManager = new com.sweattrails.api.Manager();
 
 com.sweattrails.api.internal.asyncHandler = function() {
-    for (var obj = $$.asyncQueue.pop(); obj; obj = $$.asyncQueue.pop()) {
+    for (let obj = $$.asyncQueue.pop(); obj; obj = $$.asyncQueue.pop()) {
         obj.onASync && obj.onASync();
     }
 }
@@ -281,28 +260,26 @@ function _$(type) {
     return com.sweattrails.api.STManager.all(type);
 }
 
-var __ = com.sweattrails.api;
-var ___ = com.sweattrails.api.internal;
 var $$ = __.STManager;
 var _ = $$.objects;
 
-/* -- T A B -------------------------------------------------------------- */
+/* -- B A S I C T A B ---------------------------------------------------- */
 
 com.sweattrails.api.BasicTab = class {
     constructor() {
         this.onSelect = null;
         this.onUnselect = null;
         this.onDraw = null;
-        return this;
     }
 }
+
+/* -- T A B -------------------------------------------------------------- */
 
 com.sweattrails.api.internal.Tab = class {
     constructor(code, label, elem) {
         this.type = "tab";
         this.impl = null;
         if (elem) {
-            var factory = null;
             if (elem.getAttribute("factory")) {
                 this.impl = __.getfunc(elem.getAttribute("factory"))(elem);
             } else if (elem.getAttribute("impl")) {
@@ -321,19 +298,17 @@ com.sweattrails.api.internal.Tab = class {
             }
         }
         com.sweattrails.api.STManager.register(this);
-        return this;
     }
 
     select() {
         if (this.impl && this.impl.onSelect) {
             this.impl.onSelect();
         }
-        for (var rix = 0; rix < this.renderables.length; rix++) {
-            var renderable = this.renderables[rix];
+        this.renderables.forEach((renderable) => {
             if (!renderable.container.hidden || (renderable.container.className === "tabpage")) {
                 renderable.render();
             }
-        }
+        });
         this.header.className = "tab_selected";
         this.href.className = "whitelink";
         this.page.hidden = false;
@@ -363,17 +338,21 @@ com.sweattrails.api.TabManager = class {
         this.renderables = [];
         this.tabs = {}
         this.firsttab = null;
-        this.select = function(code, ev) { this.selectTab(code); ev.stopPropagation(); }
+
+        this.select = function(code, ev) {
+            this.selectTab(code); ev.
+            stopPropagation();
+        }
     }
 
     build() {
         this.pagebox = document.getElementById("pagebox");
         if (!this.pagebox) return;
-        var tb = this.pagebox.getElementsByTagNameNS(com.sweattrails.api.xmlns, "tabs");
+        const tb = this.pagebox.getElementsByTagNameNS(com.sweattrails.api.xmlns, "tabs");
         if (tb && (tb.length > 0)) {
             var tabs_elem = tb[0];
             var tabs = getChildrenByTagNameNS(tabs_elem, com.sweattrails.api.xmlns, "tab");
-            $$.log(this, "Found " + tabs.length + " tabs");
+            $$.log(this, `Found ${tabs.length} tabs`);
             for (var tabix = 0; tabix < tabs.length; tabix++) {
                 var tab_elem = tabs[tabix];
                 var tab = this.addTabFromElem(tab_elem);
@@ -384,21 +363,22 @@ com.sweattrails.api.TabManager = class {
     }
 
     start() {
-        var pw = document.getElementById("page_pleasewait");
-        if (pw) pw.hidden = true;
-        for (var rix = 0; rix < this.renderables.length; rix++) {
-            var renderable = this.renderables[rix];
+        const pw = document.getElementById("page_pleasewait");
+        if (pw) {
+            pw.hidden = true;
+        }
+        this.renderables.forEach((renderable) => {
             if (renderable && renderable.render) {
                 renderable.render();
             }
-        }
+        });
         if (this.firsttab) {
             this.selectTab(this.firsttab.code);
         }
     }
 
     addTabFromElem(elem) {
-        var tab = this.addTab(new com.sweattrails.api.internal.Tab(elem.getAttribute("code"), elem.getAttribute("label"), elem));
+        const tab = this.addTab(new com.sweattrails.api.internal.Tab(elem.getAttribute("code"), elem.getAttribute("label"), elem));
         if (tab) {
             while (elem.childNodes.length > 0) {
                 tab.page.appendChild(elem.childNodes[0]);
@@ -408,22 +388,22 @@ com.sweattrails.api.TabManager = class {
     }
 
     addTab(tab) {
-        $$.log(this, "addTab(" + tab.code + ")");
+        $$.log(this, `addTab(${tab.code})`);
         if (!tab.impl || !tab.impl.onDraw || tab.impl.onDraw()) {
             this.drawTab(tab);
             this.tabs[tab.code] = tab;
+            return tab;
         } else {
-            $$.log(this, "Tab " + tab.code + " hidden");
-            tab = null;
+            $$.log(this, `Tab ${tab.code} hidden`);
+            return null;
         }
-        return tab;
     }
 
     drawTab(tab) {
-        $$.log(this, "Tab " + tab.code + " visible");
+        $$.log(this, `Tab ${tab.code} visible`);
         tab.manager = this;
-        var tabbox = document.getElementById("tabbox");
-        var span = document.createElement("span");
+        const tabbox = document.getElementById("tabbox");
+        const span = document.createElement("span");
         span.className = "tab";
         span.id = "tab_" + tab.code;
         span.tab = tab;
@@ -445,26 +425,24 @@ com.sweattrails.api.TabManager = class {
             tab.page.hidden = true;
             this.pagebox.appendChild(tab.page);
         }
-        tab.draw && tab.draw();
+        if (tab.draw) {
+            tab.draw();
+        }
     }
 
     selectTab(code) {
-        $$.log(this, "selectTab(" + code + ")");
-        var newtab = this.tabs[code];
+        $$.log(this, `selectTab(${code})`);
+        const newtab = this.tabs[code];
         if (newtab) {
-            for (var tabcode in this.tabs) {
-                var tab = this.tabs[tabcode];
-                if (tab.header.className === "tab_selected") {
-                    if (tabcode !== code) {
-                        tab.unselect();
-                    } else {
-                        return true;
-                    }
-                }
+            Object.values(this.tabs)
+                .filter((tab) => (tab.header.className === "tab_selected") && (tab.code !== code))
+                .forEach((tab) => { tab.unselect()});
+            if (newtab.header.className !== 'tab_selected') {
+                newtab.select();
             }
-            newtab.select();
+            return true;
         }
-        return typeof(newtab) !== 'undefined';
+        return false;
     }
 }
 
@@ -539,7 +517,7 @@ com.sweattrails.api.internal.DataBridge = class {
             __.dump(object, "%s.setValue(%s)", this, value);
         } catch (e) {
             console.trace("Exception in Databridge.setValue: " + e);
-            com.sweattrails.api.dump(object, "bridge.set: " + this.set + " object =");
+            __.dump(object, "bridge.set: " + this.set + " object =");
             throw e;
         }
     }
@@ -557,7 +535,7 @@ com.sweattrails.api.internal.DataBridge = class {
             }
         } catch (e) {
             console.trace("Exception in Databridge.getValue: " + e);
-            com.sweattrails.api.dump(object, "bridge.get: " + this.get + " object =");
+            __.dump(object, "bridge.get: " + this.get + " object =");
             throw e;
         }
     }
@@ -573,73 +551,75 @@ com.sweattrails.api.internal.DataBridge = class {
 
 /* ----------------------------------------------------------------------- */
 
-com.sweattrails.api.internal.walkname = function (name, ns = window) {
-    ns = ns || window;
-    name = name || "";
-    var components = name.split(".");
-    var component = null;
-    for (var ix = 0; ix < (components.length - 1); ix++) {
-        component = components[ix].trim();
-        if (!(component in ns)) {
-            ns[component] = {}
-        }
-        ns = ns[component];
+com.sweattrails.api.internal.walkname = function(name, ns = window) {
+    const ret = { ns, component: null };
+    if (!ret.ns) {
+        ret.ns = window;
     }
-    component = components[ix].trim();
-    return [ ns, component ];
+    return name.split(".").reduce((ctx, c) => {
+        if (ctx.component) {
+            if (!ctx.component in ctx.ns) {
+                ctx.ns[ctx.component] = {};
+            }
+            ctx.ns = ctx.ns[ctx.component];
+        }
+        ctx.component = c.trim();
+        return ctx;
+    }, ret);
 }
 
-com.sweattrails.api.getvar = function (name, ns = window) {
-    ns = ns || window;
-    name = name || "";
-    var components = name.split(".");
-    for (var ix = 0; ns && (ix < components.length); ix++) {
-        var component = components[ix].trim();
-        if (component in ns) {
-            ns = ns[component];
-        } else {
-            ns = null;
-        }
+com.sweattrails.api.getvar = function(name, ns = window) {
+    const walk = { ns, component: null };
+    if (!walk.ns) {
+        walk.ns = window;
     }
-    return ns;
+    name.split(".").reduce((ctx, c) => {
+        if (ctx.ns) {
+            if (ctx.component) {
+                ctx.ns = ctx.ns[ctx.component] || null;
+            }
+            ctx.component = c.trim();
+        }
+        return ctx;
+    }, walk);
+    return (walk.ns) ? walk.ns[walk.component] : null;
 }
 
 getvar = __.getvar;
 
-com.sweattrails.api.clearvar = function (name, ns = null) {
-    var wn = ___.walkname(name, ns);
-    if (wn[0] && wn[1]) {
-        wn[0][wn[1]] = null;
+com.sweattrails.api.clearvar = function(name, ns = null) {
+    const wn = ___.walkname(name, ns);
+    if (wn.ns && wn.component) {
+        wn.ns[wn.component] = null;
     }
     return ns;
 }
 
-com.sweattrails.api.setvar = function (name, value, ns = null) {
-    var wn = ___.walkname(name, ns);
-    if (wn[0] && wn[1]) {
-        ns = wn[0];
-        var component = wn[1];
-        if ((typeof(ns[component]) !== 'undefined') && ns[component]) {
-            if (Array.isArray(ns[component])) {
-                ns[component].push(value);
+com.sweattrails.api.setvar = function (name, value, ns = window) {
+    const wn = ___.walkname(name, ns);
+    if (wn.ns && wn.component) {
+        if ((wn.component in wn.ns) && (wn.ns[component] !== null)) {
+            const oldval = wn.ns[wn.component];
+            if (Array.isArray(oldval)) {
+                oldval.push(value);
             } else {
-                ns[component] = [ns[component], value];
+                wn.ns[wn.component] = [oldval, value];
             }
         } else {
-            ns[component] = value;
+            wn.ns[wn.component] = value;
         }
     }
-    return ns;
+    return wn.ns;
 }
 
 setvar = __.setvar;
 
-com.sweattrails.api.getfunc = function (func, ns = null, thisObj = null) {
-    var f = null;
+com.sweattrails.api.getfunc = function (func, ns = window, thisObj = null) {
+    let f = null;
     if (typeof(func) === "function") {
         f = func;
     } else {
-        var v = __.getvar(func, ns);
+        const v = __.getvar(func, ns);
         f = (typeof(v) === "function") && v;
     }
     if (f && thisObj) {
@@ -654,11 +634,9 @@ com.sweattrails.api.mixin = function(cls, mixin) {
     if (mixin.mixin && (typeof(mixin.mixin) === "function")) {
         mixin.mixin(cls);
     } else {
-        for (let f in mixin) {
-            if (typeof(mixin[f]) === "function") {
-                cls.prototype[f] = mixin[f];
-            }
-        }
+        Object.entries(mixin)
+              .filter(([name, value]) => typeof(value) === 'function')
+              .forEach(([name, f]) => { cls.prototype[name] = f });
     }
     return cls;
 }
@@ -680,11 +658,9 @@ com.sweattrails.api.BuilderFlags.Boolean = 8;
  */
 
 com.sweattrails.api.GritObject = {
-    set(elem, tag, property, flags) {
-        property = property || tag;
-        var val = elem.getAttribute(tag);
-        var converted = null;
-        flags = flags || 0;
+    set(elem, tag, property = tag, flags = 0) {
+        const val = elem.getAttribute(tag);
+        let converted = undefined;
         if (val) {
             if (flags | com.sweattrails.api.BuilderFlags.Int) {
                 converted = parseInt(val);
@@ -699,7 +675,7 @@ com.sweattrails.api.GritObject = {
                 converted = val === "true";
             }
         }
-        if (!converted) {
+        if (converted === undefined) {
             converted = val;
         }
         if (typeof(property) === "function") {
@@ -712,12 +688,12 @@ com.sweattrails.api.GritObject = {
     },
 
     buildChildren(elem, tag, childcls) {
-        var elems = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, tag);
-        for (var j = 0; j < elems.length; j++) {
-            var child = new childcls(this);
+        const elems = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, tag);
+        Array.from(elems).forEach((elem) => {
+            const child = new childcls(this);
             com.sweattrails.api.GritObject.mixin(child);
-            child.build(elems[j]);
-        }
+            child.build(elem);
+        });
         return this;
     },
 
@@ -735,7 +711,7 @@ com.sweattrails.api.GritObject = {
     },
 
     mixin(cls) {
-        var pr = cls.prototype;
+        const pr = cls.prototype;
         if (!pr.buildChildren) {
             pr.set = com.sweattrails.api.GritObject.set;
             pr.buildChildren = com.sweattrails.api.GritObject.buildChildren;
@@ -762,9 +738,9 @@ com.sweattrails.api.Builder = class {
     }
 
     process(elem) {
-        var name = elem.getAttribute("name");
-        $$.log(this, "Building %s", name);
-        var obj = new this.objclass(elem.parentNode, name);
+        const name = elem.getAttribute("name");
+        $$.log(this, `Building ${name}`);
+        const obj = new this.objclass(elem.parentNode, name);
         obj.build(elem);
         if (obj.hasDataSource) {
             obj.buildDataSource(elem);
@@ -775,55 +751,62 @@ com.sweattrails.api.Builder = class {
 /* ----------------------------------------------------------------------- */
 
 function getChildrenByTagNameNS(elem, ns, tagname) {
-    var ret = [];
-    var nodes = elem.childNodes;
-    for (var ix = 0; ix < nodes.length; ix++) {
-        var c = nodes[ix];
-        if ((c.namespaceURI === ns) && (c.localName === tagname)) {
-            ret.push(c);
-        }
-    }
+    const ret = [];
+    Array.from(elem.childNodes)
+         .filter(child => (child.namespaceURI === ns) && (child.localName === tagname))
+         .forEach((child) => { ret.push(child); });
     return ret;
 }
 
 function hasChildWithTagNameNS(elem, ns, tagname) {
-    var nodes = elem.childNodes;
-    for (var ix = 0; ix < nodes.length; ix++) {
-        var c = nodes[ix];
-        if ((c.namespaceURI === ns) && (c.localName === tagname)) {
-            return true;
-        }
-    }
-    return false;
+    return !!Array.from(elem.childNodes)
+                  .find(child => (c.namespaceURI === ns) && (c.localName === tagname));
+}
+
+function processChildrenWithTagNameNS(elem, ns, tagname, f) {
+    getChildrenByTagNameNS(elem, ns, tagname).forEach(f);
 }
 
 com.sweattrails.api.renderObject = function(elem, content) {
-    if ((typeof(content) === "object") && (typeof(content["render"]) === "function")) {
-        content = content.render();
-    }
-    if (typeof(content) === "string") {
-        elem.innerHTML = content;
-    } else if (!content) {
-        elem.innerHTML = "&#160;";
+    let rendered;
+    if (typeof(content) === "object") {
+        if (content instanceof HTMLElement) {
+            rendered = content;
+        } else {
+            if (typeof(content.render) === "function") {
+                rendered = content.render();
+            } else {
+                rendered = String(content);
+            }
+        }
     } else {
-        $$.log($$, "elem: " + elem + ", typeof: " + typeof(elem) + " rendering " + content + ", type " + typeof(content));
-        elem.appendChild(content);
+        rendered = String(content);
+    }
+    if (typeof(rendered) === "string") {
+        elem.innerHTML = rendered;
+    } else if (!rendered) {
+        elem.innerHTML = "&#160;";
+    } else if (rendered instanceof HTMLElement) {
+        elem.appendChild(rendered);
+    } else {
+        $$.log($$, `elem: ${elem}, typeof: ${typeof(elem)} rendering ${rendered}, type ${typeof(rendered)}`);
+        throw TypeError(`Cannot include object ${rendered} in HTML document`);
     }
 }
 
 
 com.sweattrails.api.internal.DOMElementLike = class {
-    constructor(obj, ns, tagname) {
+    constructor(obj = {}, ns, tagname) {
         this._ns = ns;
         this._tagname = tagname;
-        this.object = obj || {}
+        this.object = obj;
     }
 
     getAttribute(attr) {
         if (typeof(this.object) !== "object") {
             return null;
         } else {
-            ret = (attr in this.object) ? this.object[attr] : null;
+            let ret = (attr in this.object) ? this.object[attr] : null;
             if (["number", "string", "boolean"].indexOf(typeof(ret)) >= 0) {
                 ret = ret.toString();
             } else {
@@ -834,41 +817,31 @@ com.sweattrails.api.internal.DOMElementLike = class {
     }
 
     getAttributeNames() {
-        if (typeof(this.object) !== "object") {
-            return null;
-        } else {
-            var ret = [];
-            for (var attr in this.object) {
-                ret.push(attr);
-            }
-            return ret;
-        }
+        return (typeof(this.object) === "object")
+            ? Object.keys(this.object)
+            : null;
     }
 
     get childNodes() {
-        var ret = [];
-        var ns = this._ns;
+        const ret = [];
         if (typeof(this.object) === "object") {
-            for (var c in this.object) {
-                var o = this.object[c];
-                o = (Array.isArray(o)) ? o : [o];
-                o.forEach(function(child) {
-                    var node = new com.sweattrails.api.internal.DOMElementLike(child, ns, c);
-                    ret.append(node);
-                });
-            }
+            Object.entries(this.object)
+                  .forEach(([c, o]) => {
+                      const o_arr = (Array.isArray(o)) ? o : [o];
+                      o.forEach((child) => {
+                          ret.push(new com.sweattrails.api.internal.DOMElementLike(child, this._ns, c));
+                      })
+                  });
         } else {
-            ret.append(this.object.toString());
+            ret.push(this.object.toString());
         }
         return ret;
     }
 
     get nodeValue() {
-        var ret = null;
-        if (typeof(this.object) !== "object") {
-            ret = this.object.toString();
-        }
-        return ret;
+        return (typeof(this.object) !== "object")
+            ? this.object.toString()
+            : null;
     }
 
     get namespaceURI() {
@@ -881,7 +854,9 @@ com.sweattrails.api.internal.DOMElementLike = class {
 }
 
 getDOMElement = function(obj) {
-    return (obj && obj.getAttribute) ? obj : new com.sweattrails.api.internal.DOMElementLike(obj, ST.xmlns, "object");
+    return (obj && obj.getAttribute)
+        ? obj
+        : new com.sweattrails.api.internal.DOMElementLike(obj, ST.xmlns, "object");
 }
 
 /*
@@ -909,13 +884,13 @@ function password_changed() {
  */
 
 function rpad(num, width) {
-    var n = num + "";
+    let n = String(num);
     while (n.length < 2) n = "0" + n;
     return n;
 }
 
 function obj_to_datetime(obj) {
-    if (obj) {
+    if (obj && (typeof(obj) === 'object')) {
         return new Date(
                 ((typeof(obj.year) !== "undefined") && obj.year) || 1970,
                 ((typeof(obj.month) !== "undefined") && (obj.month - 1)) || 0,
@@ -928,37 +903,26 @@ function obj_to_datetime(obj) {
     }
 }
 
-function date_to_obj(d) {
-    d = d || new Date();
+function date_to_obj(d = new Date()) {
     return {
         'year': d.getUTCFullYear(),
         'month': d.getUTCMonth() + 1,
         'day': d.getUTCDate()
-    }
+    };
 }
 
-function time_to_obj(d) {
-    d = d || new Date();
-    var ret = {
-        'hour': d.getUTCHours(),
-        'minute': d.getUTCMinutes(),
-        'second': d.getUTCSeconds()
-    }
-    // $$.log($$, "time_to_obj -> " + ret.hour + ":" + ret.minute + ":" + ret.second)
-    return ret
-}
-
-function datetime_to_obj(d) {
-    d = d || new Date();
-    var ret = {
-        'year': d.getUTCFullYear(),
-        'month': d.getUTCMonth() + 1,
-        'day': d.getUTCDate(),
+function time_to_obj(d = new Date()) {
+    return {
         'hour': d.getUTCHours(),
         'minute': d.getUTCMinutes(),
         'second': d.getUTCSeconds()
     };
-    // $$.log($$, "datetime_to_obj: " + format_datetime(ret));
+}
+
+function datetime_to_obj(d = new Date()) {
+    const ret = date_to_obj(d);
+    Object.entries(time_to_obj(d))
+          .forEach(([name, value]) => { ret[name] = value });
     return ret;
 }
 
@@ -988,15 +952,16 @@ function format_date(d) {
 
 function format_time(d) {
     if (false /* imperial() */) {
-        var ampm = ((d.hour < 12) && "am") || "pm";
-        return rpad(((d.hour < 13) && d.hour) || (d.hour - 12), 2)  + ":" + rpad(d.minute, 2) + ampm;
+        const ampm = (d.hour < 12) ? "am" : "pm";
+        const h = (d.hour + 12) % 12 || 12;
+        return rpad(h, 2)  + ":" + rpad(d.minute, 2) + ampm;
     } else {
         return rpad(d.hour, 2)  + ":" + rpad(d.minute, 2);
     }
 }
 
 function format_elapsed_time(t) {
-    var s = "";
+    let s = "";
     if (t.hour > 0) {
         s = rpad(t.hour, 2) + ":";
     }
@@ -1021,21 +986,31 @@ function prettytime(value) {
     return ret;
 }
 
-function import_file(url, callback) {
+function import_file(url, callback = null) {
     // Brute-force XSS denial:
     if ((url.indexOf("http://") === 0) || (url.indexOf("https://") === 0)) {
         return;
     }
-    var head = document.getElementsByTagName('head')[0];
-    var script = document.createElement('script');
+    if (!document.head) {
+        return;
+    }
+    const script = document.createElement('script');
     script.type = 'text/javascript';
     script.src = url;
+    script.usercallback = callback;
 
-    if (typeof(callback) === "function") {
-        script.onreadystatechange = callback;
-        script.onload = callback;
+    script.callback = function() {
+        if (this.usercallback) {
+            this.usercallback();
+        }
+        document.head.removeChild(this);
+    };
+    script.onreadystatechange = script.callback;
+    script.onload = script.callback;
+    script.onerror = function(err) {
+        throw new URIError(`The script ${err.target.src} is not accessible.`);
     }
-    head.appendChild(script);
+    document.head.appendChild(script);
 }
 
 

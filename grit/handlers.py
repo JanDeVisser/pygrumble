@@ -233,7 +233,7 @@ class ImageHandler(PropertyBridgedHandler):
         else:
             self.error(401)
 
-    def get(self, key=None, kind=None, prop=None, content_type=None):
+    def get(self, key=None, kind=None, prop=None, content_type=None, extension=None):
         logger.debug("ImageHandler.get(%s.%s, %s)", kind, prop, key)
         self._initialize_bridge(key, kind, prop)
         has_access = True
@@ -250,7 +250,10 @@ class ImageHandler(PropertyBridgedHandler):
                 else:
                     blob = getattr(self.object(), self.property())
                     assert blob, "Couldn't get contents of ImageProperty %s.%s" % (self._kind, self._prop)
-                    self.response.content_type = str(blob[1])
+                    self.response.content_type = str(blob[1]) if extension is None else 'application/octet-stream'
+                    if extension is not None:
+                        filename = self.object().keyname() + '.' + extension
+                        self.response.headers['Content-Disposition'] = 'attachment; filename="' + filename + '"'
                     self.response.etag = str(blob[2])
                     self.response.body = str(blob[0])
             else:

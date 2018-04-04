@@ -86,7 +86,10 @@ com.sweattrails.api.internal.LinkAction = function(elem) {
 };
 
 com.sweattrails.api.internal.LinkAction.prototype.onClick = function() {
-    document.location = this.href;
+    const keyval = (typeof(key) !== 'undefined') ? key : '$$';
+    const url = this.href.replace('$$', keyval)
+                         .replace(/\$([\w_][\w_\.]*)/g, (match, submatch) => __.getvar(submatch));
+    document.location = url;
 };
 
 /* ----------------------------------------------------------------------- */
