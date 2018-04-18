@@ -66,6 +66,10 @@ com.sweattrails.api.internal.DataSource = class {
         delete this._parameters[param];
     };
 
+    getParameter(param) {
+        return this._parameters[param];
+    }
+
     parameters() {
         return this._parameters;
     };
@@ -594,7 +598,7 @@ com.sweattrails.api.DataSourceBuilder = class {
         } else {
             let values = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "value");
             if (values.length === 0) {
-                values = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "choices");
+                values = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "choice");
             }
             if (values.length > 0) {
                 ret = this.staticbuilder.build(elem, values);

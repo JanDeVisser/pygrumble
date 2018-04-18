@@ -466,11 +466,11 @@ __.mixin(com.sweattrails.api.LayerControl, com.sweattrails.api.internal.Layered)
 /* ----------------------------------------------------------------------- */
 
 com.sweattrails.api.Map = class {
-    constructor(container, options) {
+    constructor(container, id, options) {
         this.container = container;
         this.parent = null;
         this.options = options;
-        this.id = options.id || options.name;
+        this.id = id;
         this.type = "map";
         $$.register(this);
         this.layers = [];
@@ -484,10 +484,7 @@ com.sweattrails.api.Map = class {
         this.selectedLayer = options.selectedLayer && __.getfunc(options.selectedLayer);
         this.initialize = options.initialize && __.getfunc(options.initialize);
         this.initialize && this.initialize(options);
-    };
 
-    setDataSource(ds) {
-        this.datasource = ds;
     };
 
     render() {
@@ -507,13 +504,12 @@ com.sweattrails.api.Map = class {
                 this.map.on("click", this.click, this)
             }
             if (this.onresize) {
-                this.map.o = functionn("resize", this.onresize, this);
+                this.map.on("resize", this.onresize, this);
             }
             this.tickets = [];
-            _ = this;
-            this.layers.forEach(function(layer) {
-                layer.render(function(layer) {
-                    layer.layer.addTo(_.map);
+            this.layers.forEach((layer) => {
+                layer.render((layer) => {
+                    layer.layer.addTo(this.map);
                 });
             });
             this.countReservations();
@@ -613,78 +609,59 @@ __.mixin(com.sweattrails.api.Map, com.sweattrails.api.internal.Layered);
  * MapBuilder -
  */
 
-com.sweattrails.api.MapBuilder = class  {
+com.sweattrails.api.MapBuilder = class extends __.Builder {
     constructor() {
+        super("map", com.sweattrails.api.Map)
         this.type = "builder";
         this.name = "mapbuilder";
         this.builders = {
-            "trail": this.buildTrail,
-            "icons": this.buildIcons,
-            "gpx": this.buildGPX,
-            "tile": this.buildTile,
-            "layers": this.buildLayers,
-            "custom": this.buildCustom
+            "trail": (parent, elem, attachTo) => {
+                const layer = this.buildDataLayer(parent, elem, attachTo, com.sweattrails.api.TrailLayer);
+                this.copyNode(layer, elem, attachTo);
+            },
+            "icons": (parent, elem, attachTo) => {
+                const layer = this.buildDataLayer(parent, elem, attachTo, com.sweattrails.api.IconLayer);
+                this.copyNode(layer, elem, attachTo);
+            },
+            "gpx": (parent, elem, attachTo) => {
+                const options = this.parseOptions(elem, {
+                    polyline_options: null,
+                    marker_options: { wptIconUrls: null }
+                });
+                const layer = new com.sweattrails.api.GPXLayer(parent, options);
+                parent.addLayer(layer);
+                this.copyNode(layer, elem, attachTo);
+            },
+            "tile": (parent, elem, attachTo) => {
+                let l = null;
+                const id = elem.getAttribute("id");
+                if (id) {
+                    if (!__.getvar(id, com.sweattrails.api.TileLayers)) {
+                        $$.log(this, "Tile Layer with id %s not found", id);
+                    } else {
+                        l = new com.sweattrails.api.TileLayer(parent, id);
+                    }
+                } else {
+                    const label = elem.getAttribute("label");
+                    const url = elem.getAttribute("url");
+                    const descr = this.parseOptions(elem, null);
+                    l = new com.sweattrails.api.TileLayer(parent, id, label, url, descr);
+                }
+                l && parent.addLayer(l);
+                this.copyNode(l || parent, elem, attachTo);
+            },
+            "layers": (parent, elem, attachTo) => {
+                const layer = new com.sweattrails.api.LayerControl(parent, null, this.parseOptions(elem));
+                parent.addLayer(layer);
+                this.copyNode(layer, elem, attachTo);
+            },
+            "custom": (parent, elem, attachTo) => {
+                const options = this.parseOptions(elem);
+                const layer = new com.sweattrails.api.CustomLayer(parent, options);
+                parent.addLayer(layer);
+                this.copyNode(layer, elem, attachTo);
+            },
         };
-        $$.processor("map", this);
-    }
-
-    parseOptions(elem, suboptions, level = 0) {
-        const ret = Array.from(elem.childNodes).reduce((accum, c) => {
-            const n = c.localName;
-            if (((n === "option") || (n === "value")) && c.getAttribute("name")) {
-                accum[c.getAttribute("name")] = c.getAttribute("value") || c.textContent;
-            } else if (suboptions && (typeof(suboptions[n]) !== "undefined")) {
-                accum[n] = this.parseOptions(c, suboptions[n], level+1);
-            }
-            return accum;
-        }, {});
-
-        if (level == 0) {
-            Array.from(elem.getAttributeNames()).forEach((attr) => {
-                ret[attr] = elem.getAttribute(attr);
-            });
-        }
-        // Convert "[xxx, yyy]" to an array.
-        Object.entries(ret).forEach(([attr, value]) => {
-            if (/^\[\ *(-?\d+\ *(,\ *-?\d+\ *)*)*\ *\]$/.test(value)) {
-               ret[attr] = eval(value);
-            }
-        });
-        return ret;
-    }
-
-    buildGPX(parent, elem, attachTo) {
-        const options = this.parseOptions(elem, {
-            polyline_options: null,
-            marker_options: { wptIconUrls: null }
-        });
-        parent.addLayer(new com.sweattrails.api.GPXLayer(parent, options));
-    }
-
-    buildTile(parent, elem, attachTo) {
-        let l = null;
-        const id = elem.getAttribute("id");
-        if (id) {
-            if (!__.getvar(id, com.sweattrails.api.TileLayers)) {
-                $$.log(this, "Tile Layer with id %s not found", id);
-            } else {
-                l = new com.sweattrails.api.TileLayer(parent, id);
-            }
-        } else {
-            const label = elem.getAttribute("label");
-            const url = elem.getAttribute("url");
-            const descr = this.parseOptions(elem, null);
-            l = new com.sweattrails.api.TileLayer(parent, id, label, url, descr);
-        }
-        l && parent.addLayer(l);
-    }
-
-    buildTrail(parent, elem, attachTo) {
-        return this.buildDataLayer(parent, elem, attachTo, com.sweattrails.api.TrailLayer);
-    }
-
-    buildIcons(parent, elem, attachTo) {
-        return this.buildDataLayer(parent, elem, attachTo, com.sweattrails.api.IconLayer);
     }
 
     buildDataLayer(parent, elem, attachTo, factory) {
@@ -715,40 +692,6 @@ com.sweattrails.api.MapBuilder = class  {
             }
         }
         parent.addLayer(layer);
-    }
-
-    buildLayers(parent, elem, attachTo) {
-        const layer = new com.sweattrails.api.LayerControl(parent, null, this.parseOptions(elem));
-        parent.addLayer(layer);
-        this.copyNode(layer, elem, attachTo);
-    }
-
-    buildCustom(parent, elem, attachTo) {
-        const options = this.parseOptions(elem);
-        const layer = new com.sweattrails.api.CustomLayer(parent, options);
-        parent.addLayer(layer);
-        this.copyNode(layer, elem, attachTo);
-    }
-
-    process(t) {
-        const p = t.parentElement;
-        const options = this.parseOptions(t);
-        $$.log(this, "mapBuilder: building " + options.id || options.name);
-        const map = new com.sweattrails.api.Map(p, options);
-        this.copyNode(map, t, p);
-    }
-
-    copyNode (parent, elem, attachTo) {
-        Array.from(elem.childNodes).forEach((c) => {
-            if (c.namespaceURI === com.sweattrails.api.xmlns) {
-                const n = c.localName;
-                this.builders[n] && this.builders[n].bind(this)(parent, c, attachTo);
-            } else {
-                const childClone = c.cloneNode(false);
-                attachTo.appendChild(childClone);
-                this.copyNode(parent, c, childClone);
-            }
-        });
     }
 }
 

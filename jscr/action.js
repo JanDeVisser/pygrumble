@@ -190,7 +190,7 @@ com.sweattrails.api.ActionContainer.prototype.build = function(elem) {
     if (arguments.length > 1) {
         this.parent = arguments[1] ? arguments[1] : this.owner.container;
     }
-    elem = getDOMElement(elem);
+    elem = __.getDOMElement(elem);
     var actions = getChildrenByTagNameNS(elem, com.sweattrails.api.xmlns, "action");
     for (var i = 0; i < actions.length; i++) {
         this.buildAction(actions[i]);
@@ -198,7 +198,7 @@ com.sweattrails.api.ActionContainer.prototype.build = function(elem) {
 };
 
 com.sweattrails.api.ActionContainer.prototype.buildAction = function(a) {
-    a = getDOMElement(a);
+    a = __.getDOMElement(a);
     var action = new com.sweattrails.api.Action(a.getAttribute("name"), a.getAttribute("action"));
     action.build(a);
     action.container = this;
@@ -208,8 +208,8 @@ com.sweattrails.api.ActionContainer.prototype.buildAction = function(a) {
 
 com.sweattrails.api.ActionContainer.prototype.erase = function() {
     if (this.actionbar) {
-    	this.parent.removeChild(this.actionbar);
-    	this.actionbar = null;
+        this.parent.removeChild(this.actionbar);
+        this.actionbar = null;
     }
 };
 
@@ -321,7 +321,7 @@ com.sweattrails.api.Action = function(id, action) {
 };
 
 com.sweattrails.api.Action.prototype.build = function(a) {
-    a = getDOMElement(a);
+    a = __.getDOMElement(a);
     var ac = a.getAttribute("action");
     this.label = a.getAttribute("label");
     this.modes = a.getAttribute("mode");

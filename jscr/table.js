@@ -17,45 +17,45 @@
  */
 
 
-com.sweattrails.api.Column = class {
-    constructor(elem, table) {
+com.sweattrails.api.Column = class extends com.sweattrails.api.Widget {
+    constructor(table, options) {
+        super('column', table, options);
         let g = null;
 
-        this.elem = elem;
-        this.width = elem.getAttribute("width");
-        this.align = elem.getAttribute("align");
-        this.link = elem.getAttribute("link");
-        if (elem.getAttribute("property")) {
-            g = elem.getAttribute("property");
-        } else {
-            g = elem.getAttribute("get");
-        }
+        this.width = options.width;
+        this.align = options.align;
+        this.link = options.link;
+        g = options.property || options.get;
         this.bridge = new com.sweattrails.api.internal.DataBridge(g);
-        this.table = table;
-        this.label = elem.getAttribute("label");
+        this.label = options.label;
 
-        if (elem.getAttribute("select") && !this,table.form) {
-            this.impl = new com.sweattrails.api.LinkColumn(this, elem);
+        if (options.select && !this.table.form) {
+            this.impl = new com.sweattrails.api.LinkColumn(this, options);
         }
         if (!this.impl) {
-            const type = elem.getAttribute("type");
+            const type = options.type;
             if (type) {
-                this.createImpl(type, this, elem);
+                this.impl = this.createImpl(type, this, options);
             }
         }
+    }
+
+    get table() {
+        return this.container;
+    }
+
+    getId() {
+        return this.id || this.property || this.get;
     }
 
     createImpl(type, ...args) {
         if (type) {
             const factory = com.sweattrails.api.internal.columntypes[type];
             if (factory) {
-                try {
-                    this.impl = factory(...args);
-                } catch (e) {
-                    this.impl = new factory(...args);
-                }
+                return com.sweattrails.api.instantiate(factory, ...args);
             }
         }
+        return null;
     }
 
     applyPropertyDef(propdef) {
@@ -92,30 +92,26 @@ com.sweattrails.api.Column = class {
 /*
  * Table -
  */
-com.sweattrails.api.Table = class {
-    constructor(container, id, ds = null) {
-        this.container = container;
-        this.id = id;
-        this.type = "table";
-        $$.register(this);
+com.sweattrails.api.Table = class extends com.sweattrails.api.Component {
+    constructor(container = null, options = {}) {
+        super("table", container, options);
         this.table = null;
-        if (ds) {
-            this.setDataSource(ds);
-        }
         this.columns = [];
         this.footer = new com.sweattrails.api.ActionContainer(this, "footer");
         this.header = new com.sweattrails.api.ActionContainer(this, "header");
+        this.element = document.createElement("table");
+        this.element.id = `table-${this.id}`;
+        this.element.width = "100%";
     };
+
+    hasDatasource() {
+        return ds;
+    }
 
     initForm(ds) {
-        this.form = new com.sweattrails.api.Form("table-" + this.id, this.container, ds, true);
-    //        new com.sweattrails.api.ProxyDataSource(this), true)
-        return this;
-    };
-
-    setDataSource(ds) {
-        this.datasource = ds;
-        ds.addView(this);
+        this.form = new com.sweattrails.api.Form(
+            this.container,
+            { popup: true, id: `table-${this.id}` });
         return this;
     };
 
@@ -139,18 +135,21 @@ com.sweattrails.api.Table = class {
         return this;
     };
 
+    clear() {
+        Array.from(this.element.childNodes)
+             .forEach((c) => { this.element.removeChild(c); });
+    }
+
     onData(data) {
-        $$.log(this, "Table.onData");
+        this.log("Table.onData");
+        this.clear();
         this.onrender && this.onrender(data);
-        this.table = document.createElement("table");
-        this.table.id = this.id + "-table";
-        this.table.width = "100%";
         this.cellspacing = "0";
         this.container.appendChild(this.table);
         this.headerrow = document.createElement("tr");
         this.headerrow.id = `${this.id}-header`;
         this.headerrow.className = "tableheader";
-        this.table.appendChild(this.headerrow);
+        this.element.appendChild(this.headerrow);
         this.rowclass = 'oddrow';
 
         if (this.counter) {
@@ -170,11 +169,15 @@ com.sweattrails.api.Table = class {
     };
 
     noData() {
-        $$.log(this, "Table.noData");
-        var emptyrow = document.createElement("div");
-        emptyrow.id = this.id + "-emptyrow";
-        this.container.appendChild(emptyrow);
-        emptyrow.innerHTML = "&#160;<i>No data</i>";
+        this.log("Table.noData");
+        this.clear();
+        const emptyrow = document.createElement("tr");
+        emptyrow.id = `table-${this.id}-emptyrow`;
+        emptyrow.className = `emptyrow`;
+        this.element.parentNode.appendChild(emptyrow);
+        const td = document.createElement('td');
+        td.innerHTML = "&#160;<i>No data</i>";
+        emptyrow.appendChild(td);
     };
 
     renderData(obj) {
@@ -204,11 +207,11 @@ com.sweattrails.api.Table = class {
             com.sweattrails.api.renderObject(td, data);
             tr.appendChild(td);
         });
-        this.table.appendChild(tr);
+        this.element.appendChild(tr);
     };
 
     onDataEnd() {
-        $$.log(this, "Table.onDataEnd");
+        this.log("Table.onDataEnd");
         this.footer.render();
         this.onrendered && this.onrendered();
     };
@@ -226,7 +229,7 @@ com.sweattrails.api.Table = class {
     }
 
     openForm(object) {
-        $$.log(this, "Table.openForm");
+        this.log("Table.openForm");
         if (this.form && !this.form.ispopup) {
             this.data = object;
             this.form.popup((!object) ? com.sweattrails.api.MODE_NEW : com.sweattrails.api.MODE_VIEW);
@@ -235,7 +238,7 @@ com.sweattrails.api.Table = class {
     };
 
     reset(data) {
-        $$.log(this, "Table.reset");
+        this.log("Table.reset");
         this.datasource.reset(data);
         this.render();
     };
@@ -257,33 +260,29 @@ com.sweattrails.api.Table = class {
     };
 
     onDataSubmitted() {
-        $$.log(this, "Table.onDataSubmitted");
+        this.log("Table.onDataSubmitted");
         this.form && this.form.ispopup && this.form.onDataSubmitted();
         this.onsubmitted && this.onsubmitted();
     };
 
     onDataError(errorinfo) {
-        $$.log(this, "Table.onDataError");
+        this.log("Table.onDataError");
         this.form && this.form.ispopup && this.form.onDataError(errorinfo);
         this.onerror && this.onerror(errorinfo);
     };
 }
 
-/**
- * TableBuilder -
- */
+/* -- T A B L E B U I L D E R -------------------------------------------- */
 
-com.sweattrails.api.TableBuilder = class {
+com.sweattrails.api.TableBuilder = class extends com.sweattrails.api.Builder {
     constructor() {
-        this.type = "builder";
-        this.name = "tablebuilder";
-        com.sweattrails.api.STManager.processor("table", this);
+        super("table", com.sweattrails.api.Table);
     };
 
     process(t) {
         const p = t.parentNode;
         const name = t.getAttribute("id") || t.getAttribute("name");
-        $$.log(this, `Building table ${name}`);
+        this.log(`Building table ${name}`);
         const ds = com.sweattrails.api.dataSourceBuilder.build(t);
         const table = new com.sweattrails.api.Table(p, name, ds);
         table.onrender = t.getAttribute("onrender") && __.getfunc(t.getAttribute("onrender"));
@@ -303,7 +302,7 @@ com.sweattrails.api.TableBuilder = class {
             const form_ds = com.sweattrails.api.dataSourceBuilder.build(formelem,
                                 new com.sweattrails.api.ProxyDataSource(table));
             table.initForm(form_ds);
-            _.formbuilder.buildForm(table.form, formelem);
+            _.formbuilder.process(formelem, table.form, form_ds);
         }
         table.counter = t.getAttribute("counter") != null;
         getChildrenByTagNameNS(t, com.sweattrails.api.xmlns, "column")
